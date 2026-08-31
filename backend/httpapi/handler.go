@@ -21,32 +21,24 @@ type Handler struct {
 
 func NewHandler(sites *site.Service, pages *page.Service, snapshots *snapshot.Service, logger *slog.Logger) http.Handler {
 	h := &Handler{sites: sites, pages: pages, snapshots: snapshots, logger: logger}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", h.health)
-	mux.HandleFunc("POST /api/sites", h.createSite)
-	mux.HandleFunc("GET /api/sites/{siteID}", h.getSite)
-	mux.HandleFunc("POST /api/sites/{siteID}/pages", h.createPage)
-	mux.HandleFunc("GET /api/sites/{siteID}/pages", h.listPages)
-	mux.HandleFunc("GET /api/pages/{pageID}", h.getPage)
-	mux.HandleFunc("PUT /api/pages/{pageID}/tree", h.updateTree)
-	mux.HandleFunc("GET /api/pages/{pageID}/versions", h.listVersions)
-	mux.HandleFunc("POST /api/sites/{siteID}/snapshots", h.createSnapshot)
-	mux.HandleFunc("GET /api/snapshots/{snapshotID}", h.getSnapshot)
-	return withJSON(withCORS(mux))
+	return NewRouter(h)
 }
 
 type createSiteRequest struct {
 	Name string `json:"name"`
 	Slug string `json:"slug"`
 }
+
 type createPageRequest struct {
 	Name string               `json:"name"`
 	Slug string               `json:"slug"`
 	Root domain.ComponentNode `json:"root"`
 }
+
 type updateTreeRequest struct {
 	Root domain.ComponentNode `json:"root"`
 }
+
 type createSnapshotRequest struct {
 	Name string `json:"name"`
 }
