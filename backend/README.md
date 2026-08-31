@@ -10,6 +10,16 @@ export PATH="/usr/local/go/bin:$(go env GOPATH)/bin:${PATH}"
 go run ./cmd/server
 ```
 
+По умолчанию management API запускается по REST. Выбрать gRPC:
+
+```bash
+LIAPOLDUS_MANAGEMENT_TRANSPORT=grpc \
+LIAPOLDUS_ADDR=:9090 \
+go run ./cmd/server
+```
+
+Допустимые значения `LIAPOLDUS_MANAGEMENT_TRANSPORT`: `rest` и `grpc`.
+
 Адрес можно изменить переменной `LIAPOLDUS_ADDR`, например `LIAPOLDUS_ADDR=:9090`.
 
 ## Проверка
@@ -17,6 +27,8 @@ go run ./cmd/server
 ```bash
 go test ./...
 go vet ./...
+buf lint
+buf generate
 curl http://localhost:8080/healthz
 ```
 
