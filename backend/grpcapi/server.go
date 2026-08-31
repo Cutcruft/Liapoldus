@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/liapoldus/liapoldus/backend/domain"
+	"github.com/liapoldus/liapoldus/backend/esb"
 	managementv1 "github.com/liapoldus/liapoldus/backend/gen/liapoldus/management/v1"
 	"github.com/liapoldus/liapoldus/backend/page"
 	"github.com/liapoldus/liapoldus/backend/site"
@@ -28,7 +29,7 @@ type Server struct {
 	logger    *slog.Logger
 }
 
-func NewServer(sites *site.Service, pages *page.Service, snapshots *snapshot.Service, logger *slog.Logger) *grpc.Server {
+func NewServer(sites *site.Service, pages *page.Service, snapshots *snapshot.Service, logger *slog.Logger, extensionRegistries ...*esb.Registry) *grpc.Server {
 	server := grpc.NewServer()
 	managementv1.RegisterManagementServiceServer(server, &Server{
 		sites: sites, pages: pages, snapshots: snapshots, logger: logger,
@@ -36,6 +37,11 @@ func NewServer(sites *site.Service, pages *page.Service, snapshots *snapshot.Ser
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 	grpc_health_v1.RegisterHealthServer(server, healthServer)
+	var registry *esb.Registry
+	if len(extensionRegistries) > 0 {
+		registry = extensionRegistries[0]
+	}
+	esb.RegisterGRPC(server, registry)
 	return server
 }
 
@@ -176,17 +182,17 @@ func siteMessage(site domain.Site) *managementv1.Site {
 }
 
 func pageMessage(page domain.Page) *managementv1.Page {
-	return &managementv1.Page{Id: page.ID, SiteId: page.SiteID, Name: page.Name, Slug: page.Slug, Root: nodeMessage(page.Root), Version: int32(page.Version), CreatedAt: timestamppb.New(page.CreatedAt), UpdatedAt: timestamppb.New(page.UpdatedAt)}
+	return &managementv1.Page{Id: page.ID, SiteId: page.SiteID, Name: page.Name, Slug: page.Slug, Root: nodeMessage(page.Root), Version: page.Version, CreatedAt: timestamppb.New(page.CreatedAt), UpdatedAt: timestamppb.New(page.UpdatedAt)}
 }
 
 func pageVersionMessage(version domain.PageVersion) *managementv1.PageVersion {
-	return &managementv1.PageVersion{Id: version.ID, PageId: version.PageID, Number: int32(version.Number), Root: nodeMessage(version.Root), CreatedAt: timestamppb.New(version.CreatedAt)}
+	return &managementv1.PageVersion{Id: version.ID, PageId: version.PageID, Number: version.Number, Root: nodeMessage(version.Root), CreatedAt: timestamppb.New(version.CreatedAt)}
 }
 
 func snapshotMessage(snapshot domain.Snapshot) *managementv1.Snapshot {
 	result := &managementv1.Snapshot{Id: snapshot.ID, SiteId: snapshot.SiteID, Name: snapshot.Name, CreatedAt: timestamppb.New(snapshot.CreatedAt)}
 	for _, page := range snapshot.Pages {
-		result.Pages = append(result.Pages, &managementv1.SnapshotPage{PageId: page.PageID, VersionId: page.VersionID, Version: int32(page.Version)})
+		result.Pages = append(result.Pages, &managementv1.SnapshotPage{PageId: page.PageID, VersionId: page.VersionID, Version: page.Version})
 	}
 	return result
 }

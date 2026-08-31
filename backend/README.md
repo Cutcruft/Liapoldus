@@ -48,4 +48,6 @@ GitHub Actions CI выполняет те же проверки и собира�
 bash scripts/smoke.sh
 ```
 
-Сейчас persistence работает в памяти. Перезапуск процесса очищает данные намеренно: это позволяет разрабатывать API и frontend до подключения PostgreSQL.
+Для PostgreSQL через Docker Compose см. [docs/postgres.md](../docs/postgres.md).
+
+Режим `memory` доступен для unit-тестов и локальной разработки. В этом режиме перезапуск процесса очищает данные; обычный запуск использует PostgreSQL.

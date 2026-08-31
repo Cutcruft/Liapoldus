@@ -24,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.0'
+          go-version: '1.26.6'
           cache: true
 
       - name: Check formatting
@@ -39,6 +39,9 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Verify module checksums
+        run: go mod verify
 
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
@@ -79,3 +82,56 @@ jobs:
           name: liapoldus-server
           path: bin/liapoldus-server
           if-no-files-found: error
+
+      - name: Build Docker image
+        run: docker build --tag liapoldus:ci .
+
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: liapoldus:ci
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  security:
+    name: Security checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify module checksums
+        run: go mod verify
+
+      - name: Scan Go dependencies and reachable code
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+      - name: Scan Go source with gosec
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.22.10 -exclude-dir=backend/gen ./...
+
+      - name: Scan repository for secrets
+        run: go run github.com/zricethezav/gitleaks/v8@v8.24.3 detect --source . --no-banner --redact
+
+      - name: Scan filesystem with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

@@ -16,6 +16,9 @@ func TestLoadDefaultsToREST(t *testing.T) {
 	if cfg.Addr != ":8080" {
 		t.Fatalf("address = %q, want :8080", cfg.Addr)
 	}
+	if cfg.Storage != StoragePostgres {
+		t.Fatalf("storage = %q, want %q", cfg.Storage, StoragePostgres)
+	}
 }
 
 func TestLoadGRPCConfiguration(t *testing.T) {
@@ -31,6 +34,9 @@ func TestLoadGRPCConfiguration(t *testing.T) {
 	}
 	if cfg.Addr != ":9090" {
 		t.Fatalf("address = %q, want :9090", cfg.Addr)
+	}
+	if cfg.Storage != StoragePostgres {
+		t.Fatalf("storage = %q, want %q", cfg.Storage, StoragePostgres)
 	}
 }
 

@@ -16,7 +16,7 @@ Backend реализован на Go как модульный монолит. �
 - `site` — создание и чтение сайтов.
 - `page` — создание страниц, проверка дерева компонентов и выпуск версий.
 - `snapshot` — фиксация последних версий страниц сайта.
-- `store` — текущая in-memory реализация persistence-портов.
+- `store` — реализации persistence-портов для in-memory и PostgreSQL.
 - `httpapi` — REST transport и преобразование HTTP-запросов в application-вызовы.
 - `cmd/server` — композиция зависимостей и жизненный цикл процесса.
 
@@ -36,7 +36,9 @@ External API
 
 Серверная обработка разрешена только для server-only случаев: секретные ключи, локальная БД, webhooks, внутренние сети и операции с обязательной серверной проверкой. Такой endpoint должен быть отдельной явно обозначенной capability, а не неявным прокси для любого Provider.
 
-Такое разделение позволяет заменить `store.Memory` на PostgreSQL без изменений в `site`, `page`, `snapshot` и HTTP API.
+Для backend-расширений добавлен отдельный универсальный ESB gRPC layer. Он не смешан с typed management API: расширения регистрируют операции в `esb.Registry`, а transport маршрутизирует opaque payload по metadata `service`/`method`. Описание находится в [docs/esb.md](esb.md).
+
+Такое разделение позволяет выбирать `store.Memory` или PostgreSQL без изменений в `site`, `page`, `snapshot` и HTTP API.
 
 ## Дерево компонентов
 
@@ -62,16 +64,15 @@ ComponentNode
 
 ## Почему in-memory
 
-Это стартовый адаптер для запуска и тестов без PostgreSQL. Он не предназначен для production: данные теряются после перезапуска, отсутствуют транзакции и горизонтальное масштабирование.
+Это адаптер для unit-тестов и локальной разработки без PostgreSQL. Он не предназначен для production: данные теряются после перезапуска.
 
-Следующий persistence-адаптер должен использовать PostgreSQL и JSONB для `ComponentNode.props` и дерева. Публичные контракты репозиториев уже отделены от реализации.
+PostgreSQL adapter использует JSONB для дерева `ComponentNode` и транзакции для создания страниц, версий и snapshots. Публичные контракты репозиториев отделены от реализации.
 
 ## Следующие этапы
 
-1. PostgreSQL adapter, миграции и конфигурация.
-2. `ComponentDefinition` и schema validation.
-3. Route и runtime resolver.
-4. Vue 3 editor с рекурсивным renderer и drag-and-drop.
-5. Snapshot build worker через Vite.
-6. Assets, content и bindings.
-7. Direct frontend Operations, providers и plugin SDK.
+1. `ComponentDefinition` и schema validation.
+2. Route и runtime resolver.
+3. Vue 3 editor с рекурсивным renderer и drag-and-drop.
+4. Snapshot build worker через Vite.
+5. Assets, content и bindings.
+6. Direct frontend Operations, providers и plugin SDK.
