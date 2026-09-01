@@ -15,7 +15,8 @@
 | Snapshot | Частично | Фиксация актуальной версии каждой страницы |
 | REST API | Частично | API из `docs/api.md` |
 | Runtime health | Готово | `GET /healthz` |
-| Persistence | Только development | In-memory хранилище |
+| Persistence | Реализовано | PostgreSQL adapter и in-memory adapter |
+| ESB extension layer | Частично | gRPC `Call`/`Stream`, registry и metadata routing |
 
 ## Пока не реализовано
 
@@ -36,6 +37,6 @@
 - Development/Production environments;
 - runtime routing, publication и rollback;
 - Redis/cache policies;
-- PostgreSQL persistence.
+- production lifecycle и динамическая загрузка extension registry.
 
 Наличие пункта в основном README не означает, что он уже доступен через API. Перед реализацией каждого следующего блока его нужно добавить в этот статус и покрыть тестами.

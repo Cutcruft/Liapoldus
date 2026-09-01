@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package esb;
+
+option csharp_namespace = "Esb.Protocol";
+
+// Universal ESB transport contract.
+//
+// The contract does not know business entities, commands or DTOs.
+// Routing and context are passed through metadata. Payload is an opaque
+// byte sequence and may contain JSON, MessagePack, Protobuf, BSON or any
+// other format.
+message EsbRequest {
+  // Format is determined by metadata["content_type"].
+  bytes payload = 1;
+
+  // Reserved keys: service, method, correlation_id, content_type.
+  map<string, string> metadata = 2;
+}
+
+message EsbReply {
+  bytes payload = 1;
+
+  // correlation_id must be returned when it was present in the request.
+  map<string, string> metadata = 2;
+}
+
+service Esb {
+  rpc Call(EsbRequest) returns (EsbReply);
+  rpc Stream(EsbRequest) returns (stream EsbReply);
+}

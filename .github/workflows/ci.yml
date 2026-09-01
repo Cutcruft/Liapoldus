@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache: true
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          files="$(gofmt -l cmd backend)"
+          if [[ -n "${files}" ]]; then
+            echo "The following files are not formatted:"
+            echo "${files}"
+            exit 1
+          fi
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify module checksums
+        run: go mod verify
+
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.50.0'
+
+      - name: Install protobuf generators
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+
+      - name: Validate protobuf contract
+        run: buf lint
+
+      - name: Verify generated protobuf code
+        run: |
+          buf generate
+          git diff --exit-code -- backend/gen
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          args: --timeout=5m
+
+      - name: Build server
+        run: go build -trimpath -ldflags="-s -w" -o bin/liapoldus-server ./cmd/server
+
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: liapoldus-server
+          path: bin/liapoldus-server
+          if-no-files-found: error
+
+      - name: Build Docker image
+        run: docker build --tag liapoldus:ci .
+
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: liapoldus:ci
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  security:
+    name: Security checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify module checksums
+        run: go mod verify
+
+      - name: Scan Go dependencies and reachable code
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+      - name: Scan Go source with gosec
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.22.10 -exclude-dir=backend/gen ./...
+
+      - name: Scan repository for secrets
+        run: go run github.com/zricethezav/gitleaks/v8@v8.24.3 detect --source . --no-banner --redact
+
+      - name: Scan filesystem with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

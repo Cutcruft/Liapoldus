@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package liapoldus.management.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/liapoldus/liapoldus/backend/gen/liapoldus/management/v1;managementv1";
+
+service ManagementService {
+  rpc CreateSite(CreateSiteRequest) returns (CreateSiteResponse);
+  rpc GetSite(GetSiteRequest) returns (GetSiteResponse);
+
+  rpc CreatePage(CreatePageRequest) returns (CreatePageResponse);
+  rpc GetPage(GetPageRequest) returns (GetPageResponse);
+  rpc ListPages(ListPagesRequest) returns (ListPagesResponse);
+  rpc UpdatePageTree(UpdatePageTreeRequest) returns (UpdatePageTreeResponse);
+  rpc ListPageVersions(ListPageVersionsRequest) returns (ListPageVersionsResponse);
+
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (CreateSnapshotResponse);
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
+}
+
+message ComponentNode {
+  string id = 1;
+  string type = 2;
+  google.protobuf.Struct props = 3;
+  repeated ComponentNode children = 4;
+}
+
+message Site {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message Page {
+  string id = 1;
+  string site_id = 2;
+  string name = 3;
+  string slug = 4;
+  ComponentNode root = 5;
+  int32 version = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message PageVersion {
+  string id = 1;
+  string page_id = 2;
+  int32 number = 3;
+  ComponentNode root = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message SnapshotPage {
+  string page_id = 1;
+  string version_id = 2;
+  int32 version = 3;
+}
+
+message Snapshot {
+  string id = 1;
+  string site_id = 2;
+  string name = 3;
+  repeated SnapshotPage pages = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message CreateSiteRequest {
+  string name = 1;
+  string slug = 2;
+}
+message CreateSiteResponse { Site site = 1; }
+message GetSiteRequest { string id = 1; }
+message GetSiteResponse { Site site = 1; }
+
+message CreatePageRequest {
+  string site_id = 1;
+  string name = 2;
+  string slug = 3;
+  ComponentNode root = 4;
+}
+message CreatePageResponse { Page page = 1; }
+message GetPageRequest { string id = 1; }
+message GetPageResponse { Page page = 1; }
+message ListPagesRequest { string site_id = 1; }
+message ListPagesResponse { repeated Page pages = 1; }
+
+message UpdatePageTreeRequest {
+  string id = 1;
+  ComponentNode root = 2;
+}
+message UpdatePageTreeResponse { Page page = 1; }
+
+message ListPageVersionsRequest { string page_id = 1; }
+message ListPageVersionsResponse { repeated PageVersion versions = 1; }
+
+message CreateSnapshotRequest {
+  string site_id = 1;
+  string name = 2;
+}
+message CreateSnapshotResponse { Snapshot snapshot = 1; }
+message GetSnapshotRequest { string id = 1; }
+message GetSnapshotResponse { Snapshot snapshot = 1; }

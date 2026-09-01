@@ -2,6 +2,19 @@
 
 По умолчанию сервер запускается на `http://localhost:8080`.
 
+## Management transport
+
+Управляющий API можно запустить в одном из двух режимов:
+
+```bash
+LIAPOLDUS_MANAGEMENT_TRANSPORT=rest  # по умолчанию
+LIAPOLDUS_MANAGEMENT_TRANSPORT=grpc
+```
+
+Оба transport используют одни и те же доменные сервисы и операции. Меняется только внешний протокол. REST и gRPC не запускаются одновременно на одном адресе.
+
+Protobuf-контракт находится в [proto/liapoldus/management/v1/management.proto](../proto/liapoldus/management/v1/management.proto), сгенерированный Go-код — в `backend/gen`.
+
 ## Health
 
 ```http
@@ -83,3 +96,12 @@ GET /api/snapshots/{snapshotId}
 ```
 
 Используются статусы `400`, `404`, `409` и `500`.
+
+В gRPC эти ошибки преобразуются в стандартные коды:
+
+```text
+400 → InvalidArgument
+404 → NotFound
+409 → AlreadyExists
+500 → Internal
+```

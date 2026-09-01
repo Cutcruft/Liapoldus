@@ -33,7 +33,7 @@ type Page struct {
 	Name      string        `json:"name"`
 	Slug      string        `json:"slug"`
 	Root      ComponentNode `json:"root"`
-	Version   int           `json:"version"`
+	Version   int32         `json:"version"`
 	CreatedAt time.Time     `json:"createdAt"`
 	UpdatedAt time.Time     `json:"updatedAt"`
 }
@@ -41,7 +41,7 @@ type Page struct {
 type PageVersion struct {
 	ID        string        `json:"id"`
 	PageID    string        `json:"pageId"`
-	Number    int           `json:"number"`
+	Number    int32         `json:"number"`
 	Root      ComponentNode `json:"root"`
 	CreatedAt time.Time     `json:"createdAt"`
 }
@@ -49,7 +49,7 @@ type PageVersion struct {
 type SnapshotPage struct {
 	PageID    string `json:"pageId"`
 	VersionID string `json:"versionId"`
-	Version   int    `json:"version"`
+	Version   int32  `json:"version"`
 }
 
 type Snapshot struct {
