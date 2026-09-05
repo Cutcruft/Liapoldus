@@ -122,4 +122,9 @@ export class SyncEngine {
   get activeSize(): number {
     return this.scheduler.size();
   }
+
+  /** Отменяет все poll-задания (при перезагрузке runtime). */
+  dispose(): void {
+    this.scheduler.clear();
+  }
 }

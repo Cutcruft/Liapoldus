@@ -58,6 +58,8 @@ export class RouteNotFoundError extends RuntimeError {
 
 export interface TransportErrorCause {
   status?: number;
+  /** порт/адрес транспорта в cause (test-spec §15#3) */
+  port?: number;
   httpError?: boolean;
   graphqlErrors?: unknown[];
   message?: string;

@@ -86,6 +86,11 @@ export class DesignTokens {
     return this.current.get(asVar(name));
   }
 
+  /** Плоский словарь `--имя → значение` применённой темы (для синхронизации со store). */
+  values(): Record<string, string> {
+    return Object.fromEntries(this.current);
+  }
+
   private attachFonts(fonts: string[]): void {
     this.env?.onFonts?.(fonts);
     const doc = this.env?.document;
