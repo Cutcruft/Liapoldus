@@ -75,3 +75,10 @@ type FormRepository interface {
 	CreateSubmission(context.Context, Submission) error
 	ListSubmissionsByForm(context.Context, string, string) ([]Submission, error)
 }
+
+type ComponentDefinitionRepository interface {
+	Save(context.Context, *ComponentDefinition) error
+	Get(context.Context, string, string) (*ComponentDefinition, error)
+	List(context.Context, string) ([]ComponentDefinition, error)
+	Delete(context.Context, string, string) error
+}
