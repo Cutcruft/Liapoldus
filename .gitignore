@@ -1,0 +1,7 @@
+# Go
+backend/bin/
+backend/*.log
+
+# Node
+backend/tests/e2e/node_modules/
+backend/tests/e2e/coverage/

@@ -5,38 +5,33 @@
 PostgreSQL и backend поднимаются через Docker Compose:
 
 ```bash
+# из директории backend/
 docker compose up --build
 ```
 
-Compose запускает PostgreSQL и backend. Backend ждёт health-check базы, проверяет соединение и выполняет миграцию `backend/store/migrations/001_initial.sql`.
+Compose запускает PostgreSQL и backend. Backend ждёт health-check базы, проверяет соединение и выполняет миграцию `internal/infra/store/migrations/001_initial.sql`.
 
-По умолчанию Compose запускает management API в режиме gRPC. Для REST можно изменить `LIAPOLDUS_MANAGEMENT_TRANSPORT` на `rest` в `docker-compose.yml`.
+Management API доступен по REST на `http://localhost:8080`.
 
 ## Проверка в WSL Ubuntu
 
 Из PowerShell можно выполнять команды внутри WSL так:
 
 ```bash
-wsl.exe -d Ubuntu -- bash -lc "cd /mnt/c/Users/sh_ub/CutCraft/Liapoldus && docker compose up -d --build"
-```
-
-Проверка gRPC management API:
-
-```bash
-wsl.exe -d Ubuntu -- bash -lc "cd /mnt/c/Users/sh_ub/CutCraft/Liapoldus && GRPCURL_BIN=/home/sh_ub/go/bin/grpcurl bash scripts/test-grpc.sh"
+wsl.exe -d Ubuntu -- bash -lc "cd /mnt/c/Users/sh_ub/CutCraft/Liapoldus/backend && docker compose up -d --build"
 ```
 
 Smoke-тест создает сайт и страницу с компонентным деревом, обновляет дерево, проверяет две версии страницы и создает snapshot. Данные остаются в volume `liapoldus-postgres`, поэтому перезапуск приложения не удаляет их:
 
 ```bash
-wsl.exe -d Ubuntu -- docker compose -f /mnt/c/Users/sh_ub/CutCraft/Liapoldus/docker-compose.yml restart app
+wsl.exe -d Ubuntu -- docker compose -f /mnt/c/Users/sh_ub/CutCraft/Liapoldus/backend/docker-compose.yml restart app
 ```
 
 Состояние контейнеров и записи в базе можно посмотреть так:
 
 ```bash
-wsl.exe -d Ubuntu -- docker compose -f /mnt/c/Users/sh_ub/CutCraft/Liapoldus/docker-compose.yml ps
-wsl.exe -d Ubuntu -- docker compose -f /mnt/c/Users/sh_ub/CutCraft/Liapoldus/docker-compose.yml exec -T postgres psql -U liapoldus -d liapoldus -c "SELECT count(*) FROM sites;"
+wsl.exe -d Ubuntu -- docker compose -f /mnt/c/Users/sh_ub/CutCraft/Liapoldus/backend/docker-compose.yml ps
+wsl.exe -d Ubuntu -- docker compose -f /mnt/c/Users/sh_ub/CutCraft/Liapoldus/backend/docker-compose.yml exec -T postgres psql -U liapoldus -d liapoldus -c "SELECT count(*) FROM sites;"
 ```
 
 ## Конфигурация
@@ -49,7 +44,7 @@ LIAPOLDUS_DATABASE_URL=postgres://user:password@host:5432/database?sslmode=disab
 Для запуска без базы данных можно явно выбрать временное хранилище:
 
 ```bash
-LIAPOLDUS_STORAGE=memory go run ./cmd/server
+LIAPOLDUS_STORAGE=memory go run ./backend/cmd/server
 ```
 
 Memory storage предназначен только для тестов и локальной разработки. Данные в нём теряются после остановки процесса.

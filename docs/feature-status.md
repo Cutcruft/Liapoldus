@@ -16,7 +16,6 @@
 | REST API | Частично | API из `docs/api.md` |
 | Runtime health | Готово | `GET /healthz` |
 | Persistence | Реализовано | PostgreSQL adapter и in-memory adapter |
-| ESB extension layer | Частично | gRPC `Call`/`Stream`, registry и metadata routing |
 
 ## Пока не реализовано
 
@@ -29,6 +28,7 @@
 - Operation, Provider и frontend SDK;
 - прямые HTTP/GraphQL-интеграции из frontend;
 - server-only operations;
+- ESB extension layer (registry, metadata routing, `Call`/`Stream`);
 - Forms и validation schema;
 - Plugin management и npm dependencies;
 - версии всех объектов кроме Page;

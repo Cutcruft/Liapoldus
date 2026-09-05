@@ -2,33 +2,21 @@
 
 ## Запуск
 
-Из Ubuntu под WSL, из корня репозитория:
+Из Ubuntu под WSL, из директории `backend` репозитория:
 
 ```bash
-cd /mnt/c/Users/sh_ub/CutCraft/Liapoldus
+cd /mnt/c/Users/sh_ub/CutCraft/Liapoldus/backend
 export PATH="/usr/local/go/bin:$(go env GOPATH)/bin:${PATH}"
 go run ./cmd/server
 ```
 
-По умолчанию management API запускается по REST. Выбрать gRPC:
-
-```bash
-LIAPOLDUS_MANAGEMENT_TRANSPORT=grpc \
-LIAPOLDUS_ADDR=:9090 \
-go run ./cmd/server
-```
-
-Допустимые значения `LIAPOLDUS_MANAGEMENT_TRANSPORT`: `rest` и `grpc`.
-
-Адрес можно изменить переменной `LIAPOLDUS_ADDR`, например `LIAPOLDUS_ADDR=:9090`.
+По умолчанию сервер слушает `:8080`. Адрес можно изменить переменной `LIAPOLDUS_ADDR`, например `LIAPOLDUS_ADDR=:9090`.
 
 ## Проверка
 
 ```bash
 go test ./...
 go vet ./...
-buf lint
-buf generate
 curl http://localhost:8080/healthz
 ```
 
@@ -38,14 +26,14 @@ curl http://localhost:8080/healthz
 bash scripts/lint.sh
 ```
 
-Используется pinned-конфигурация в корневом `.golangci.yml`. Скрипт проверяет форматирование, `go vet` и набор статических линтеров.
+Используется pinned-конфигурация в `.golangci.yml`. Скрипт проверяет форматирование, `go vet` и набор статических линтеров.
 
 GitHub Actions CI выполняет те же проверки и собирает серверный бинарник. Описание находится в [docs/ci.md](../docs/ci.md).
 
 Для полного smoke-теста API из WSL, пока сервер запущен в другом окне:
 
 ```bash
-bash scripts/smoke.sh
+bash scripts/test.sh
 ```
 
 Для PostgreSQL через Docker Compose см. [docs/postgres.md](../docs/postgres.md).

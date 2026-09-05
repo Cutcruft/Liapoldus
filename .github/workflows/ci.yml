@@ -29,8 +29,9 @@ jobs:
 
       - name: Check formatting
         shell: bash
+        working-directory: backend
         run: |
-          files="$(gofmt -l cmd backend)"
+          files="$(gofmt -l .)"
           if [[ -n "${files}" ]]; then
             echo "The following files are not formatted:"
             echo "${files}"
@@ -38,33 +39,25 @@ jobs:
           fi
 
       - name: Download dependencies
+        working-directory: backend
         run: go mod download
 
       - name: Verify module checksums
+        working-directory: backend
         run: go mod verify
 
-      - name: Set up Buf
-        uses: bufbuild/buf-setup-action@v1
-        with:
-          version: '1.50.0'
-
-      - name: Install protobuf generators
+      - name: Verify generated mocks
+        working-directory: backend
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
-
-      - name: Validate protobuf contract
-        run: buf lint
-
-      - name: Verify generated protobuf code
-        run: |
-          buf generate
-          git diff --exit-code -- backend/gen
+          go generate ./...
+          git diff --exit-code -- tests/unit/mocks
 
       - name: Test
+        working-directory: backend
         run: go test ./...
 
       - name: Vet
+        working-directory: backend
         run: go vet ./...
 
       - name: Lint
@@ -72,19 +65,21 @@ jobs:
         with:
           version: v1.64.8
           args: --timeout=5m
+          working-directory: backend
 
       - name: Build server
+        working-directory: backend
         run: go build -trimpath -ldflags="-s -w" -o bin/liapoldus-server ./cmd/server
 
       - name: Upload server artifact
         uses: actions/upload-artifact@v4
         with:
           name: liapoldus-server
-          path: bin/liapoldus-server
+          path: backend/bin/liapoldus-server
           if-no-files-found: error
 
       - name: Build Docker image
-        run: docker build --tag liapoldus:ci .
+        run: docker build --tag liapoldus:ci ./backend
 
       - name: Scan Docker image
         uses: aquasecurity/trivy-action@0.28.0
@@ -94,6 +89,42 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+
+  e2e:
+    name: End-to-end tests (REST)
+    runs-on: ubuntu-latest
+    env:
+      LIAPOLDUS_E2E_BASE_URL: http://127.0.0.1:18080
+    defaults:
+      run:
+        working-directory: backend/tests/e2e
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.6'
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/tests/e2e/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build server
+        working-directory: backend
+        run: go build -o bin/liapoldus-server ./cmd/server
+
+      - name: Run tests
+        run: npm test
 
   security:
     name: Security checks
@@ -112,16 +143,20 @@ jobs:
           cache: true
 
       - name: Download dependencies
+        working-directory: backend
         run: go mod download
 
       - name: Verify module checksums
+        working-directory: backend
         run: go mod verify
 
       - name: Scan Go dependencies and reachable code
+        working-directory: backend
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
       - name: Scan Go source with gosec
-        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.22.10 -exclude-dir=backend/gen ./...
+        working-directory: backend
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.22.10 ./...
 
       - name: Scan repository for secrets
         run: go run github.com/zricethezav/gitleaks/v8@v8.24.3 detect --source . --no-banner --redact
