@@ -2,9 +2,11 @@ import { DescriptorValidationError, TransportError } from '../errors';
 import type { OperationDescriptor } from '../types/descriptor';
 import type { TreeDeclaration } from '../types/tree';
 import { ApiClient } from './api-client';
+import { AssetResolver } from './assets';
 import { registerBuiltin } from './builtin/descriptors';
 import { parseCron } from './cron';
 import { parseDescriptors } from './descriptor';
+import { FormRuntime } from './form';
 import { I18n, type I18nOptions } from './i18n';
 import { RuntimeRegistry } from './registry';
 import { Router } from './router';
@@ -51,6 +53,8 @@ export interface BootRuntime {
   readonly i18n: I18n;
   readonly tokens: DesignTokens;
   readonly tree: TreeController;
+  readonly forms: FormRuntime;
+  readonly assets: AssetResolver;
   /** полный сброс: закрыть dev-канал, снять poll, выгрузить транспорты и сессию */
   dispose(): void;
 }
@@ -75,6 +79,8 @@ class BootSession {
   tree!: TreeController;
   sync!: SyncEngine;
   client!: ApiClient;
+  forms!: FormRuntime;
+  assets!: AssetResolver;
 
   ready = false;
   private factory!: TransportFactory;
@@ -128,6 +134,13 @@ class BootSession {
     this.sync = new SyncEngine(this.registry, this.transport);
     this.client = new ApiClient(this.registry, { transport: this.transport, scope: 'server', sync: this.sync });
     this.tree = new TreeController(this.store);
+    this.forms = new FormRuntime(this.store, {
+      query: (operationId: string, input?: Record<string, unknown>) => this.client.query(operationId, input),
+      callEndpoint: (endpointId: string, input?: Record<string, unknown>) => this.client.callEndpoint(endpointId, input),
+    }, {
+      localeProvider: () => this.i18n.getLocale(),
+    });
+    this.assets = new AssetResolver(this.store, this.client.builtin.asset);
 
     this.i18n.detect();
     this.ready = true;
@@ -158,6 +171,8 @@ class BootSession {
       i18n: this.i18n,
       tokens: this.tokens,
       tree: this.tree,
+      forms: this.forms,
+      assets: this.assets,
       dispose: () => this.dispose(),
     };
   }

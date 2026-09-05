@@ -1,4 +1,4 @@
-import { createStore } from 'zustand/vanilla';
+import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AssetMeta } from '../types/asset';
 import type { ContentData } from '../types/content';
 import type { ResolvedRoute, RouteDescriptor } from '../types/descriptor';
@@ -35,13 +35,10 @@ export interface RuntimeActions {
 
 export type RuntimeStoreState = RuntimeState & RuntimeActions;
 
-export interface RuntimeStore {
-  getState(): RuntimeStoreState;
-  setState(patch: Partial<RuntimeStoreState>): void;
-  subscribe(listener: (state: RuntimeStoreState, prevState: RuntimeStoreState) => void): () => void;
-  /** Подписка на срез: колбэк вызывается только при изменении выбранного значения (по ===). */
+/** zustand store + slice-подписка (равенство по === между выборками). */
+export type RuntimeStore = StoreApi<RuntimeStoreState> & {
   subscribeSlice<T>(selector: (s: RuntimeState) => T, listener: (value: T, prev: T) => void): () => void;
-}
+};
 
 export const defaultStoreState: RuntimeState = {
   ready: false,
@@ -82,7 +79,7 @@ export function createRuntimeStore(initial?: Partial<RuntimeState>): RuntimeStor
       })),
   }));
 
-  const api = store as unknown as RuntimeStore;
+  const api = store as RuntimeStore;
 
   api.subscribeSlice = <T>(selector: (s: RuntimeState) => T, listener: (value: T, prev: T) => void): (() => void) => {
     let prev = selector(store.getState() as RuntimeState);
