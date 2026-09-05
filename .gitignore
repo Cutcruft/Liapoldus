@@ -9,3 +9,6 @@ backend/.env
 # Node
 backend/tests/e2e/node_modules/
 backend/tests/e2e/coverage/
+ui-runtime/node_modules/
+ui-runtime/dist/
+ui-runtime/coverage/
