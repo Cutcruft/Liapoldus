@@ -2,11 +2,13 @@ package integrationtest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
@@ -14,6 +16,14 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/infra/db"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
+
+func mustMap(raw string) map[string]any {
+	m := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		panic("bad fixture: " + raw)
+	}
+	return m
+}
 
 // setupPostgres opens the database from TEST_DATABASE_URL, applies migrations
 // and returns a fresh Services wired to it. Tests skip when the variable is
@@ -69,11 +79,23 @@ func TestSitePageContentAssetRoundtrip(t *testing.T) {
 		t.Fatalf("create site: %v", err)
 	}
 
+	now := time.Now().UTC()
+	for _, def := range []*domain.ComponentDefinition{
+		{SiteID: site.ID, ID: "Container", Name: "Контейнер", Kind: "component",
+			Schema: mustMap(`{"type":"object","properties":{"title":{"type":"string"}}}`), CreatedAt: now},
+		{SiteID: site.ID, ID: "Text", Name: "Текст", Kind: "component",
+			Schema: mustMap(`{"type":"object","properties":{"text":{"type":"string"}}}`), CreatedAt: now},
+	} {
+		if err := services.Store.Save(ctx, def); err != nil {
+			t.Fatalf("seed definition: %v", err)
+		}
+	}
+
 	root := domain.ComponentNode{
-		ID:       "root",
-		Type:     "Container",
-		Props:    map[string]any{"title": "Home"},
-		Children: []domain.ComponentNode{{ID: "kids", Type: "Text"}},
+		InstanceID:   "root",
+		DefinitionID: "Container",
+		Props:        map[string]any{"title": "Home"},
+		Children:     []domain.ComponentNode{{InstanceID: "kids", DefinitionID: "Text"}},
 	}
 	page, err := services.Pages.Create(ctx, site.ID, "Home", "index", root)
 	if err != nil {
@@ -92,9 +114,9 @@ func TestSitePageContentAssetRoundtrip(t *testing.T) {
 	}
 
 	updatedRoot := domain.ComponentNode{
-		ID:    "root",
-		Type:  "Container",
-		Props: map[string]any{"title": "About"},
+		InstanceID:   "root",
+		DefinitionID: "Container",
+		Props:        map[string]any{"title": "About"},
 	}
 	updated, err := services.Pages.UpdateTree(ctx, page.ID, updatedRoot)
 	if err != nil {

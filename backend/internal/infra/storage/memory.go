@@ -20,6 +20,7 @@ type Memory struct {
 	routes      map[string]domain.Route
 	forms       map[string]domain.Form
 	submissions map[string][]domain.Submission
+	defs        map[string]*domain.ComponentDefinition
 }
 
 var _ domain.Storage = (*Memory)(nil)
@@ -35,6 +36,7 @@ func NewMemory() *Memory {
 		routes:      make(map[string]domain.Route),
 		forms:       make(map[string]domain.Form),
 		submissions: make(map[string][]domain.Submission),
+		defs:        make(map[string]*domain.ComponentDefinition),
 	}
 }
 
@@ -500,6 +502,48 @@ func (m *Memory) ListSubmissionsByForm(_ context.Context, siteID, formID string)
 		return nil, domain.ErrNotFound
 	}
 	return clone(m.submissions[formID]), nil
+}
+
+func (m *Memory) defKey(siteID, id string) string { return siteID + "\x00" + id }
+
+func (m *Memory) Save(_ context.Context, def *domain.ComponentDefinition) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.defs[m.defKey(def.SiteID, def.ID)] = def
+	return nil
+}
+
+func (m *Memory) Get(_ context.Context, siteID, id string) (*domain.ComponentDefinition, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	def, ok := m.defs[m.defKey(siteID, id)]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	return clone(def), nil
+}
+
+func (m *Memory) List(_ context.Context, siteID string) ([]domain.ComponentDefinition, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]domain.ComponentDefinition, 0, len(m.defs))
+	for _, def := range m.defs {
+		if def.SiteID == siteID {
+			result = append(result, clone(*def))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result, nil
+}
+
+func (m *Memory) Delete(_ context.Context, siteID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.defs[m.defKey(siteID, id)]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(m.defs, m.defKey(siteID, id))
+	return nil
 }
 
 func clone[T any](value T) T {

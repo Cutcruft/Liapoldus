@@ -4,24 +4,27 @@
 работающим статусом и тестами. Дизайн-лог: `docs/design/frontend.md` (O1 — открыто).
 
 ## Этап 0 — Уборка терминологии: Vue → React
-- [ ] Переписать README: §6 ComponentDefinition (.vue → .tsx), §8 Component Types, §19 Forms, §20-21 Plugin, упоминания Vue/редактора.
-- [ ] Переписать `docs/ui-runtime/spec.md` и `test-spec.md`: убрать `.vue`/обёртки, зафиксировать React как единственный фреймворк.
-- [ ] Прогнать `rg` по репо на `Vue|\.vue|vue ` — ноль совпадений, кроме согласованных.
+- [x] Переписать README: §6 ComponentDefinition (.vue → .tsx), §8 Component Types, §19 Forms, §20-21 Plugin, упоминания Vue/редактора.
+- [x] Переписать `docs/ui-runtime/spec.md` и `test-spec.md`: убрать `.vue`/обёртки, зафиксировать React как единственный фреймворк.
+- [x] Прогнать `rg` по репо на `Vue|\.vue|vue ` — ноль совпадений, кроме согласованных.
 
 ## Этап 1 — Пакет `ui-runtime/` (по `docs/ui-runtime/test-spec.md`)
-- [ ] `ui-runtime/`: `package.json` (npm-пакет, версии отдельные), vitest, TS strict.
-- [ ] Дескрипторы и registry (Provider/Operation/Endpoint; Duplicate/Unknown/DescriptorValidationError).
-- [ ] HTTP-транспорт на fetch, api-client, builtin-операции (/runtime/*), poll-scheduler (cron 6-полевый).
-- [ ] WS/SSE-транспорты (фейки в тестах).
-- [ ] Sync (структура vs данные), i18n/content, assets, tree, routing, design-tokens, store, boot.
-- [ ] React-слой: PageRenderer, RouteOutlet, useQuery/useMutation, test-spec зелёный.
+- [x] `ui-runtime/`: `package.json` (npm-пакет, версии отдельные), vitest, TS strict.
+- [x] Дескрипторы и registry (Provider/Operation/Endpoint; Duplicate/Unknown/DescriptorValidationError).
+- [x] HTTP-транспорт на fetch, api-client, builtin-операции (/runtime/*), poll-scheduler (cron 6-полевый).
+- [x] WS/SSE-транспорты (фейки в тестах).
+- [x] Sync (структура vs данные), i18n/content, assets, tree, routing, design-tokens, store, boot.
+- [x] React-слой: PageRenderer, RouteOutlet, useQuery/useMutation, test-spec зелёный.
+
+> Итог Этапа 1: 23 тест-файла, 220 тестов зелёные, `tsc` чистый (коммиты до `9f70170`).
 
 ## Этап 2 — Git-модель компонентов (backend, go-git)
-- [ ] Git-сервис: репо на сайт (bare), привязка remote (GitHub/GitLab SSH/HTTPS), auth (ключи/токены).
-- [ ] Версии: `ComponentVersion` = коммит; файлы `.tsx` + metadata + schema в коммите.
-- [ ] Автопикинг новых версий: webhook + поллинг; создание ComponentVersion по коммиту.
-- [ ] Dependency-сервис (R9): резолв `pkg@version`, fetch ESM с CDN/registry, `lockfile`+integrity, кэш-зеркало.
-- [ ] Интеграционные тесты: init/fetch/checkout/rollback; e2e с локальным bare.
+> Тест-контракт: `docs/backend/components-test-spec.md`.
+> Срез согласован: component-модель (ComponentDefinition + schema + bindings) + базовый git-сервис (внутренний bare).
+> Внешние remote/автопикинг и Dependency-сервис (R9) — отдельные заходы.
+- [ ] Компонент-модель: ComponentDefinition (id, schema JSON Schema, metadata), ComponentNode → `definitionId` + `bindings`, валидация дерева против реестра.
+- [ ] Git-сервис: репо на сайт (bare, go-git), init репо, `ComponentVersion` = коммит (`src/definition.tsx` + `schema.json` + `metadata.json`).
+- [ ] fetch/checkout по версии, rollback (checkout коммита), история версий.
 
 ## Этап 3 — Сборщик в Go (esbuild)
 - [ ] Materializer workspace: `entry.tsx` + `definitions/*.tsx` из checkout снапшота + `manifest.json`.

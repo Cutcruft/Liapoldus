@@ -15,7 +15,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -823,4 +823,98 @@ func isUniqueViolation(err error) bool {
 func isForeignKeyViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23503"
+}
+
+// --- ComponentDefinitionRepository -----------------------------------------
+
+func (p *Postgres) Save(ctx context.Context, def *domain.ComponentDefinition) error {
+	schemaJSON, err := json.Marshal(def.Schema)
+	if err != nil {
+		return fmt.Errorf("marshal definition schema: %w", err)
+	}
+	metadataJSON, err := json.Marshal(def.Metadata)
+	if err != nil {
+		return fmt.Errorf("marshal definition metadata: %w", err)
+	}
+	if _, err := p.pool.Exec(ctx, `
+		INSERT INTO component_definitions (site_id, id, name, kind, schema, metadata, current_sha, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (site_id, id) DO UPDATE SET
+			name = EXCLUDED.name,
+			kind = EXCLUDED.kind,
+			schema = EXCLUDED.schema,
+			metadata = EXCLUDED.metadata,
+			current_sha = EXCLUDED.current_sha,
+			updated_at = EXCLUDED.updated_at
+	`, def.SiteID, def.ID, def.Name, def.Kind, schemaJSON, metadataJSON, def.CurrentSHA, def.CreatedAt, def.UpdatedAt); err != nil {
+		if isForeignKeyViolation(err) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("save definition: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) Get(ctx context.Context, siteID, id string) (*domain.ComponentDefinition, error) {
+	row := p.pool.QueryRow(ctx, `
+		SELECT site_id, id, name, kind, schema, metadata, current_sha, created_at, updated_at
+		FROM component_definitions WHERE site_id = $1 AND id = $2
+	`, siteID, id)
+	def, err := scanDefinition(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get definition: %w", err)
+	}
+	return def, nil
+}
+
+func (p *Postgres) List(ctx context.Context, siteID string) ([]domain.ComponentDefinition, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT site_id, id, name, kind, schema, metadata, current_sha, created_at, updated_at
+		FROM component_definitions WHERE site_id = $1 ORDER BY id
+	`, siteID)
+	if err != nil {
+		return nil, fmt.Errorf("list definitions: %w", err)
+	}
+	defer rows.Close()
+	result := make([]domain.ComponentDefinition, 0)
+	for rows.Next() {
+		def, err := scanDefinition(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan definition: %w", err)
+		}
+		result = append(result, *def)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate definitions: %w", err)
+	}
+	return result, nil
+}
+
+func (p *Postgres) Delete(ctx context.Context, siteID, id string) error {
+	result, err := p.pool.Exec(ctx, `DELETE FROM component_definitions WHERE site_id = $1 AND id = $2`, siteID, id)
+	if err != nil {
+		return fmt.Errorf("delete definition: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func scanDefinition(row rowScanner) (*domain.ComponentDefinition, error) {
+	var def domain.ComponentDefinition
+	var schemaJSON, metadataJSON []byte
+	if err := row.Scan(&def.SiteID, &def.ID, &def.Name, &def.Kind, &schemaJSON, &metadataJSON, &def.CurrentSHA, &def.CreatedAt, &def.UpdatedAt); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(schemaJSON, &def.Schema); err != nil {
+		return nil, fmt.Errorf("unmarshal definition schema: %w", err)
+	}
+	if err := json.Unmarshal(metadataJSON, &def.Metadata); err != nil {
+		return nil, fmt.Errorf("unmarshal definition metadata: %w", err)
+	}
+	return &def, nil
 }

@@ -2,6 +2,7 @@ package unit
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/liapoldus/liapoldus/backend/internal/api/admin"
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
@@ -19,10 +21,17 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
+	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
 
 func newAdminHandlerTestApp(t *testing.T) admin.App {
+	t.Helper()
+	app, _ := newAdminHandlerTestAppDB(t)
+	return app
+}
+
+func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 	t.Helper()
 	db := storage.NewMemory()
 	blobs, err := storage.NewDiskBlobStore(t.TempDir())
@@ -31,10 +40,9 @@ func newAdminHandlerTestApp(t *testing.T) admin.App {
 	}
 	return admin.App{
 		Sites: site.NewService(db, site.Settings{DefaultLocale: "ru"}),
-		Pages: page.NewService(db, db, page.Settings{
+		Pages: page.NewService(db, db, db, page.Settings{
 			InitialVersion: 1,
 			MaxDepth:       5,
-			Types:          map[string]bool{"Container": true, "Text": true},
 		}),
 		Snapshots: snapshot.NewService(db, db, db),
 		Contents:  content.NewService(db),
@@ -50,13 +58,34 @@ func newAdminHandlerTestApp(t *testing.T) admin.App {
 		}),
 		Forms:  form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
 		Logger: slog.Default(),
-	}
+	}, db
 }
 
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 
+// seedSiteDefs registers component definitions so page trees referencing them
+// validate. siteID must already exist in the store.
+func seedSiteDefs(t *testing.T, db domain.Storage, siteID string) {
+	t.Helper()
+	ctx := context.Background()
+	for id, schema := range map[string]string{
+		"Container": `{"type":"object","properties":{"gap":{"type":"number"}}}`,
+		"Text":      `{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}`,
+	} {
+		if err := db.Save(ctx, &domain.ComponentDefinition{
+			SiteID: siteID, ID: id, Name: id, Kind: "component",
+			Schema:    mustJSONMap(schema),
+			Metadata:  map[string]any{"label": id},
+			CreatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("seed definition %s: %v", id, err)
+		}
+	}
+}
+
 func TestSiteAndPageFlow(t *testing.T) {
-	handler := admin.NewRouter(newAdminHandlerTestApp(t))
+	app, db := newAdminHandlerTestAppDB(t)
+	handler := admin.NewRouter(app)
 
 	siteResponse := request(t, handler, http.MethodPost, "/api/sites", map[string]any{"name": "Demo", "slug": "demo"})
 	if siteResponse.Code != http.StatusCreated {
@@ -66,10 +95,11 @@ func TestSiteAndPageFlow(t *testing.T) {
 		ID string `json:"id"`
 	}
 	decodeResponse(t, siteResponse, &created)
+	seedSiteDefs(t, db, created.ID)
 
 	pageResponse := request(t, handler, http.MethodPost, "/api/sites/"+created.ID+"/pages", map[string]any{
 		"name": "Home", "slug": "home", "root": map[string]any{
-			"id": "root", "type": "Container", "children": []any{map[string]any{"id": "title", "type": "Text", "props": map[string]any{"text": "Hello"}}},
+			"instanceId": "root", "definitionId": "Container", "children": []any{map[string]any{"instanceId": "title", "definitionId": "Text", "props": map[string]any{"text": "Hello"}}},
 		},
 	})
 	if pageResponse.Code != http.StatusCreated {
@@ -85,7 +115,7 @@ func TestSiteAndPageFlow(t *testing.T) {
 	}
 
 	updateResponse := request(t, handler, http.MethodPut, "/api/pages/"+createdPage.ID+"/tree", map[string]any{
-		"root": map[string]any{"id": "root", "type": "Container", "children": []any{}},
+		"root": map[string]any{"instanceId": "root", "definitionId": "Container", "children": []any{}},
 	})
 	if updateResponse.Code != http.StatusOK {
 		t.Fatalf("update tree status = %d", updateResponse.Code)
@@ -112,16 +142,18 @@ func TestSiteAndPageFlow(t *testing.T) {
 }
 
 func TestInvalidComponentIsRejected(t *testing.T) {
-	handler := admin.NewRouter(newAdminHandlerTestApp(t))
+	app, db := newAdminHandlerTestAppDB(t)
+	handler := admin.NewRouter(app)
 	var created struct {
 		ID string `json:"id"`
 	}
 	decodeResponse(t, request(t, handler, http.MethodPost, "/api/sites", map[string]any{"name": "Demo", "slug": "demo"}), &created)
+	seedSiteDefs(t, db, created.ID)
 	response := request(t, handler, http.MethodPost, "/api/sites/"+created.ID+"/pages", map[string]any{
-		"name": "Broken", "slug": "broken", "root": map[string]any{"id": "root", "type": "Unknown"},
+		"name": "Broken", "slug": "broken", "root": map[string]any{"instanceId": "root", "definitionId": "Unknown"},
 	})
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("invalid component status = %d, want %d", response.Code, http.StatusBadRequest)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("invalid component status = %d, want %d", response.Code, http.StatusNotFound)
 	}
 }
 

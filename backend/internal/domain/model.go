@@ -24,12 +24,11 @@ type Site struct {
 }
 
 type ComponentNode struct {
-	ID           string             `json:"id"`
-	Type         string             `json:"type"`
+	InstanceID   string             `json:"instanceId"`
+	DefinitionID string             `json:"definitionId"`
 	Props        map[string]any     `json:"props,omitempty"`
-	Children     []ComponentNode    `json:"children,omitempty"`
-	DefinitionID string             `json:"definitionId,omitempty"`
 	Bindings     []ComponentBinding `json:"bindings,omitempty"`
+	Children     []ComponentNode    `json:"children,omitempty"`
 }
 
 // ComponentBinding mirrors the ui-runtime binding contract (§6 of
@@ -40,14 +39,15 @@ type ComponentBinding struct {
 }
 
 // BindingSource identifies where an instance property value comes from.
-// Source must carry exactly one of the discriminant fields below.
+// Source must carry the discriminant fields of exactly one source type.
 type BindingSource struct {
-	Type      string `json:"type"`
-	ContentID string `json:"contentId,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Operation string `json:"operation,omitempty"`
-	FormID    string `json:"formId,omitempty"`
-	Path      string `json:"path,omitempty"`
+	Type        string `json:"type"`
+	ContentID   string `json:"contentId,omitempty"`
+	Name        string `json:"name,omitempty"`
+	OperationID string `json:"operationId,omitempty"`
+	FormID      string `json:"formId,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Source      string `json:"source,omitempty"`
 }
 
 // ComponentDefinition is the persisted registry entry for a component. The

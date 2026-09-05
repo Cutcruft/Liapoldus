@@ -14,6 +14,7 @@ type Storage interface {
 	AssetRepository
 	RouteRepository
 	FormRepository
+	ComponentDefinitionRepository
 }
 
 type SiteRepository interface {

@@ -15,6 +15,7 @@ import (
 // Services bundles all aggregate services wired to one storage and the
 // externally-configured defaults.
 type Services struct {
+	Store     domain.Storage
 	Sites     *site.Service
 	Pages     *page.Service
 	Snapshots *snapshot.Service
@@ -28,20 +29,16 @@ type Services struct {
 // configuration. Sub-packages never import back into this root package, so no
 // import cycle exists.
 func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config) *Services {
-	componentTypes := make(map[string]bool, len(cfg.ComponentTypes))
-	for _, name := range cfg.ComponentTypes {
-		componentTypes[name] = true
-	}
 	redirectAllowed := make(map[int]bool, len(cfg.RedirectAllowedStatuses))
 	for _, status := range cfg.RedirectAllowedStatuses {
 		redirectAllowed[status] = true
 	}
 	return &Services{
+		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
-		Pages: page.NewService(storage, storage, page.Settings{
+		Pages: page.NewService(storage, storage, storage, page.Settings{
 			InitialVersion: cfg.PageInitialVersion,
 			MaxDepth:       cfg.ComponentMaxDepth,
-			Types:          componentTypes,
 		}),
 		Snapshots: snapshot.NewService(storage, storage, storage),
 		Contents:  content.NewService(storage),
