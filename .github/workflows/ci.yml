@@ -94,7 +94,7 @@ jobs:
     name: End-to-end tests (REST)
     runs-on: ubuntu-latest
     env:
-      LIAPOLDUS_E2E_BASE_URL: http://127.0.0.1:18080
+      LIAPOLDUS_E2E_BASE_URL: http://127.0.0.1:8080
     defaults:
       run:
         working-directory: backend/tests/e2e

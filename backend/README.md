@@ -10,7 +10,7 @@ export PATH="/usr/local/go/bin:$(go env GOPATH)/bin:${PATH}"
 go run ./cmd/server
 ```
 
-По умолчанию сервер слушает `:8080`. Адрес можно изменить переменной `LIAPOLDUS_ADDR`, например `LIAPOLDUS_ADDR=:9090`.
+По умолчанию запускаются два HTTP-сервера: admin (редакторский API) на `:8080` и client (публичный runtime) на `:18080`. Адреса меняются переменными `LIAPOLDUS_ADMIN_ADDR` и `LIAPOLDUS_CLIENT_ADDR` (устаревший алиас `LIAPOLDUS_ADDR` задаёт admin). Дополнительные настройки: `LIAPOLDUS_ADMIN_TOKEN` (Bearer для admin; пустой = открыто), `LIAPOLDUS_ASSET_DIR` (каталог файлов ассетов) и `LIAPOLDUS_CLIENT_DEFAULT_SLUG` (запасной сайт по умолчанию).
 
 ## Проверка
 
@@ -18,6 +18,7 @@ go run ./cmd/server
 go test ./...
 go vet ./...
 curl http://localhost:8080/healthz
+curl http://localhost:18080/healthz
 ```
 
 Полная локальная проверка качества кода:

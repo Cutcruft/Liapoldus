@@ -27,7 +27,7 @@ func TestSiteServiceCreate(t *testing.T) {
 			return nil
 		})
 
-	site, err := domain.NewSiteService(repo).Create(context.Background(), "Demo", "demo")
+	site, err := domain.NewSiteService(repo).Create(context.Background(), "Demo", "demo", "ru", nil)
 	if err != nil {
 		t.Fatalf("create site: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestSiteServiceCreateValidation(t *testing.T) {
 
 	repo := mocks.NewMockSiteRepository(ctrl)
 
-	_, err := domain.NewSiteService(repo).Create(context.Background(), "  ", "  ")
+	_, err := domain.NewSiteService(repo).Create(context.Background(), "  ", "  ", "", nil)
 	if !errors.Is(err, domain.ErrInvalidRequest) {
 		t.Fatalf("error = %v, want ErrInvalidRequest", err)
 	}
@@ -55,7 +55,7 @@ func TestSiteServiceCreateRepoError(t *testing.T) {
 	repo := mocks.NewMockSiteRepository(ctrl)
 	repo.EXPECT().CreateSite(gomock.Any(), gomock.Any()).Return(domain.ErrAlreadyExists)
 
-	_, err := domain.NewSiteService(repo).Create(context.Background(), "Demo", "demo")
+	_, err := domain.NewSiteService(repo).Create(context.Background(), "Demo", "demo", "ru", nil)
 	if !errors.Is(err, domain.ErrAlreadyExists) {
 		t.Fatalf("error = %v, want ErrAlreadyExists", err)
 	}
@@ -65,7 +65,7 @@ func TestSiteServiceGet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	want := domain.Site{ID: "site_1", Name: "Demo", Slug: "demo"}
+	want := domain.Site{ID: "site_1", Name: "Demo", Slug: "demo", DefaultLocale: "ru"}
 	repo := mocks.NewMockSiteRepository(ctrl)
 	repo.EXPECT().GetSite(gomock.Any(), "site_1").Return(want, nil)
 
@@ -73,7 +73,7 @@ func TestSiteServiceGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get site: %v", err)
 	}
-	if got != want {
+	if got.ID != want.ID || got.Name != want.Name || got.Slug != want.Slug || got.DefaultLocale != want.DefaultLocale {
 		t.Fatalf("site = %#v, want %#v", got, want)
 	}
 }

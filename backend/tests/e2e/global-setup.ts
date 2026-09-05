@@ -6,7 +6,8 @@ const here = fileURLToPath(new URL('.', import.meta.url))
 const backendRoot = new URL('../..', import.meta.url)
 const bin = new URL('../../bin/liapoldus-server', import.meta.url)
 
-export const baseURL = process.env.LIAPOLDUS_E2E_BASE_URL ?? 'http://127.0.0.1:18080'
+export const baseURL = process.env.LIAPOLDUS_E2E_BASE_URL ?? 'http://127.0.0.1:8080'
+export const clientURL = process.env.LIAPOLDUS_E2E_CLIENT_URL ?? 'http://127.0.0.1:18080'
 
 let server: ChildProcess | undefined
 
@@ -27,7 +28,9 @@ export async function setup(): Promise<void> {
     env: {
       ...process.env,
       LIAPOLDUS_STORAGE: 'memory',
-      LIAPOLDUS_ADDR: addr.host,
+      LIAPOLDUS_ADMIN_ADDR: addr.host,
+      LIAPOLDUS_CLIENT_ADDR: '127.0.0.1:18080',
+      LIAPOLDUS_ASSET_DIR: './data/e2e-assets',
     },
     stdio: 'inherit',
   })

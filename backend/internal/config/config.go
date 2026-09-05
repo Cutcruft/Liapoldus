@@ -14,16 +14,38 @@ const (
 )
 
 type Config struct {
-	Addr        string
-	Storage     StorageDriver
-	DatabaseURL string
+	AdminAddr         string
+	ClientAddr        string
+	AdminToken        string
+	AssetDir          string
+	ClientDefaultSlug string
+	Storage           StorageDriver
+	DatabaseURL       string
 }
 
 func Load() (Config, error) {
-	addr := strings.TrimSpace(os.Getenv("LIAPOLDUS_ADDR"))
-	if addr == "" {
-		addr = ":8080"
+	adminAddr := strings.TrimSpace(os.Getenv("LIAPOLDUS_ADMIN_ADDR"))
+	if adminAddr == "" {
+		// backward-compatible alias for the management/editor API.
+		adminAddr = strings.TrimSpace(os.Getenv("LIAPOLDUS_ADDR"))
 	}
+	if adminAddr == "" {
+		adminAddr = ":8080"
+	}
+
+	clientAddr := strings.TrimSpace(os.Getenv("LIAPOLDUS_CLIENT_ADDR"))
+	if clientAddr == "" {
+		clientAddr = ":18080"
+	}
+
+	adminToken := strings.TrimSpace(os.Getenv("LIAPOLDUS_ADMIN_TOKEN"))
+
+	assetDir := strings.TrimSpace(os.Getenv("LIAPOLDUS_ASSET_DIR"))
+	if assetDir == "" {
+		assetDir = "./data/assets"
+	}
+
+	clientDefaultSlug := strings.TrimSpace(os.Getenv("LIAPOLDUS_CLIENT_DEFAULT_SLUG"))
 
 	storage := StorageDriver(strings.ToLower(strings.TrimSpace(os.Getenv("LIAPOLDUS_STORAGE"))))
 	if storage == "" {
@@ -37,5 +59,13 @@ func Load() (Config, error) {
 	if databaseURL == "" {
 		databaseURL = "postgres://liapoldus:liapoldus@localhost:5432/liapoldus?sslmode=disable"
 	}
-	return Config{Addr: addr, Storage: storage, DatabaseURL: databaseURL}, nil
+	return Config{
+		AdminAddr:         adminAddr,
+		ClientAddr:        clientAddr,
+		AdminToken:        adminToken,
+		AssetDir:          assetDir,
+		ClientDefaultSlug: clientDefaultSlug,
+		Storage:           storage,
+		DatabaseURL:       databaseURL,
+	}, nil
 }

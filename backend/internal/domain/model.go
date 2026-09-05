@@ -14,10 +14,12 @@ var (
 )
 
 type Site struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Slug          string    `json:"slug"`
+	DefaultLocale string    `json:"defaultLocale"`
+	Hosts         []string  `json:"hosts"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 type ComponentNode struct {

@@ -55,3 +55,17 @@ func (s *SnapshotService) Create(ctx context.Context, siteID, name string) (Snap
 func (s *SnapshotService) Get(ctx context.Context, id string) (Snapshot, error) {
 	return s.repo.GetSnapshot(ctx, id)
 }
+
+func (s *SnapshotService) ListBySite(ctx context.Context, siteID string) ([]Snapshot, error) {
+	if _, err := s.sites.GetSite(ctx, siteID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListSnapshotsBySite(ctx, siteID)
+}
+
+func (s *SnapshotService) Delete(ctx context.Context, id string) error {
+	if _, err := s.repo.GetSnapshot(ctx, id); err != nil {
+		return err
+	}
+	return s.repo.DeleteSnapshot(ctx, id)
+}

@@ -79,3 +79,14 @@ func (s *PageService) UpdateTree(ctx context.Context, id string, root ComponentN
 func (s *PageService) Versions(ctx context.Context, id string) ([]PageVersion, error) {
 	return s.repo.ListPageVersions(ctx, id)
 }
+
+func (s *PageService) Version(ctx context.Context, pageID, versionID string) (PageVersion, error) {
+	return s.repo.GetPageVersion(ctx, pageID, versionID)
+}
+
+func (s *PageService) Delete(ctx context.Context, id string) error {
+	if _, err := s.repo.GetPage(ctx, id); err != nil {
+		return err
+	}
+	return s.repo.DeletePage(ctx, id)
+}

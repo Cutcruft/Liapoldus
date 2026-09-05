@@ -11,7 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	httpapi "github.com/liapoldus/liapoldus/backend/internal/api/http"
+	"github.com/liapoldus/liapoldus/backend/internal/api/admin"
+	"github.com/liapoldus/liapoldus/backend/internal/api/client"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/store"
@@ -33,62 +34,98 @@ func run(logger *slog.Logger) error {
 
 	startupContext, cancelStartup := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancelStartup()
-	siteRepository, pageRepository, snapshotRepository, closeStore, err := openStore(startupContext, cfg, logger)
+	storage, closeStore, err := openStore(startupContext, cfg, logger)
 	if err != nil {
 		return err
 	}
 	defer closeStore()
 
-	sites := domain.NewSiteService(siteRepository)
-	pages := domain.NewPageService(pageRepository, siteRepository)
-	snapshots := domain.NewSnapshotService(siteRepository, pageRepository, snapshotRepository)
+	blobs, err := store.NewDiskBlobStore(cfg.AssetDir)
+	if err != nil {
+		return err
+	}
+
+	sites := domain.NewSiteService(storage)
+	pages := domain.NewPageService(storage, storage)
+	snapshots := domain.NewSnapshotService(storage, storage, storage)
+	contents := domain.NewContentService(storage)
+	assets := domain.NewAssetService(storage, blobs, storage)
+	routes := domain.NewRouteService(storage)
+	forms := domain.NewFormService(storage, storage)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	return serveREST(ctx, cfg, sites, pages, snapshots, logger)
+	return serve(ctx, cfg, sites, pages, snapshots, contents, assets, routes, forms, logger)
 }
 
-func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (domain.SiteRepository, domain.PageRepository, domain.SnapshotRepository, func(), error) {
+func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (store.Storage, func(), error) {
 	switch cfg.Storage {
 	case config.StorageMemory:
-		memory := store.NewMemory()
-		return memory, memory, memory, func() {}, nil
+		logger.Info("memory storage in use")
+		return store.NewMemory(), func() {}, nil
 	case config.StoragePostgres:
 		postgres, err := store.NewPostgres(ctx, cfg.DatabaseURL)
 		if err != nil {
-			return nil, nil, nil, func() {}, err
+			return nil, func() {}, err
 		}
 		if err := postgres.Migrate(ctx); err != nil {
 			postgres.Close()
-			return nil, nil, nil, func() {}, err
+			return nil, func() {}, err
 		}
 		logger.Info("postgres storage ready")
-		return postgres, postgres, postgres, postgres.Close, nil
+		return postgres, postgres.Close, nil
 	default:
-		return nil, nil, nil, func() {}, fmt.Errorf("unsupported storage driver %q", cfg.Storage)
+		return nil, func() {}, fmt.Errorf("unsupported storage driver %q", cfg.Storage)
 	}
 }
 
-func serveREST(ctx context.Context, cfg config.Config, sites *domain.SiteService, pages *domain.PageService, snapshots *domain.SnapshotService, logger *slog.Logger) error {
-	server := &http.Server{Addr: cfg.Addr, Handler: httpapi.NewHandler(sites, pages, snapshots, logger), ReadHeaderTimeout: 5 * time.Second}
+func serve(ctx context.Context, cfg config.Config, sites *domain.SiteService, pages *domain.PageService, snapshots *domain.SnapshotService, contents *domain.ContentService, assets *domain.AssetService, routes *domain.RouteService, forms *domain.FormService, logger *slog.Logger) error {
+	adminHandler := admin.NewRouter(admin.App{
+		Sites:      sites,
+		Pages:      pages,
+		Contents:   contents,
+		Assets:     assets,
+		Routes:     routes,
+		Forms:      forms,
+		Snapshots:  snapshots,
+		Logger:     logger,
+		AdminToken: cfg.AdminToken,
+	})
+	clientHandler := client.NewRouter(&client.App{
+		Sites:       sites,
+		Contents:    contents,
+		Assets:      assets,
+		Routes:      routes,
+		Forms:       forms,
+		Logger:      logger,
+		DefaultSlug: cfg.ClientDefaultSlug,
+	})
 
-	errCh := make(chan error, 1)
-	go func() {
-		logger.Info("management server started", "address", server.Addr)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- fmt.Errorf("rest server: %w", err)
-			return
-		}
-		errCh <- nil
-	}()
+	adminServer := &http.Server{Addr: cfg.AdminAddr, Handler: adminHandler, ReadHeaderTimeout: 5 * time.Second}
+	clientServer := &http.Server{Addr: cfg.ClientAddr, Handler: clientHandler, ReadHeaderTimeout: 5 * time.Second}
+
+	errCh := make(chan error, 2)
+	go serveListener(adminServer, logger, errCh)
+	go serveListener(clientServer, logger, errCh)
 
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return server.Shutdown(shutdownCtx)
+		_ = adminServer.Shutdown(shutdownCtx)
+		_ = clientServer.Shutdown(shutdownCtx)
+		return nil
 	case err := <-errCh:
 		return err
 	}
+}
+
+func serveListener(server *http.Server, logger *slog.Logger, errCh chan<- error) {
+	logger.Info("server started", "address", server.Addr)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		errCh <- fmt.Errorf("server %s: %w", server.Addr, err)
+		return
+	}
+	errCh <- nil
 }
