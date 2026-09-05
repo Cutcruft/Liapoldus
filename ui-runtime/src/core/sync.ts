@@ -19,6 +19,8 @@ export interface SyncOptions {
   /** принудительный канал (poll/sse/ws) */
   channel?: Channel;
   input?: Record<string, unknown>;
+  /** params запроса (query/path/body) — приоритет над input для построения URL */
+  params?: Record<string, unknown>;
   errorHandler?: (e: Error) => void;
 }
 
@@ -77,7 +79,7 @@ export class SyncEngine {
     if (typeof this.transport.subscribe !== 'function') {
       throw new DescriptorValidationError(`Транспорт провайдера '${op.provider.id}' не поддерживает push-канал ${channel}`);
     }
-    const req: TransportRequest = { provider: op.provider, operation: op, input: opts?.input };
+    const req: TransportRequest = { provider: op.provider, operation: op, input: opts?.input, params: opts?.params };
     return this.transport.subscribe(
       req,
       (data) => onData(data as T, { ...meta, timestamp: Date.now() }),
@@ -112,6 +114,7 @@ export class SyncEngine {
       provider: op.provider,
       operation: op,
       input: opts?.input,
+      params: opts?.params,
     });
     emit(res.body);
   }
