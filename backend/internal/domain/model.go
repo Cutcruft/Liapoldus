@@ -6,9 +6,12 @@ import (
 )
 
 var (
-	ErrNotFound       = errors.New("resource not found")
-	ErrAlreadyExists  = errors.New("resource already exists")
-	ErrInvalidRequest = errors.New("invalid request")
+	ErrNotFound           = errors.New("resource not found")
+	ErrAlreadyExists      = errors.New("resource already exists")
+	ErrInvalidRequest     = errors.New("invalid request")
+	ErrRepoNotInitialized = errors.New("repository not initialized")
+	ErrSchemaInvalid      = errors.New("invalid JSON schema")
+	ErrVersionNotFound    = errors.New("component version not found")
 )
 
 type Site struct {
@@ -21,10 +24,56 @@ type Site struct {
 }
 
 type ComponentNode struct {
-	ID       string          `json:"id"`
-	Type     string          `json:"type"`
-	Props    map[string]any  `json:"props,omitempty"`
-	Children []ComponentNode `json:"children,omitempty"`
+	ID           string             `json:"id"`
+	Type         string             `json:"type"`
+	Props        map[string]any     `json:"props,omitempty"`
+	Children     []ComponentNode    `json:"children,omitempty"`
+	DefinitionID string             `json:"definitionId,omitempty"`
+	Bindings     []ComponentBinding `json:"bindings,omitempty"`
+}
+
+// ComponentBinding mirrors the ui-runtime binding contract (§6 of
+// docs/ui-runtime/json-descriptors.md).
+type ComponentBinding struct {
+	Property string        `json:"property"`
+	Source   BindingSource `json:"source"`
+}
+
+// BindingSource identifies where an instance property value comes from.
+// Source must carry exactly one of the discriminant fields below.
+type BindingSource struct {
+	Type      string `json:"type"`
+	ContentID string `json:"contentId,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Operation string `json:"operation,omitempty"`
+	FormID    string `json:"formId,omitempty"`
+	Path      string `json:"path,omitempty"`
+}
+
+// ComponentDefinition is the persisted registry entry for a component. The
+// actual source is stored in git (R5); the registry carries the parsed schema
+// and metadata for validation and listing.
+type ComponentDefinition struct {
+	SiteID     string         `json:"siteId"`
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	Kind       string         `json:"kind"`
+	Source     string         `json:"-"`
+	Schema     map[string]any `json:"schema"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
+	CurrentSHA string         `json:"currentSha"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
+}
+
+// ComponentVersion is a commit in the site's git repo representing a released
+// definition of a component.
+type ComponentVersion struct {
+	ID           string    `json:"id"`
+	SiteID       string    `json:"siteId"`
+	DefinitionID string    `json:"definitionId"`
+	Message      string    `json:"message"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 type Page struct {
