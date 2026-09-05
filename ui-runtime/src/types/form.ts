@@ -1,12 +1,6 @@
-export interface FieldSchema {
-  type: 'text' | 'email' | 'password' | 'number' | 'select' | 'checkbox' | 'textarea' | 'custom';
-  label?: string;
-  required?: boolean;
-  placeholder?: string;
-  values?: string[];
-  defaultValue?: unknown;
-  rules?: ValidationRule[];
-}
+/** Типы форм: канонический формат из json-descriptors.md §10 (fields — массив, cross-field validation, submit.target). */
+
+export type FieldType = 'text' | 'email' | 'password' | 'number' | 'select' | 'checkbox' | 'textarea' | 'custom';
 
 export interface ValidationRule {
   id: 'minLength' | 'maxLength' | 'min' | 'max' | 'pattern' | 'custom';
@@ -14,22 +8,36 @@ export interface ValidationRule {
   message?: string;
 }
 
+export interface FieldSchema {
+  name: string;
+  type: FieldType;
+  label?: string;
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+  defaultValue?: unknown;
+  rules?: ValidationRule[];
+}
+
+/** Кросс-полевое правило: e.g. `{ id: 'confirmMatch', fields: ['password','password2'] }`. */
+export interface CrossFieldRule {
+  id: string;
+  fields: string[];
+  message?: string;
+}
+
+/** submit.target: `endpoint.<id>` | `operation.<id>` | голый id (по умолчанию — endpoint). */
+export interface FormSubmitConfig {
+  target: string;
+  providerId?: string;
+}
+
 export interface FormDefinition {
   id: string;
   name?: string;
-  submit: {
-    operationId?: string;
-    endpointId?: string;
-  };
-  fields: Record<string, FieldSchema>;
-  /** кросс-полевые правила */
-  rules?: CrossFieldRule[];
-}
-
-export interface CrossFieldRule {
-  id: string;
-  condition: { field: string; operator: 'eq' | 'notEq' | 'gt' | 'gte' | 'lt' | 'lte'; value: unknown };
-  message?: string;
+  fields: FieldSchema[];
+  validation?: CrossFieldRule[];
+  submit: FormSubmitConfig;
 }
 
 export interface FieldValidationError {
@@ -43,8 +51,12 @@ export interface ValidationResult {
   errors: FieldValidationError[];
 }
 
+export type FormSubmitResult = { submissionId: string; status: 'ok' };
+
+/** Снимок формы для UI. */
 export interface FormRuntimeSnapshot {
   status: 'idle' | 'loading' | 'error' | 'submitting' | 'submitted';
   values: Record<string, unknown>;
-  errors: FieldValidationError[];
+  errors: Record<string, string[]>;
+  definition?: FormDefinition;
 }

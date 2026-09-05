@@ -3,6 +3,12 @@ export interface AssetVariant {
   url: string;
 }
 
+/** Ссылка на ассет внутри контента; резолвится в `variants[].url` (default 'master'). */
+export interface AssetRef {
+  assetId: string;
+  variant?: string;
+}
+
 export interface AssetMeta {
   id: string;
   name: string;

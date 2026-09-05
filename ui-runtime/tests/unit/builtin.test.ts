@@ -48,9 +48,11 @@ const assetsFix: Record<string, AssetFixture> = {
 
 const formFix = {
   id: 'f1',
-  fields: { email: { type: 'email', required: true }, name: { type: 'string', required: false } },
-  validation: { email: { pattern: '^[^@]+@[^@]+$' } },
-  submit: { endpointId: 'form.submit' },
+  fields: [
+    { name: 'email', type: 'email', required: true },
+    { name: 'name', type: 'text', required: false },
+  ],
+  submit: { target: 'endpoint.form.submit' },
 };
 
 function mergeContent(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
@@ -293,8 +295,10 @@ describe('builtin', () => {
 
     const form = await api.builtin.form.get('f1');
     expect(form.id).toBe('f1');
-    expect(form.fields).toHaveProperty('email');
-    expect(form.submit.endpointId).toBe('form.submit');
+    const emailField = form.fields.find((f) => f.name === 'email')!;
+    expect(emailField.type).toBe('email');
+    expect(emailField.required).toBe(true);
+    expect(form.submit.target).toBe('endpoint.form.submit');
   });
 
   it('form.submit — server-only: из компонента (public) → ScopeError; в server-контексте отправляет payload', async () => {
