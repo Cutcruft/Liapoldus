@@ -25,9 +25,9 @@ Backend реализован на Go как модульный монолит. �
 
 ```text
 Go API: Operation definition + public config
-                 ↓
-Vue frontend: Provider / Plugin
-                 ↓
+                  ↓
+React frontend: Provider / Plugin
+                  ↓
 External API
 ```
 
@@ -71,7 +71,7 @@ PostgreSQL adapter использует JSONB для дерева `ComponentNode
 
 1. `ComponentDefinition` и schema validation.
 2. Route и runtime resolver.
-3. Vue 3 editor с рекурсивным renderer и drag-and-drop.
-4. Snapshot build worker через Vite.
+3. React editor с рекурсивным renderer и drag-and-drop.
+4. Snapshot build worker через esbuild (встроен в Go-бинарник).
 5. Assets, content и bindings.
 6. Direct frontend Operations, providers и plugin SDK.

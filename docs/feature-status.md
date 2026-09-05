@@ -33,10 +33,10 @@
 - прямые HTTP/GraphQL-интеграции из frontend;
 - server-only operations;
 - ESB extension layer (registry, metadata routing, `Call`/`Stream`);
-- Plugin management и npm dependencies;
+- Plugin management и декларации зависимостей (fetch + lock с CDN/registry);
 - версии всех объектов кроме Page;
 - полноценный Snapshot со всеми типами объектов;
-- Vite build worker и static artifacts;
+- build worker и static artifacts (esbuild внутри Go-бинарника);
 - Development/Production environments (client работает с текущими данными напрямую);
 - runtime publication и rollback;
 - Redis/cache policies;

@@ -633,7 +633,7 @@ class ComponentRegistry {
 }
 ```
 
-- `ComponentDefinition` — React-компонент (обёртка `.vue`/`.jsx`), который знает только как рендерить; `metadata/schema` — отдельные дескрипторы, в рантайм не зашиты.
+- `ComponentDefinition` — React-компонент (исходники `.tsx`), который знает только как рендерить; `metadata/schema` — отдельные дескрипторы, в рантайм не зашиты.
 - `PageRenderer` по `instanceId → definitionId` забирает компонент из реестра и передаёт `props` + резолвенные binding-значения.
 - неизвестный `definitionId` → `ComponentNotFoundError` (рендер placeholder, не падение всего дерева).
 

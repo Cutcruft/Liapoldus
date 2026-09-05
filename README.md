@@ -7,7 +7,7 @@
 Сервис предоставляет:
 
 - конструктор страниц;
-- Vue-компоненты;
+- React-компоненты;
 - маршрутизацию;
 - темы;
 - контент и локализацию;
@@ -15,7 +15,7 @@
 - простые формы;
 - configuration API и server-only endpoints;
 - интеграцию с внешними системами через плагины;
-- сборку frontend через Vite;
+- сборку frontend через esbuild (встроен в Go-бинарник, без Node);
 - версионирование;
 - Development и Production окружения;
 - размещение нескольких независимых сайтов на одном backend.
@@ -31,7 +31,7 @@
 | Site                | Независимый сайт                                   |
 | Route               | Правило навигации                                  |
 | Page                | Содержимое страницы                                |
-| ComponentDefinition | Определение Vue-компонента                         |
+| ComponentDefinition | Определение React-компонента                         |
 | ComponentInstance   | Использование компонента на странице               |
 | Binding             | Связь свойства компонента с данными                |
 | Content             | Данные, используемые компонентом                   |
@@ -119,27 +119,27 @@ Page может использовать Layout, который является
 
 # 6. ComponentDefinition
 
-`ComponentDefinition` представляет управляемый системой Vue-компонент.
+`ComponentDefinition` представляет управляемый системой React-компонент.
 
 Определение содержит:
 
 - имя;
 - тип;
-- источник `.vue`;
+- источник `.tsx`;
 - metadata;
 - schema;
 - ограничения использования.
 
-Vue-файл является реализацией компонента.
+Файл `.tsx` является реализацией компонента.
 
-Metadata и schema хранятся отдельно от `.vue`.
+Metadata и schema хранятся отдельно от `.tsx`.
 
 Пример:
 
 ```text
 ComponentDefinition
     name: Card
-    source: ./Card.vue
+    source: ./Card.tsx
     allowChildren: true
 ```
 
@@ -239,7 +239,7 @@ Content
     └── Translation: de
 ```
 
-Локализация относится к данным Content, а не к Vue-компоненту.
+Локализация относится к данным Content, а не к React-компоненту.
 
 ---
 
@@ -450,8 +450,8 @@ Plugin является механизмом расширения системы
 
 Plugin может предоставлять:
 
-- npm dependencies;
-- Vue components;
+- внешние пакеты (fetch + lock из CDN/registry);
+- React components;
 - Component metadata;
 - Themes;
 - Providers;
@@ -465,17 +465,17 @@ GraphQL, HTTP и другие внешние технологии не долж�
 
 # 21. Plugin Management
 
-Система самостоятельно управляет frontend dependencies.
+Система управляет frontend-зависимостями на уровне деклараций.
 
-Установка Plugin должна обеспечивать:
+Сервер не имеет Node-окружения, поэтому к установке применяется fetch-модель:
 
-1. получение описания пакета;
+1. получение описания пакета (`pkg@version`);
 2. изменение package configuration;
-3. установку npm dependencies;
-4. обновление node\_modules;
+3. загрузка предсобранного ESM-бандла с CDN/registry;
+4. запись lockfile (+integrity) в версию и кэширование для пересборок;
 5. включение Plugin в frontend build.
 
-Vite используется как build engine после подготовки frontend workspace.
+esbuild используется как build engine после подготовки frontend workspace.
 
 ---
 
@@ -543,8 +543,7 @@ Build содержит:
 ```text
 Snapshot
 → Frontend Workspace
-→ npm dependencies
-→ Vite
+→ esbuild (внутри Go-бинарника)
 → static artifacts
 ```
 
@@ -611,8 +610,8 @@ Build Time:
 - подключает компоненты;
 - подключает темы;
 - подключает plugins;
-- устанавливает npm dependencies;
-- запускает Vite;
+- разрешает внешние зависимости (fetch + lock из CDN/registry);
+- запускает esbuild;
 - создаёт static artifacts.
 
 Runtime:
@@ -699,7 +698,7 @@ Object Versions
 ```text
 Snapshot
 → Build
-→ Vite
+→ esbuild
 → Static Artifacts
 ```
 
@@ -734,7 +733,7 @@ Provider
 Infrastructure
 ```
 
-Таким образом один и тот же Vue-компонент может использовать локальные данные или данные внешней системы без изменения своего исходного кода.
+Таким образом один и тот же React-компонент может использовать локальные данные или данные внешней системы без изменения своего исходного кода.
 
 ## 32. Прямые интеграции frontend
 
