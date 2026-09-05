@@ -39,4 +39,13 @@
 - Redis/cache policies;
 - production lifecycle и динамическая загрузка extension registry.
 
+## Спроектировано (спек, реализация не начата)
+
+| Область | Документация |
+| --- | --- |
+| ui-runtime: архитектура и слои (контент+локализация, ассеты, единый роутинг/edge) | `docs/ui-runtime/spec.md` |
+| ui-runtime: JSON-дескрипторы (контракт для backend, вкл. поллинг/content-locale/ассеты/роуты) | `docs/ui-runtime/json-descriptors.md` |
+| ui-runtime: полный спек тестов (контракт для реализации, вкл. asset/edge-тесты) | `docs/ui-runtime/test-spec.md` |
+| Backend REST API (content с ?locale и translations, ассеты, формы, runtime-роутинг) | `docs/api.md` |
+
 Наличие пункта в основном README не означает, что он уже доступен через API. Перед реализацией каждого следующего блока его нужно добавить в этот статус и покрыть тестами.
