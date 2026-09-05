@@ -13,7 +13,7 @@ import { makeFakeFetch, resetFakes } from './helpers';
 const BUILTIN = 'liapoldus.builtin';
 
 const treeA: TreeDeclaration = {
-  root: { id: 'root', definitionId: 'Page', props: { type: 'children', children: [] } },
+  root: { instanceId: 'root', definitionId: 'Page', props: {}, bindings: [], children: [] },
 };
 
 const stringsByLocale: Record<string, Record<string, string>> = {

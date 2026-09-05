@@ -203,77 +203,61 @@ export const endpointDescriptor2: EndpointDescriptor = {
   operationId: 'form.submit',
 };
 
-// --- routes (таблица для Router/edge) -------------------------------------
+// --- routes (единая таблица для Router/edge, json-descriptors §4) --------
 
 export const routeDescriptor1: RouteDescriptor = {
-  kind: 'route',
-  id: 'home',
-  path: '/',
-  matcher: { kind: 'regex', source: '/^\\/$/', priority: 0 },
-  operationId: 'page@home',
+  id: 'route.home',
+  matcher: '^/(|new)$',
+  priority: 0,
+  action: { type: 'renderPage', pageId: 'page.home' },
 };
 
 export const routeDescriptor2: RouteDescriptor = {
-  kind: 'route',
-  id: 'docs',
-  path: '/docs',
-  matcher: { kind: 'regex', source: '/^\\/docs(\\/.*)?$/', priority: 1 },
-  operationId: 'page@docs',
+  id: 'route.article',
+  matcher: '^/articles/(?<articleId>[0-9]+)$',
+  priority: 10,
+  action: { type: 'renderPage', pageId: 'page.article' },
 };
 
 export const routeDescriptor3: RouteDescriptor = {
-  kind: 'route',
-  id: 'blog-entry',
-  path: '/blog/{slug}/',
-  matcher: {
-    kind: 'path',
-    source: '/blog/',
-    priority: 1,
-    segments: [
-      { type: 'fixed', value: 'blog' },
-      { type: 'param', value: 'slug' },
-    ],
-  },
-  operationId: 'page@blog-entry',
+  id: 'route.blog',
+  matcher: '^/blog/(?<slug>[a-z0-9-]+)$',
+  priority: 10,
+  action: { type: 'renderPage', pageId: 'page.blog' },
 };
 
 export const routeDescriptor4: RouteDescriptor = {
-  kind: 'route',
-  id: 'api',
-  path: '/*',
-  matcher: { kind: 'regex', source: '/^\\/api\\/.*$/', priority: 100 },
-  operationId: 'page@api',
+  id: 'route.old',
+  matcher: '^/old$',
+  priority: 5,
+  action: { type: 'redirect', target: '/new', status: 301 },
 };
 
 export const routeDescriptor5: RouteDescriptor = {
-  kind: 'route',
-  id: 'not-found',
-  path: '/*',
-  matcher: { kind: 'path', source: '/*', priority: 0 },
-  operationId: 'page@not-found',
+  id: 'route.legacy',
+  matcher: '^/legacy/(.*)$',
+  priority: 5,
+  action: { type: 'redirect', target: '/modern/$1', status: 308, keepQuery: true },
 };
 
 export const routeDescriptor6: RouteDescriptor = {
-  kind: 'route',
-  id: 'catalog',
-  path: '/catalog',
-  matcher: { kind: 'path', source: '/catalog', priority: 10 },
-  operationId: 'page@catalog',
+  id: 'route.robots',
+  matcher: '^/robots\\.txt$',
+  priority: 100,
+  action: { type: 'serveAsset', assetId: 'asset.robots' },
 };
 
 export const routeDescriptor7: RouteDescriptor = {
-  kind: 'route',
-  id: 'catalog-old',
-  path: '/old-catalog',
-  matcher: { kind: 'path', source: '/old-catalog', priority: 10 },
-  operationId: 'page@catalog-old',
+  id: 'route.article-lower',
+  matcher: '^/articles/(?<articleId>[0-9]+)$',
+  priority: 5,
+  action: { type: 'renderPage', pageId: 'page.article-lower' },
 };
 
-// --- themes --------------------------------------------------------------
+// --- themes (json-descriptors §8) ----------------------------------------
 
 export const themeDescriptor1: ThemeDescriptor = {
-  kind: 'theme',
-  id: 'default',
+  themeId: 'default',
   tokens: {
     '--color-primary': '#305EA8',
     '--color-bg': '#FFFFFF',
@@ -282,13 +266,13 @@ export const themeDescriptor1: ThemeDescriptor = {
 };
 
 export const themeDescriptor2: ThemeDescriptor = {
-  kind: 'theme',
-  id: 'dark',
+  themeId: 'dark',
   tokens: {
     '--color-primary': '#7EA8E8',
     '--color-bg': '#0F1115',
     '--font-body': 'Inter, sans-serif',
   },
+  fonts: ['Inter'],
 };
 
 // --- контракт ------------------------------------------------------------
@@ -366,128 +350,58 @@ export const contractJson = JSON.stringify(
 
 export const treeDeclaration: TreeDeclaration = {
   root: {
-    id: 'root',
+    instanceId: 'root',
     definitionId: 'Page',
-    props: {
-      type: 'children',
-      children: [
-        {
-          id: 'i1',
-          definitionId: 'Header',
-          props: {
-            type: 'children',
-            children: [
-              {
-                id: 'i2',
-                definitionId: 'Navigation',
-                props: {
-                  type: 'children',
-                  children: [
-                    {
-                      id: 'i3',
-                      definitionId: 'Item',
-                      props: {
-                        type: 'props',
-                        value: {
-                          text: { key: 'text', ref: { source: 'i18n', entityId: 'menu', path: 'home' } },
-                          link: '#home',
-                        },
-                      },
-                    },
-                    {
-                      id: 'i4',
-                      definitionId: 'Item',
-                      props: {
-                        type: 'props',
-                        value: {
-                          text: { key: 'text', ref: { source: 'i18n', entityId: 'menu', path: 'favorites' } },
-                          link: '#favorites',
-                        },
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
+    props: {},
+    bindings: [
+      { property: 'title', source: { type: 'content', contentId: 'hero', path: 'strings.title' } },
+      { property: 'items', source: { type: 'operation', operationId: 'reviews', path: 'items.[].title' } },
+    ],
+    children: [
+      {
+        instanceId: 'i1',
+        definitionId: 'Header',
+        props: { nav: ['home', 'favorites'] },
+        bindings: [],
+        children: [
+          {
+            instanceId: 'i2',
+            definitionId: 'Navigation',
+            props: {},
+            bindings: [{ property: 'label', source: { type: 'content', contentId: 'menu', path: 'home' } }],
+            children: [],
           },
-        },
-        {
-          id: 'i5',
-          definitionId: 'Hero',
-          props: {
-            type: 'props',
-            value: {
-              title: { key: 'title', ref: { source: 'content', entityId: 'hero', path: 'strings.title' } },
-              body: { key: 'body', ref: { source: 'content', entityId: 'hero', path: 'strings.body' } },
-            },
-          },
-        },
-        {
-          id: 'i6',
-          definitionId: 'ProductList',
-          props: {
-            type: 'list',
-            list: {
-              source: { source: 'content', entityId: 'products', path: 'items' },
-              as: 'item',
-              children: [
-                {
-                  id: 'i7',
-                  definitionId: 'ProductCard',
-                  props: {
-                    type: 'props',
-                    value: { title: { key: 'title', ref: { source: 'content', path: 'title' } } },
-                  },
-                },
-              ],
-            },
-          },
-        },
-        {
-          id: 'i8',
-          definitionId: 'Footer',
-          props: {
-            type: 'props',
-            value: {
-              copyright: { key: 'copyright', ref: { source: 'i18n', entityId: 'footer', path: 'copyright' } },
-            },
-          },
-        },
-        {
-          id: 'i9',
-          definitionId: 'NotFoundInfo',
-          props: {
-            type: 'props',
-            value: { text: { key: 'text', ref: { source: 'i18n', entityId: 'errors', path: 'notFound' } } },
-          },
-        },
-        {
-          id: 'i10',
-          definitionId: 'AuthStatus',
-          props: {
-            type: 'props',
-            value: { hint: { key: 'hint', ref: { source: 'form', entityId: 'contact', path: 'status' } } },
-          },
-        },
-        {
-          id: 'i11',
-          definitionId: 'Reviews',
-          props: {
-            type: 'props',
-            value: {
-              items: { key: 'items', ref: { source: 'operation', entityId: 'reviews', path: 'items.[].title' } },
-            },
-          },
-        },
-        {
-          id: 'i12',
-          definitionId: 'Breadcrumbs',
-          props: {
-            type: 'props',
-            value: { current: { key: 'current', ref: { source: 'route', path: 'params.category' } } },
-          },
-        },
-      ],
-    },
+        ],
+      },
+      {
+        instanceId: 'i3',
+        definitionId: 'Hero',
+        props: {},
+        bindings: [
+          { property: 'title', source: { type: 'content', contentId: 'hero', path: 'strings.title' } },
+          { property: 'body', source: { type: 'content', contentId: 'hero', path: 'strings.body' } },
+        ],
+        children: [],
+      },
+      {
+        instanceId: 'i4',
+        definitionId: 'ProductList',
+        props: {},
+        bindings: [
+          { property: 'items', source: { type: 'content', contentId: 'products', path: 'items' } },
+          { property: 'title', source: { type: 'content', contentId: 'hero', path: 'strings.title' } },
+        ],
+        children: [],
+      },
+      {
+        instanceId: 'i5',
+        definitionId: 'Footer',
+        props: {},
+        bindings: [
+          { property: 'copyright', source: { type: 'content', contentId: 'footer', path: 'copyright' } },
+        ],
+        children: [],
+      },
+    ],
   },
 };

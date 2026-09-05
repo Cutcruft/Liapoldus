@@ -1,21 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { createRuntimeStore } from '../../src/core/store';
 import type { AssetMeta } from '../../src/types/asset';
-import type { RouteDescriptor } from '../../src/types/descriptor';
+import type { ResolvedRoute, RouteDescriptor } from '../../src/types/descriptor';
 import type { TreeDeclaration } from '../../src/types/tree';
 
 const treeA: TreeDeclaration = {
-  root: { id: 'root', definitionId: 'Page', props: { type: 'children', children: [] } },
+  root: { instanceId: 'root', definitionId: 'Page', props: {}, bindings: [], children: [] },
 };
 const treeB: TreeDeclaration = {
-  root: { id: 'root', definitionId: 'PageAlt', props: { type: 'children', children: [] } },
+  root: { instanceId: 'root', definitionId: 'PageAlt', props: {}, bindings: [], children: [] },
 };
 const route: RouteDescriptor = {
-  kind: 'route',
-  id: 'home',
-  path: '/',
-  matcher: { kind: 'regex', source: '/^\\/$/', priority: 0 },
-  operationId: 'page@home',
+  id: 'route.home',
+  matcher: '^/$',
+  priority: 0,
+  action: { type: 'renderPage', pageId: 'page.home' },
+};
+const resolvedRoute: ResolvedRoute = {
+  route,
+  params: {},
+  query: {},
 };
 const asset: AssetMeta = {
   id: 'a1',
@@ -32,6 +36,7 @@ describe('runtime store', () => {
     expect(st.ready).toBe(false);
     expect(st.tree).toBeNull();
     expect(st.routes).toEqual([]);
+    expect(st.route).toBeNull();
     expect(st.tokens).toEqual({});
     expect(st.content).toEqual({});
     expect(st.assets).toEqual({});
@@ -55,6 +60,10 @@ describe('runtime store', () => {
     st().setRoutes([route]);
     expect(st().routes).toHaveLength(1);
     expect(st().tree).toBe(treeA);
+
+    st().setRoute(resolvedRoute);
+    expect(st().route).toBe(resolvedRoute);
+    expect(st().routes).toHaveLength(1);
 
     st().applyTokens({ '--x': '#fff' });
     expect(st().tokens['--x']).toBe('#fff');

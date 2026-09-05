@@ -69,25 +69,36 @@ export class RuntimeRegistry {
   private themes: ThemeDescriptor[] = [];
 
   register(descriptor: Descriptor, _ctx?: RegisterContext): void {
-    switch (descriptor.kind) {
+    switch (this.kindOf(descriptor)) {
       case 'provider':
-        this.registerProvider(descriptor);
+        this.registerProvider(descriptor as ProviderDescriptor);
         return;
       case 'operation':
-        this.registerOperation(descriptor);
+        this.registerOperation(descriptor as OperationDescriptor);
         return;
       case 'endpoint':
-        this.registerEndpoint(descriptor);
+        this.registerEndpoint(descriptor as EndpointDescriptor);
         return;
       case 'route':
-        this.registerRoute(descriptor);
+        this.registerRoute(descriptor as RouteDescriptor);
         return;
       case 'theme':
-        this.registerTheme(descriptor);
+        this.registerTheme(descriptor as ThemeDescriptor);
         return;
       default:
-        throw new DescriptorValidationError(`Неизвестный тип дескриптора: ${(descriptor as Descriptor).kind}`);
+        throw new DescriptorValidationError(`Неизвестный тип дескриптора: ${String((descriptor as Descriptor)?.kind)}`);
     }
+  }
+
+  /** kind из `kind`-поля; канонические route/theme без kind распознаются структурно. */
+  private kindOf(d: unknown): string {
+    if (d && typeof d === 'object') {
+      const rec = d as Record<string, unknown>;
+      if (typeof rec.kind === 'string') return rec.kind;
+      if ('action' in rec && 'matcher' in rec) return 'route';
+      if ('themeId' in rec && 'tokens' in rec) return 'theme';
+    }
+    return 'unknown';
   }
 
   registerProvider(descriptor: ProviderDescriptor): void {
@@ -298,15 +309,15 @@ export class RuntimeRegistry {
   }
 
   registerTheme(descriptor: ThemeDescriptor): void {
-    const existing = this.themes.find((t) => t.id === descriptor.id);
+    const existing = this.themes.find((t) => t.themeId === descriptor.themeId);
     if (existing) {
-      throw new DuplicateRegistrationError(`Theme '${descriptor.id}' уже зарегистрирована`);
+      throw new DuplicateRegistrationError(`Theme '${descriptor.themeId}' уже зарегистрирована`);
     }
     this.themes.push(descriptor);
   }
 
-  hasTheme(id: string): boolean {
-    return this.themes.some((t) => t.id === id);
+  hasTheme(themeId: string): boolean {
+    return this.themes.some((t) => t.themeId === themeId);
   }
 
   get themesList(): ThemeDescriptor[] {

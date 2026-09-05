@@ -1,73 +1,57 @@
-export type BindingSource =
-  | 'content'
-  | 'asset'
-  | 'i18n'
-  | 'route'
-  | 'operation'
-  | 'form'
-  | 'tokens';
+/**
+ * Дерево страницы и bindings — каноническая форма (json-descriptors.md §5/§6,
+ * тест-спека §11). Дерево описывает только структуру; данные — через bindings.
+ */
 
-export interface BindingReference {
-  /** source контекста: content, i18n, route, operation, form… */
-  source: BindingSource;
-  /** id сущности внутри source (contentId, section, operationId…) */
-  entityId?: string;
-  /** dot-path с поддержкой `[]` для обхода массивов */
-  path?: string;
-  /** статический вариант (например `theme.tokens.primary`) */
-  static?: string;
-}
+export type BindingSource =
+  | { type: 'content'; contentId: string; path: string }
+  | { type: 'routeParam'; name: string }
+  | { type: 'routeQuery'; name: string }
+  | { type: 'operation'; operationId: string; path: string }
+  | { type: 'form'; formId: string; path: string }
+  | { type: 'props'; path: string }
+  | { type: 'runtime'; source: string };
 
 export interface Binding {
   /** позиция в props */
-  key: string;
-  ref: BindingReference;
-  /** значение по умолчанию, если binding не резолвится */
-  default?: unknown;
-}
-
-export interface PropertySlot {
-  type: 'props' | 'binding' | 'text' | 'list' | 'children';
-  /** для binding: список bindings */
-  bindings?: Binding[];
-  /** для props: статические props */
-  value?: Record<string, unknown>;
-  /** для text: ключ strings/content */
-  ref?: BindingReference;
-  /** для list: декларация перечисления */
-  list?: {
-    source: BindingReference;
-    as?: string;
-    children: TreeInstance[];
-  };
-  /** для children: дочерние инстансы */
-  children?: TreeInstance[];
+  property: string;
+  source: BindingSource;
 }
 
 export interface TreeInstance {
-  /** псевдо-id для auth-ссылок (markers) и updateBindings */
-  id: string;
+  instanceId: string;
   /** id определения из ComponentRegistry */
   definitionId: string;
-  props?: PropertySlot;
+  /** статические props */
+  props: Record<string, unknown>;
+  bindings: Binding[];
+  children: TreeInstance[];
 }
 
 export interface TreeDeclaration {
-  /** корень дерева */
+  snapshotId?: string;
+  versionId?: string;
   root: TreeInstance;
 }
 
-export interface ResolvedValue {
-  value: unknown;
+/** Инстанс с резолвленными bindings (props = static + значения из контекста). */
+export interface ResolvedTreeInstance {
+  instanceId: string;
+  definitionId: string;
+  props: Record<string, unknown>;
+  /** сами binding-спеки сохраняются (для пересчёта через updateBindings) */
+  bindings: Binding[];
+  children: ResolvedTreeInstance[];
 }
 
+/** Контекст разрешения bindings (срез стора). */
 export interface BindingContext {
   content: Record<string, unknown>;
-  i18n: Record<string, string>;
-  route: { path: string; params: Record<string, string> };
-  operation:
-    | { error: true; message: string }
-    | { data: unknown };
-  form: Record<string, { status: string; values: Record<string, unknown> }>;
-  theme?: Record<string, string>;
+  route: { path: string; params: Record<string, string>; query: Record<string, string> } | null;
+  operation: Record<string, { data?: unknown; error?: boolean }>;
+  form: Record<string, { values: Record<string, unknown>; status: string }>;
+}
+
+export function isResolvedRoot(value: TreeInstance | ResolvedTreeInstance): value is ResolvedTreeInstance {
+  return 'children' in value && 'bindings' in value;
 }

@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import type { AssetMeta } from '../types/asset';
 import type { ContentData } from '../types/content';
-import type { RouteDescriptor } from '../types/descriptor';
+import type { ResolvedRoute, RouteDescriptor } from '../types/descriptor';
 import type { FormRuntimeSnapshot } from '../types/form';
 import type { TreeDeclaration } from '../types/tree';
 
@@ -10,6 +10,8 @@ export interface RuntimeState {
   ready: boolean;
   tree: TreeDeclaration | null;
   routes: RouteDescriptor[];
+  /** текущий маршрут (ResolvedRoute) после навигации */
+  route: ResolvedRoute | null;
   tokens: Record<string, string>;
   content: Record<string, ContentData>;
   assets: Record<string, AssetMeta>;
@@ -22,6 +24,7 @@ export interface RuntimeActions {
   setReady(ready?: boolean): void;
   setTree(tree: TreeDeclaration | null): void;
   setRoutes(routes: RouteDescriptor[]): void;
+  setRoute(route: ResolvedRoute | null): void;
   applyTokens(tokens: Record<string, string>): void;
   setContent(content: Record<string, ContentData>): void;
   setAssets(assets: Record<string, AssetMeta>): void;
@@ -44,6 +47,7 @@ export const defaultStoreState: RuntimeState = {
   ready: false,
   tree: null,
   routes: [],
+  route: null,
   tokens: {},
   content: {},
   assets: {},
@@ -62,6 +66,7 @@ export function createRuntimeStore(initial?: Partial<RuntimeState>): RuntimeStor
     setReady: (ready = true) => set({ ready }),
     setTree: (tree) => set({ tree }),
     setRoutes: (routes) => set({ routes }),
+    setRoute: (route) => set({ route }),
     applyTokens: (tokens) => set({ tokens }),
     setContent: (content) => set({ content }),
     setAssets: (assets) => set({ assets }),

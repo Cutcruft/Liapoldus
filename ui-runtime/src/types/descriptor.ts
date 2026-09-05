@@ -85,30 +85,40 @@ export interface EndpointDescriptor {
   output?: { schemaId: string };
 }
 
-export type MatcherKind = 'path' | 'regex';
+export type RedirectStatus = 301 | 302 | 307 | 308;
+
+export type RouteAction =
+  | { type: 'renderPage'; pageId: string }
+  | { type: 'serveAsset'; assetId: string }
+  | { type: 'redirect'; target: string; status?: RedirectStatus; keepQuery?: boolean };
 
 export interface RouteDescriptor {
-  kind: 'route';
+  /** id маршрута, напр. `route.article` */
   id: string;
-  /** путь маршрута для матчинга в клиенте, например `/*` */
-  path: string;
-  matcher: {
-    kind: MatcherKind;
-    source: string;
-    priority?: number;
-    segments?: { type: 'fixed' | 'param'; value: string }[];
-  };
-  operationId: string;
+  /** полный regex с обязательными якорями `^…$` (одна функция матчинга для клиента и edge) */
+  matcher: string;
+  /** больше = раньше; при равенстве — порядок регистрации */
+  priority: number;
+  action: RouteAction;
 }
 
-export interface ThemeToken {
-  [name: string]: string | ThemeToken;
+export interface ResolvedRoute {
+  route: RouteDescriptor;
+  /** захваченные именованные группы regex */
+  params: Record<string, string>;
+  /** query-параметры запроса */
+  query: Record<string, string>;
 }
+
+export type ThemeTokenDef = string | { value: string } | { ref: string };
 
 export interface ThemeDescriptor {
-  kind: 'theme';
-  id: string;
-  tokens: ThemeToken;
+  themeId: string;
+  tokens: Record<string, ThemeTokenDef>;
+  /** подключаемые шрифты */
+  fonts?: string[];
+  /** статические ресурсы темы */
+  assets?: string[];
 }
 
 export interface FallbackDescriptor {
@@ -148,5 +158,14 @@ export type Descriptor =
   | ProviderDescriptor
   | OperationDescriptor
   | EndpointDescriptor
-  | RouteDescriptor
-  | ThemeDescriptor;
+  | RouteDescriptorKind
+  | ThemeDescriptorKind;
+
+/** внутренний дискриминант для register(): валидатор добавляет `kind`. */
+export interface RouteDescriptorKind extends RouteDescriptor {
+  kind: 'route';
+}
+
+export interface ThemeDescriptorKind extends ThemeDescriptor {
+  kind: 'theme';
+}

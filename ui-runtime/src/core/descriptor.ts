@@ -6,8 +6,12 @@ import type {
   EndpointDescriptor,
   OperationDescriptor,
   ProviderDescriptor,
+  RouteAction,
   RouteDescriptor,
+  RouteDescriptorKind,
   ThemeDescriptor,
+  ThemeDescriptorKind,
+  ThemeTokenDef,
 } from '../types/descriptor';
 
 const BADGE_RE = /^([A-Za-z0-9._/-]+)#([a-z]+)$/;
@@ -179,51 +183,68 @@ export function validateEndpointDescriptor(raw: unknown): EndpointDescriptor {
   return ep;
 }
 
-export function validateRouteDescriptor(raw: unknown): RouteDescriptor {
+export function validateRouteDescriptor(raw: unknown): RouteDescriptorKind {
   if (!isRecord(raw)) throw new DescriptorValidationError('Дескриптор route должен быть объектом');
   const id = requireString(raw, 'id', 'route');
-  requireString(raw, 'operationId', id);
-  requireString(raw, 'path', id);
-  if (!isRecord(raw.matcher)) {
-    throw new DescriptorValidationError('route требует matcher', { entityId: id, path: 'matcher' });
+  const matcher = requireString(raw, 'matcher', id);
+  if (!matcher.startsWith('^') || !matcher.endsWith('$')) {
+    throw new DescriptorValidationError(
+      `matcher маршрута '${id}' должен быть полным regex с якорями ^…$`,
+      { entityId: id, path: 'matcher' },
+    );
   }
-  const kind = raw.matcher.kind;
-  if (kind !== 'path' && kind !== 'regex') {
-    throw new DescriptorValidationError('matcher.kind должен быть path|regex', { entityId: id, path: 'matcher.kind' });
+  new RegExp(matcher); // ранняя проверка компиляции
+  const priority = typeof raw.priority === 'number' ? raw.priority : 0;
+  if (!isRecord(raw.action)) {
+    throw new DescriptorValidationError('route требует action', { entityId: id, path: 'action' });
   }
-  requireString(raw.matcher as Record<string, unknown>, 'source', id);
-  const priority = typeof raw.matcher.priority === 'number' ? raw.matcher.priority : 0;
-  let segments: RouteDescriptor['matcher']['segments'] = undefined;
-  if (Array.isArray(raw.matcher.segments)) {
-    segments = [];
-    for (const seg of raw.matcher.segments as unknown[]) {
-      if (isRecord(seg) && (seg.type === 'fixed' || seg.type === 'param') && typeof seg.value === 'string') {
-        segments.push({ type: seg.type, value: seg.value });
-      }
+  const type = raw.action.type;
+  if (type === 'renderPage') {
+    requireString(raw.action, 'pageId', id);
+  } else if (type === 'serveAsset') {
+    requireString(raw.action, 'assetId', id);
+  } else if (type === 'redirect') {
+    requireString(raw.action, 'target', id);
+    const status = raw.action.status;
+    if (status !== undefined && (status !== 301 && status !== 302 && status !== 307 && status !== 308)) {
+      throw new DescriptorValidationError(
+        `status редиректа маршрута '${id}' вне {301,302,307,308}`,
+        { entityId: id, path: 'action.status' },
+      );
     }
+  } else {
+    throw new DescriptorValidationError(`action.type маршрута '${id}' должен быть renderPage|serveAsset|redirect`, {
+      entityId: id,
+      path: 'action.type',
+    });
   }
-  return {
-    kind: 'route',
-    id,
-    path: raw.path as string,
-    matcher: {
-      kind,
-      source: raw.matcher.source as string,
-      priority,
-      ...(segments ? { segments } : {}),
-    },
-    operationId: raw.operationId as string,
-  };
+  return { kind: 'route', id, matcher, priority, action: raw.action as RouteAction };
 }
 
-export function validateThemeDescriptor(raw: unknown): ThemeDescriptor {
+export function validateThemeDescriptor(raw: unknown): ThemeDescriptorKind {
   if (!isRecord(raw)) throw new DescriptorValidationError('Дескриптор theme должен быть объектом');
-  const id = requireString(raw, 'id', 'theme');
+  const themeId = requireString(raw, 'themeId', 'theme');
   const tokens = raw.tokens;
   if (!isRecord(tokens)) {
-    throw new DescriptorValidationError('theme требует tokens', { entityId: id, path: 'tokens' });
+    throw new DescriptorValidationError('theme требует tokens', { entityId: themeId, path: 'tokens' });
   }
-  return { kind: 'theme', id, tokens: tokens as ThemeDescriptor['tokens'] };
+  for (const [name, def] of Object.entries(tokens)) {
+    if (typeof def === 'string') continue;
+    if (isRecord(def) && typeof def.value === 'string') continue;
+    if (isRecord(def) && typeof def.ref === 'string') continue;
+    throw new DescriptorValidationError(
+      `Токен '${name}' темы '${themeId}' должен быть string | { value } | { ref }`,
+      { entityId: themeId, path: `tokens.${name}` },
+    );
+  }
+  const theme: ThemeDescriptorKind = {
+    kind: 'theme',
+    themeId,
+    tokens: { ...(tokens as Record<string, ThemeTokenDef>) },
+  };
+  if (Array.isArray(raw.fonts)) theme.fonts = raw.fonts.filter((f): f is string => typeof f === 'string');
+  if (Array.isArray(raw.assets)) theme.assets = raw.assets.filter((a): a is string => typeof a === 'string');
+  return theme;
 }
 
 export interface ParseResult {
