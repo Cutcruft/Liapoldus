@@ -17,6 +17,595 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
+// MockStorage is a mock of Storage interface.
+type MockStorage struct {
+	ctrl     *gomock.Controller
+	recorder *MockStorageMockRecorder
+	isgomock struct{}
+}
+
+// MockStorageMockRecorder is the mock recorder for MockStorage.
+type MockStorageMockRecorder struct {
+	mock *MockStorage
+}
+
+// NewMockStorage creates a new mock instance.
+func NewMockStorage(ctrl *gomock.Controller) *MockStorage {
+	mock := &MockStorage{ctrl: ctrl}
+	mock.recorder = &MockStorageMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockStorage) EXPECT() *MockStorageMockRecorder {
+	return m.recorder
+}
+
+// CreateAsset mocks base method.
+func (m *MockStorage) CreateAsset(arg0 context.Context, arg1 domain.Asset) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateAsset", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateAsset indicates an expected call of CreateAsset.
+func (mr *MockStorageMockRecorder) CreateAsset(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAsset", reflect.TypeOf((*MockStorage)(nil).CreateAsset), arg0, arg1)
+}
+
+// CreateContent mocks base method.
+func (m *MockStorage) CreateContent(arg0 context.Context, arg1 domain.Content) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateContent", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateContent indicates an expected call of CreateContent.
+func (mr *MockStorageMockRecorder) CreateContent(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContent", reflect.TypeOf((*MockStorage)(nil).CreateContent), arg0, arg1)
+}
+
+// CreateForm mocks base method.
+func (m *MockStorage) CreateForm(arg0 context.Context, arg1 domain.Form) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateForm", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateForm indicates an expected call of CreateForm.
+func (mr *MockStorageMockRecorder) CreateForm(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateForm", reflect.TypeOf((*MockStorage)(nil).CreateForm), arg0, arg1)
+}
+
+// CreatePage mocks base method.
+func (m *MockStorage) CreatePage(arg0 context.Context, arg1 domain.Page, arg2 domain.PageVersion) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePage", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreatePage indicates an expected call of CreatePage.
+func (mr *MockStorageMockRecorder) CreatePage(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePage", reflect.TypeOf((*MockStorage)(nil).CreatePage), arg0, arg1, arg2)
+}
+
+// CreateRoute mocks base method.
+func (m *MockStorage) CreateRoute(arg0 context.Context, arg1 domain.Route) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateRoute", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateRoute indicates an expected call of CreateRoute.
+func (mr *MockStorageMockRecorder) CreateRoute(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRoute", reflect.TypeOf((*MockStorage)(nil).CreateRoute), arg0, arg1)
+}
+
+// CreateSite mocks base method.
+func (m *MockStorage) CreateSite(arg0 context.Context, arg1 domain.Site) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSite", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateSite indicates an expected call of CreateSite.
+func (mr *MockStorageMockRecorder) CreateSite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSite", reflect.TypeOf((*MockStorage)(nil).CreateSite), arg0, arg1)
+}
+
+// CreateSnapshot mocks base method.
+func (m *MockStorage) CreateSnapshot(arg0 context.Context, arg1 domain.Snapshot) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSnapshot", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateSnapshot indicates an expected call of CreateSnapshot.
+func (mr *MockStorageMockRecorder) CreateSnapshot(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSnapshot", reflect.TypeOf((*MockStorage)(nil).CreateSnapshot), arg0, arg1)
+}
+
+// CreateSubmission mocks base method.
+func (m *MockStorage) CreateSubmission(arg0 context.Context, arg1 domain.Submission) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSubmission", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateSubmission indicates an expected call of CreateSubmission.
+func (mr *MockStorageMockRecorder) CreateSubmission(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSubmission", reflect.TypeOf((*MockStorage)(nil).CreateSubmission), arg0, arg1)
+}
+
+// DeleteAsset mocks base method.
+func (m *MockStorage) DeleteAsset(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAsset", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAsset indicates an expected call of DeleteAsset.
+func (mr *MockStorageMockRecorder) DeleteAsset(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAsset", reflect.TypeOf((*MockStorage)(nil).DeleteAsset), arg0, arg1)
+}
+
+// DeleteContent mocks base method.
+func (m *MockStorage) DeleteContent(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteContent", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteContent indicates an expected call of DeleteContent.
+func (mr *MockStorageMockRecorder) DeleteContent(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteContent", reflect.TypeOf((*MockStorage)(nil).DeleteContent), arg0, arg1)
+}
+
+// DeleteForm mocks base method.
+func (m *MockStorage) DeleteForm(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteForm", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteForm indicates an expected call of DeleteForm.
+func (mr *MockStorageMockRecorder) DeleteForm(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteForm", reflect.TypeOf((*MockStorage)(nil).DeleteForm), arg0, arg1, arg2)
+}
+
+// DeletePage mocks base method.
+func (m *MockStorage) DeletePage(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePage", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePage indicates an expected call of DeletePage.
+func (mr *MockStorageMockRecorder) DeletePage(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePage", reflect.TypeOf((*MockStorage)(nil).DeletePage), arg0, arg1)
+}
+
+// DeleteRoute mocks base method.
+func (m *MockStorage) DeleteRoute(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteRoute", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteRoute indicates an expected call of DeleteRoute.
+func (mr *MockStorageMockRecorder) DeleteRoute(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRoute", reflect.TypeOf((*MockStorage)(nil).DeleteRoute), arg0, arg1, arg2)
+}
+
+// DeleteSite mocks base method.
+func (m *MockStorage) DeleteSite(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSite", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSite indicates an expected call of DeleteSite.
+func (mr *MockStorageMockRecorder) DeleteSite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSite", reflect.TypeOf((*MockStorage)(nil).DeleteSite), arg0, arg1)
+}
+
+// DeleteSnapshot mocks base method.
+func (m *MockStorage) DeleteSnapshot(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSnapshot", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSnapshot indicates an expected call of DeleteSnapshot.
+func (mr *MockStorageMockRecorder) DeleteSnapshot(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSnapshot", reflect.TypeOf((*MockStorage)(nil).DeleteSnapshot), arg0, arg1)
+}
+
+// GetAsset mocks base method.
+func (m *MockStorage) GetAsset(arg0 context.Context, arg1 string) (domain.Asset, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAsset", arg0, arg1)
+	ret0, _ := ret[0].(domain.Asset)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAsset indicates an expected call of GetAsset.
+func (mr *MockStorageMockRecorder) GetAsset(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAsset", reflect.TypeOf((*MockStorage)(nil).GetAsset), arg0, arg1)
+}
+
+// GetContent mocks base method.
+func (m *MockStorage) GetContent(arg0 context.Context, arg1 string) (domain.Content, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetContent", arg0, arg1)
+	ret0, _ := ret[0].(domain.Content)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetContent indicates an expected call of GetContent.
+func (mr *MockStorageMockRecorder) GetContent(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContent", reflect.TypeOf((*MockStorage)(nil).GetContent), arg0, arg1)
+}
+
+// GetContentsByIDs mocks base method.
+func (m *MockStorage) GetContentsByIDs(arg0 context.Context, arg1 string, arg2 []string) (map[string]domain.Content, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetContentsByIDs", arg0, arg1, arg2)
+	ret0, _ := ret[0].(map[string]domain.Content)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetContentsByIDs indicates an expected call of GetContentsByIDs.
+func (mr *MockStorageMockRecorder) GetContentsByIDs(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContentsByIDs", reflect.TypeOf((*MockStorage)(nil).GetContentsByIDs), arg0, arg1, arg2)
+}
+
+// GetForm mocks base method.
+func (m *MockStorage) GetForm(arg0 context.Context, arg1, arg2 string) (domain.Form, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetForm", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Form)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetForm indicates an expected call of GetForm.
+func (mr *MockStorageMockRecorder) GetForm(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetForm", reflect.TypeOf((*MockStorage)(nil).GetForm), arg0, arg1, arg2)
+}
+
+// GetPage mocks base method.
+func (m *MockStorage) GetPage(arg0 context.Context, arg1 string) (domain.Page, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPage", arg0, arg1)
+	ret0, _ := ret[0].(domain.Page)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPage indicates an expected call of GetPage.
+func (mr *MockStorageMockRecorder) GetPage(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPage", reflect.TypeOf((*MockStorage)(nil).GetPage), arg0, arg1)
+}
+
+// GetPageVersion mocks base method.
+func (m *MockStorage) GetPageVersion(arg0 context.Context, arg1, arg2 string) (domain.PageVersion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPageVersion", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.PageVersion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPageVersion indicates an expected call of GetPageVersion.
+func (mr *MockStorageMockRecorder) GetPageVersion(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPageVersion", reflect.TypeOf((*MockStorage)(nil).GetPageVersion), arg0, arg1, arg2)
+}
+
+// GetRoute mocks base method.
+func (m *MockStorage) GetRoute(arg0 context.Context, arg1, arg2 string) (domain.Route, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRoute", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Route)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRoute indicates an expected call of GetRoute.
+func (mr *MockStorageMockRecorder) GetRoute(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoute", reflect.TypeOf((*MockStorage)(nil).GetRoute), arg0, arg1, arg2)
+}
+
+// GetSite mocks base method.
+func (m *MockStorage) GetSite(arg0 context.Context, arg1 string) (domain.Site, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSite", arg0, arg1)
+	ret0, _ := ret[0].(domain.Site)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSite indicates an expected call of GetSite.
+func (mr *MockStorageMockRecorder) GetSite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSite", reflect.TypeOf((*MockStorage)(nil).GetSite), arg0, arg1)
+}
+
+// GetSiteBySlug mocks base method.
+func (m *MockStorage) GetSiteBySlug(arg0 context.Context, arg1 string) (domain.Site, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSiteBySlug", arg0, arg1)
+	ret0, _ := ret[0].(domain.Site)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSiteBySlug indicates an expected call of GetSiteBySlug.
+func (mr *MockStorageMockRecorder) GetSiteBySlug(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSiteBySlug", reflect.TypeOf((*MockStorage)(nil).GetSiteBySlug), arg0, arg1)
+}
+
+// GetSnapshot mocks base method.
+func (m *MockStorage) GetSnapshot(arg0 context.Context, arg1 string) (domain.Snapshot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSnapshot", arg0, arg1)
+	ret0, _ := ret[0].(domain.Snapshot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSnapshot indicates an expected call of GetSnapshot.
+func (mr *MockStorageMockRecorder) GetSnapshot(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSnapshot", reflect.TypeOf((*MockStorage)(nil).GetSnapshot), arg0, arg1)
+}
+
+// ListAssetsBySite mocks base method.
+func (m *MockStorage) ListAssetsBySite(arg0 context.Context, arg1 string) ([]domain.Asset, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAssetsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Asset)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAssetsBySite indicates an expected call of ListAssetsBySite.
+func (mr *MockStorageMockRecorder) ListAssetsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAssetsBySite", reflect.TypeOf((*MockStorage)(nil).ListAssetsBySite), arg0, arg1)
+}
+
+// ListContentsBySite mocks base method.
+func (m *MockStorage) ListContentsBySite(arg0 context.Context, arg1, arg2 string) ([]domain.Content, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListContentsBySite", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]domain.Content)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListContentsBySite indicates an expected call of ListContentsBySite.
+func (mr *MockStorageMockRecorder) ListContentsBySite(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListContentsBySite", reflect.TypeOf((*MockStorage)(nil).ListContentsBySite), arg0, arg1, arg2)
+}
+
+// ListFormsBySite mocks base method.
+func (m *MockStorage) ListFormsBySite(arg0 context.Context, arg1 string) ([]domain.Form, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListFormsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Form)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListFormsBySite indicates an expected call of ListFormsBySite.
+func (mr *MockStorageMockRecorder) ListFormsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListFormsBySite", reflect.TypeOf((*MockStorage)(nil).ListFormsBySite), arg0, arg1)
+}
+
+// ListPageVersions mocks base method.
+func (m *MockStorage) ListPageVersions(arg0 context.Context, arg1 string) ([]domain.PageVersion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPageVersions", arg0, arg1)
+	ret0, _ := ret[0].([]domain.PageVersion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPageVersions indicates an expected call of ListPageVersions.
+func (mr *MockStorageMockRecorder) ListPageVersions(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPageVersions", reflect.TypeOf((*MockStorage)(nil).ListPageVersions), arg0, arg1)
+}
+
+// ListPagesBySite mocks base method.
+func (m *MockStorage) ListPagesBySite(arg0 context.Context, arg1 string) ([]domain.Page, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPagesBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Page)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPagesBySite indicates an expected call of ListPagesBySite.
+func (mr *MockStorageMockRecorder) ListPagesBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPagesBySite", reflect.TypeOf((*MockStorage)(nil).ListPagesBySite), arg0, arg1)
+}
+
+// ListRoutesBySite mocks base method.
+func (m *MockStorage) ListRoutesBySite(arg0 context.Context, arg1 string) ([]domain.Route, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListRoutesBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Route)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListRoutesBySite indicates an expected call of ListRoutesBySite.
+func (mr *MockStorageMockRecorder) ListRoutesBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRoutesBySite", reflect.TypeOf((*MockStorage)(nil).ListRoutesBySite), arg0, arg1)
+}
+
+// ListSites mocks base method.
+func (m *MockStorage) ListSites(arg0 context.Context) ([]domain.Site, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSites", arg0)
+	ret0, _ := ret[0].([]domain.Site)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSites indicates an expected call of ListSites.
+func (mr *MockStorageMockRecorder) ListSites(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSites", reflect.TypeOf((*MockStorage)(nil).ListSites), arg0)
+}
+
+// ListSnapshotsBySite mocks base method.
+func (m *MockStorage) ListSnapshotsBySite(arg0 context.Context, arg1 string) ([]domain.Snapshot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSnapshotsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Snapshot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSnapshotsBySite indicates an expected call of ListSnapshotsBySite.
+func (mr *MockStorageMockRecorder) ListSnapshotsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSnapshotsBySite", reflect.TypeOf((*MockStorage)(nil).ListSnapshotsBySite), arg0, arg1)
+}
+
+// ListSubmissionsByForm mocks base method.
+func (m *MockStorage) ListSubmissionsByForm(arg0 context.Context, arg1, arg2 string) ([]domain.Submission, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSubmissionsByForm", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]domain.Submission)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSubmissionsByForm indicates an expected call of ListSubmissionsByForm.
+func (mr *MockStorageMockRecorder) ListSubmissionsByForm(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSubmissionsByForm", reflect.TypeOf((*MockStorage)(nil).ListSubmissionsByForm), arg0, arg1, arg2)
+}
+
+// UpdateContent mocks base method.
+func (m *MockStorage) UpdateContent(arg0 context.Context, arg1 domain.Content) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateContent", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateContent indicates an expected call of UpdateContent.
+func (mr *MockStorageMockRecorder) UpdateContent(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateContent", reflect.TypeOf((*MockStorage)(nil).UpdateContent), arg0, arg1)
+}
+
+// UpdateForm mocks base method.
+func (m *MockStorage) UpdateForm(arg0 context.Context, arg1 domain.Form) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateForm", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateForm indicates an expected call of UpdateForm.
+func (mr *MockStorageMockRecorder) UpdateForm(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateForm", reflect.TypeOf((*MockStorage)(nil).UpdateForm), arg0, arg1)
+}
+
+// UpdatePage mocks base method.
+func (m *MockStorage) UpdatePage(arg0 context.Context, arg1 domain.Page, arg2 domain.PageVersion) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePage", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdatePage indicates an expected call of UpdatePage.
+func (mr *MockStorageMockRecorder) UpdatePage(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePage", reflect.TypeOf((*MockStorage)(nil).UpdatePage), arg0, arg1, arg2)
+}
+
+// UpdateRoute mocks base method.
+func (m *MockStorage) UpdateRoute(arg0 context.Context, arg1 domain.Route) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateRoute", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateRoute indicates an expected call of UpdateRoute.
+func (mr *MockStorageMockRecorder) UpdateRoute(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRoute", reflect.TypeOf((*MockStorage)(nil).UpdateRoute), arg0, arg1)
+}
+
+// UpdateSite mocks base method.
+func (m *MockStorage) UpdateSite(arg0 context.Context, arg1 domain.Site) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSite", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateSite indicates an expected call of UpdateSite.
+func (mr *MockStorageMockRecorder) UpdateSite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSite", reflect.TypeOf((*MockStorage)(nil).UpdateSite), arg0, arg1)
+}
+
 // MockSiteRepository is a mock of SiteRepository interface.
 type MockSiteRepository struct {
 	ctrl     *gomock.Controller

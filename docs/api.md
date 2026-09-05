@@ -12,7 +12,7 @@ Liapoldus разделён на два публичных API (см. `README.md`
 - Тело запросов/ответов — JSON, `Content-Type: application/json` (кроме upload ассета — multipart).
 - Ошибки — единый формат `{"error":"..."}`. Статусы: `400` (invalid request), `401` (unauthorized, admin), `404` (not found), `409` (already exists), `405`, `500`.
 - Поля: camelCase; времена — RFC3339 (`createdAt`, `updatedAt`).
-- Идентификаторы: префикс `<entity>_<hex>` через `domain.NewID`, либо произвольный ключ там, где это разрешено (например `id` контента `nav.home`).
+- Идентификаторы: префикс `<entity>_<hex>`, либо произвольный ключ там, где это разрешено (например `id` контента `nav.home`).
 
 ## Health
 

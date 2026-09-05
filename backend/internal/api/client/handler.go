@@ -106,7 +106,7 @@ func (h *AssetHandler) Get(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondError(w, err)
 		return
 	}
-	httpapi.RespondJSON(w, http.StatusOK, asset.Metadata())
+	httpapi.RespondJSON(w, http.StatusOK, h.app.Assets.Metadata(asset))
 }
 
 func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +120,7 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondError(w, err)
 		return
 	}
-	httpapi.RespondJSON(w, http.StatusOK, domain.AssetMetadataList(assets))
+	httpapi.RespondJSON(w, http.StatusOK, h.app.Assets.MetadataList(assets))
 }
 
 func (h *AssetHandler) File(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +128,7 @@ func (h *AssetHandler) File(w http.ResponseWriter, r *http.Request) {
 	if assetID == "" {
 		assetID = r.URL.Query().Get("assetId")
 	}
-	if variant := r.URL.Query().Get("variant"); variant != "" && variant != domain.MasterVariant {
+	if variant := r.URL.Query().Get("variant"); variant != "" && !h.app.Assets.IsMaster(variant) {
 		httpapi.RespondJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown variant"})
 		return
 	}
@@ -137,7 +137,7 @@ func (h *AssetHandler) File(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondError(w, err)
 		return
 	}
-	serveAssetBytes(w, r, asset, reader)
+	serveAssetBytes(w, r, asset, reader, h.app.AssetCacheMaxAgeSeconds)
 }
 
 type FormHandler struct{ app *App }

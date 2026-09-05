@@ -2,6 +2,10 @@
 backend/bin/
 backend/*.log
 
+# Env
+.env
+backend/.env
+
 # Node
 backend/tests/e2e/node_modules/
 backend/tests/e2e/coverage/

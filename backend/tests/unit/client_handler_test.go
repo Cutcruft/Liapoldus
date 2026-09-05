@@ -1,39 +1,45 @@
-package client
+package unit
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/liapoldus/liapoldus/backend/internal/api/client"
+	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	"github.com/liapoldus/liapoldus/backend/internal/application/route"
+	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
-	"github.com/liapoldus/liapoldus/backend/internal/infra/store"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
 
-func newTestApp(t *testing.T, defaultSlug string) *App {
+func newClientHandlerTestApp(t *testing.T, defaultSlug string) *client.App {
 	t.Helper()
-	db := store.NewMemory()
-	blobs, err := store.NewDiskBlobStore(t.TempDir())
+	db := storage.NewMemory()
+	blobs, err := storage.NewDiskBlobStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &App{
-		Sites:       domain.NewSiteService(db),
-		Contents:    domain.NewContentService(db),
-		Assets:      domain.NewAssetService(db, blobs, db),
-		Routes:      domain.NewRouteService(db),
-		Forms:       domain.NewFormService(db, db),
+	return &client.App{
+		Sites:       site.NewService(db, site.Settings{DefaultLocale: "ru"}),
+		Contents:    content.NewService(db),
+		Assets:      asset.NewService(db, blobs, db, asset.Settings{MasterVariant: "master", FallbackName: "asset", FallbackMime: "application/octet-stream", URLTemplate: "/files/{id}"}),
+		Routes:      route.NewService(db, route.Settings{DefaultStatus: 301, Allowed: map[int]bool{301: true, 302: true}}),
+		Forms:       form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
 		Logger:      slog.Default(),
 		DefaultSlug: defaultSlug,
+
+		DefaultRedirectStatus:   301,
+		AssetCacheMaxAgeSeconds: 31536000,
 	}
 }
 
-func createSite(t *testing.T, app *App, slug string) domain.Site {
+func createSite(t *testing.T, app *client.App, slug string) domain.Site {
 	t.Helper()
 	site, err := app.Sites.Create(context.Background(), slug+" site", slug, "ru", nil)
 	if err != nil {
@@ -43,7 +49,7 @@ func createSite(t *testing.T, app *App, slug string) domain.Site {
 }
 
 func TestContentGetMergedWithHostFallback(t *testing.T) {
-	app := newTestApp(t, "demo")
+	app := newClientHandlerTestApp(t, "demo")
 	site := createSite(t, app, "demo")
 
 	content, err := app.Contents.Create(context.Background(), site.ID, "col.articles", "a1", map[string]any{
@@ -58,7 +64,7 @@ func TestContentGetMergedWithHostFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := NewRouter(app)
+	handler := client.NewRouter(app)
 	req := httptest.NewRequest(http.MethodGet, "/api/contents/a1?locale=ru", nil)
 	req.Host = "shop.example.org"
 	response := httptest.NewRecorder()
@@ -83,7 +89,7 @@ func TestContentGetMergedWithHostFallback(t *testing.T) {
 }
 
 func TestFormSubmitValidationAndRedirectEdge(t *testing.T) {
-	app := newTestApp(t, "demo")
+	app := newClientHandlerTestApp(t, "demo")
 	site := createSite(t, app, "demo")
 
 	form, err := app.Forms.Create(context.Background(), site.ID, "contact", map[string]any{
@@ -93,11 +99,11 @@ func TestFormSubmitValidationAndRedirectEdge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := app.Routes.Create(context.Background(), site.ID, "^/old$", 0, domain.RouteAction{
-		Type: domain.RouteRedirect, Target: "/new", Status: 301,
+		Type: route.Redirect, Target: "/new", Status: 301,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewRouter(app)
+	handler := client.NewRouter(app)
 
 	invalid := httptest.NewRecorder()
 	handler.ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/api/forms/"+form.ID+"/submissions", strings.NewReader(
@@ -125,15 +131,15 @@ func TestFormSubmitValidationAndRedirectEdge(t *testing.T) {
 }
 
 func TestRedirectGroupSubstitution(t *testing.T) {
-	app := newTestApp(t, "demo")
+	app := newClientHandlerTestApp(t, "demo")
 	site := createSite(t, app, "demo")
 
 	if _, err := app.Routes.Create(context.Background(), site.ID, `^/products/([a-z0-9-]+)$`, 0, domain.RouteAction{
-		Type: domain.RouteRedirect, Target: "/shop/$1", Status: 302,
+		Type: route.Redirect, Target: "/shop/$1", Status: 302,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewRouter(app)
+	handler := client.NewRouter(app)
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/products/sneakers", nil))
@@ -144,16 +150,3 @@ func TestRedirectGroupSubstitution(t *testing.T) {
 		t.Fatalf("location = %q", location)
 	}
 }
-
-func decodeResponse(t *testing.T, response *httptest.ResponseRecorder, target any) {
-	t.Helper()
-	data, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(data, target); err != nil {
-		t.Fatalf("decode %q: %v", string(data), err)
-	}
-}
-
-var _ = bytes.MinRead

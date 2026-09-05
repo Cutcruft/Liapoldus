@@ -6,7 +6,7 @@
 
 | Область | Статус | Что проверяется |
 | --- | --- | --- |
-| Go backend | Готово | Запуск двух HTTP-серверов (admin `:8080`, client `:18080`) |
+| Go backend | Готово | Запуск двух HTTP-серверов (admin, client) из переменных окружения |
 | Admin REST API | Готово | API из `docs/api-admin.md`: sites/pages/content/assets/routes/forms/snapshots |
 | Client REST API | Готово | API из `docs/api-client.md`: content (merge по locale), assets, forms, `/runtime/*` |
 | Edge routing | Готово | serve asset, redirect (включая группы `$1..$9` и keepQuery), render page → 404 |

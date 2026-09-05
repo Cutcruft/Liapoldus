@@ -24,13 +24,33 @@ export async function setup(): Promise<void> {
   }
 
   const addr = new URL(baseURL)
+  const client = new URL(clientURL)
   server = spawn(bin.pathname, [], {
+    cwd: fileURLToPath(backendRoot),
     env: {
       ...process.env,
       LIAPOLDUS_STORAGE: 'memory',
       LIAPOLDUS_ADMIN_ADDR: addr.host,
-      LIAPOLDUS_CLIENT_ADDR: '127.0.0.1:18080',
+      LIAPOLDUS_CLIENT_ADDR: client.host,
       LIAPOLDUS_ASSET_DIR: './data/e2e-assets',
+      LIAPOLDUS_ADMIN_TOKEN: 'e2e-admin-token',
+      LIAPOLDUS_CLIENT_DEFAULT_SLUG: '',
+      LIAPOLDUS_DEFAULT_LOCALE: 'ru',
+      LIAPOLDUS_REDIRECT_DEFAULT_STATUS: '301',
+      LIAPOLDUS_REDIRECT_ALLOWED_STATUSES: '301,302',
+      LIAPOLDUS_COMPONENT_MAX_DEPTH: '5',
+      LIAPOLDUS_COMPONENT_TYPES: 'Container,Text',
+      LIAPOLDUS_PAGE_INITIAL_VERSION: '1',
+      LIAPOLDUS_EMAIL_PATTERN: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$',
+      LIAPOLDUS_MASTER_VARIANT_NAME: 'master',
+      LIAPOLDUS_ASSET_FALLBACK_NAME: 'asset',
+      LIAPOLDUS_ASSET_FALLBACK_MIME: 'application/octet-stream',
+      LIAPOLDUS_ASSET_FILE_URL_TEMPLATE: '/api/assets/{id}/file',
+      LIAPOLDUS_ASSET_CACHE_MAX_AGE_SECONDS: '31536000',
+      LIAPOLDUS_MAX_UPLOAD_BYTES: '10485760',
+      LIAPOLDUS_STARTUP_TIMEOUT: '15s',
+      LIAPOLDUS_SHUTDOWN_TIMEOUT: '10s',
+      LIAPOLDUS_READ_HEADER_TIMEOUT: '5s',
     },
     stdio: 'inherit',
   })

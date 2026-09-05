@@ -9,7 +9,7 @@ PostgreSQL и backend поднимаются через Docker Compose:
 docker compose up --build
 ```
 
-Compose запускает PostgreSQL и backend. Backend ждёт health-check базы, проверяет соединение и выполняет миграцию `internal/infra/store/migrations/001_initial.sql`.
+Compose запускает PostgreSQL и backend. Backend ждёт health-check базы, проверяет соединение и выполняет миграции из `internal/infra/db/migrations/`.
 
 Management API доступен по REST на `http://localhost:8080`.
 
@@ -51,6 +51,6 @@ Memory storage предназначен только для тестов и ло
 
 ## Схема
 
-Миграция создаёт таблицы `sites`, `pages`, `page_versions`, `snapshots` и `snapshot_pages`.
+Миграции создают таблицы `sites`, `pages`, `page_versions`, `snapshots`, `snapshot_pages`, `contents`, `assets`, `routes`, `forms` и `submissions`.
 
 Дерево компонентов хранится в колонках `pages.root` и `page_versions.root` типа `JSONB`.

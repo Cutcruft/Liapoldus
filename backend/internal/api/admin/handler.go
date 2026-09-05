@@ -8,14 +8,21 @@ import (
 	"time"
 
 	httpapi "github.com/liapoldus/liapoldus/backend/internal/api/http"
+	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	"github.com/liapoldus/liapoldus/backend/internal/application/page"
+	"github.com/liapoldus/liapoldus/backend/internal/application/route"
+	"github.com/liapoldus/liapoldus/backend/internal/application/site"
+	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
 type SiteHandler struct {
-	sites *domain.SiteService
+	sites *site.Service
 }
 
-func NewSiteHandler(sites *domain.SiteService) *SiteHandler {
+func NewSiteHandler(sites *site.Service) *SiteHandler {
 	return &SiteHandler{sites: sites}
 }
 
@@ -38,11 +45,7 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.DecodeJSON(r, &req, w) {
 		return
 	}
-	locale := strings.TrimSpace(req.DefaultLocale)
-	if locale == "" {
-		locale = "ru"
-	}
-	result, err := h.sites.Create(r.Context(), req.Name, req.Slug, locale, req.Hosts)
+	result, err := h.sites.Create(r.Context(), req.Name, req.Slug, req.DefaultLocale, req.Hosts)
 	if err != nil {
 		httpapi.RespondError(w, err)
 		return
@@ -115,9 +118,9 @@ func (h *SiteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type PageHandler struct{ pages *domain.PageService }
+type PageHandler struct{ pages *page.Service }
 
-func NewPageHandler(pages *domain.PageService) *PageHandler {
+func NewPageHandler(pages *page.Service) *PageHandler {
 	return &PageHandler{pages: pages}
 }
 
@@ -233,9 +236,9 @@ func (h *PageHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	httpapi.RespondJSON(w, http.StatusOK, result)
 }
 
-type ContentHandler struct{ contents *domain.ContentService }
+type ContentHandler struct{ contents *content.Service }
 
-func NewContentHandler(contents *domain.ContentService) *ContentHandler {
+func NewContentHandler(contents *content.Service) *ContentHandler {
 	return &ContentHandler{contents: contents}
 }
 
@@ -384,10 +387,10 @@ func (h *ContentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 type AssetHandler struct {
-	assets *domain.AssetService
+	assets *asset.Service
 }
 
-func NewAssetHandler(assets *domain.AssetService) *AssetHandler {
+func NewAssetHandler(assets *asset.Service) *AssetHandler {
 	return &AssetHandler{assets: assets}
 }
 
@@ -419,7 +422,7 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondError(w, err)
 		return
 	}
-	httpapi.RespondJSON(w, http.StatusCreated, asset.Metadata())
+	httpapi.RespondJSON(w, http.StatusCreated, h.assets.Metadata(asset))
 }
 
 func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -432,7 +435,7 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondError(w, err)
 		return
 	}
-	httpapi.RespondJSON(w, http.StatusOK, domain.AssetMetadataList(result))
+	httpapi.RespondJSON(w, http.StatusOK, h.assets.MetadataList(result))
 }
 
 func (h *AssetHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
@@ -445,7 +448,7 @@ func (h *AssetHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondError(w, err)
 		return
 	}
-	httpapi.RespondJSON(w, http.StatusOK, result.Metadata())
+	httpapi.RespondJSON(w, http.StatusOK, h.assets.Metadata(result))
 }
 
 func (h *AssetHandler) GetFile(w http.ResponseWriter, r *http.Request) {
@@ -477,9 +480,9 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type RouteHandler struct{ routes *domain.RouteService }
+type RouteHandler struct{ routes *route.Service }
 
-func NewRouteHandler(routes *domain.RouteService) *RouteHandler {
+func NewRouteHandler(routes *route.Service) *RouteHandler {
 	return &RouteHandler{routes: routes}
 }
 
@@ -553,9 +556,9 @@ func (h *RouteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type FormHandler struct{ forms *domain.FormService }
+type FormHandler struct{ forms *form.Service }
 
-func NewFormHandler(forms *domain.FormService) *FormHandler {
+func NewFormHandler(forms *form.Service) *FormHandler {
 	return &FormHandler{forms: forms}
 }
 
@@ -641,9 +644,9 @@ func (h *FormHandler) ListSubmissions(w http.ResponseWriter, r *http.Request) {
 	httpapi.RespondJSON(w, http.StatusOK, result)
 }
 
-type SnapshotHandler struct{ snapshots *domain.SnapshotService }
+type SnapshotHandler struct{ snapshots *snapshot.Service }
 
-func NewSnapshotHandler(snapshots *domain.SnapshotService) *SnapshotHandler {
+func NewSnapshotHandler(snapshots *snapshot.Service) *SnapshotHandler {
 	return &SnapshotHandler{snapshots: snapshots}
 }
 

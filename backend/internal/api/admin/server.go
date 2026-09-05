@@ -5,17 +5,23 @@ import (
 	"net/http"
 
 	httpapi "github.com/liapoldus/liapoldus/backend/internal/api/http"
-	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	"github.com/liapoldus/liapoldus/backend/internal/application/page"
+	"github.com/liapoldus/liapoldus/backend/internal/application/route"
+	"github.com/liapoldus/liapoldus/backend/internal/application/site"
+	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 )
 
 type App struct {
-	Sites      *domain.SiteService
-	Pages      *domain.PageService
-	Contents   *domain.ContentService
-	Assets     *domain.AssetService
-	Routes     *domain.RouteService
-	Forms      *domain.FormService
-	Snapshots  *domain.SnapshotService
+	Sites      *site.Service
+	Pages      *page.Service
+	Contents   *content.Service
+	Assets     *asset.Service
+	Routes     *route.Service
+	Forms      *form.Service
+	Snapshots  *snapshot.Service
 	Logger     *slog.Logger
 	AdminToken string
 }

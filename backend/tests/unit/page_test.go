@@ -7,10 +7,19 @@ import (
 	"strings"
 	"testing"
 
+	pageapp "github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/tests/unit/mocks"
 	"go.uber.org/mock/gomock"
 )
+
+func newPageService(repo domain.PageRepository, siteRepo domain.SiteRepository) *pageapp.Service {
+	return pageapp.NewService(repo, siteRepo, pageapp.Settings{
+		InitialVersion: 1,
+		MaxDepth:       5,
+		Types:          map[string]bool{"Container": true, "Text": true},
+	})
+}
 
 func validRoot() domain.ComponentNode {
 	return domain.ComponentNode{
@@ -42,7 +51,7 @@ func TestPageServiceCreate(t *testing.T) {
 			return nil
 		})
 
-	page, err := domain.NewPageService(pageRepo, siteRepo).Create(context.Background(), "site_1", "Home", "home", validRoot())
+	page, err := newPageService(pageRepo, siteRepo).Create(context.Background(), "site_1", "Home", "home", validRoot())
 	if err != nil {
 		t.Fatalf("create page: %v", err)
 	}
@@ -60,7 +69,7 @@ func TestPageServiceCreateSiteNotFound(t *testing.T) {
 
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 
-	_, err := domain.NewPageService(pageRepo, siteRepo).Create(context.Background(), "site_missing", "Home", "home", validRoot())
+	_, err := newPageService(pageRepo, siteRepo).Create(context.Background(), "site_missing", "Home", "home", validRoot())
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
@@ -74,7 +83,7 @@ func TestPageServiceCreateInvalidRoot(t *testing.T) {
 	siteRepo.EXPECT().GetSite(gomock.Any(), "site_1").Return(domain.Site{ID: "site_1"}, nil)
 
 	pageRepo := mocks.NewMockPageRepository(ctrl)
-	service := domain.NewPageService(pageRepo, siteRepo)
+	service := newPageService(pageRepo, siteRepo)
 
 	root := domain.ComponentNode{ID: "root", Type: "Unknown"}
 	_, err := service.Create(context.Background(), "site_1", "Home", "home", root)
@@ -100,7 +109,7 @@ func TestPageServiceUpdateTree(t *testing.T) {
 			return nil
 		})
 
-	page, err := domain.NewPageService(pageRepo, nil).UpdateTree(context.Background(), "page_1", validRoot())
+	page, err := newPageService(pageRepo, nil).UpdateTree(context.Background(), "page_1", validRoot())
 	if err != nil {
 		t.Fatalf("update tree: %v", err)
 	}
@@ -117,7 +126,7 @@ func TestPageServiceVersions(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	pageRepo.EXPECT().ListPageVersions(gomock.Any(), "page_1").Return(want, nil)
 
-	versions, err := domain.NewPageService(pageRepo, nil).Versions(context.Background(), "page_1")
+	versions, err := newPageService(pageRepo, nil).Versions(context.Background(), "page_1")
 	if err != nil {
 		t.Fatalf("list versions: %v", err)
 	}

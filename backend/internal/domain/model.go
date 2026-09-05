@@ -2,8 +2,6 @@ package domain
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -60,36 +58,4 @@ type Snapshot struct {
 	Name      string         `json:"name"`
 	Pages     []SnapshotPage `json:"pages"`
 	CreatedAt time.Time      `json:"createdAt"`
-}
-
-// Validate checks the structural invariants required by the first renderer.
-// The list of component types is intentionally small until ComponentDefinition
-// is introduced as a persisted domain object.
-func (n ComponentNode) Validate() error {
-	return n.validate(0)
-}
-
-func (n ComponentNode) validate(depth int) error {
-	if depth > 64 {
-		return fmt.Errorf("%w: component tree depth exceeds 64", ErrInvalidRequest)
-	}
-	if strings.TrimSpace(n.ID) == "" {
-		return fmt.Errorf("%w: component id is required", ErrInvalidRequest)
-	}
-	if !SupportedComponentTypes[n.Type] {
-		return fmt.Errorf("%w: unsupported component type %q", ErrInvalidRequest, n.Type)
-	}
-	for _, child := range n.Children {
-		if err := child.validate(depth + 1); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-var SupportedComponentTypes = map[string]bool{
-	"Container": true,
-	"Text":      true,
-	"Image":     true,
-	"Button":    true,
 }

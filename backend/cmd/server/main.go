@@ -9,13 +9,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/liapoldus/liapoldus/backend/internal/api/admin"
 	"github.com/liapoldus/liapoldus/backend/internal/api/client"
+	"github.com/liapoldus/liapoldus/backend/internal/application"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
-	"github.com/liapoldus/liapoldus/backend/internal/infra/store"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/db"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
 
 func main() {
@@ -32,40 +33,34 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	startupContext, cancelStartup := context.WithTimeout(context.Background(), 15*time.Second)
+	startupContext, cancelStartup := context.WithTimeout(context.Background(), cfg.StartupTimeout)
 	defer cancelStartup()
-	storage, closeStore, err := openStore(startupContext, cfg, logger)
+	store, closeStore, err := openStore(startupContext, cfg, logger)
 	if err != nil {
 		return err
 	}
 	defer closeStore()
 
-	blobs, err := store.NewDiskBlobStore(cfg.AssetDir)
+	blobs, err := storage.NewDiskBlobStore(cfg.AssetDir)
 	if err != nil {
 		return err
 	}
 
-	sites := domain.NewSiteService(storage)
-	pages := domain.NewPageService(storage, storage)
-	snapshots := domain.NewSnapshotService(storage, storage, storage)
-	contents := domain.NewContentService(storage)
-	assets := domain.NewAssetService(storage, blobs, storage)
-	routes := domain.NewRouteService(storage)
-	forms := domain.NewFormService(storage, storage)
+	services := application.New(store, blobs, cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	return serve(ctx, cfg, sites, pages, snapshots, contents, assets, routes, forms, logger)
+	return serve(ctx, cfg, services, logger)
 }
 
-func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (store.Storage, func(), error) {
+func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (domain.Storage, func(), error) {
 	switch cfg.Storage {
 	case config.StorageMemory:
 		logger.Info("memory storage in use")
-		return store.NewMemory(), func() {}, nil
+		return storage.NewMemory(), func() {}, nil
 	case config.StoragePostgres:
-		postgres, err := store.NewPostgres(ctx, cfg.DatabaseURL)
+		postgres, err := db.NewPostgres(ctx, cfg.DatabaseURL)
 		if err != nil {
 			return nil, func() {}, err
 		}
@@ -80,30 +75,32 @@ func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (sto
 	}
 }
 
-func serve(ctx context.Context, cfg config.Config, sites *domain.SiteService, pages *domain.PageService, snapshots *domain.SnapshotService, contents *domain.ContentService, assets *domain.AssetService, routes *domain.RouteService, forms *domain.FormService, logger *slog.Logger) error {
+func serve(ctx context.Context, cfg config.Config, services *application.Services, logger *slog.Logger) error {
 	adminHandler := admin.NewRouter(admin.App{
-		Sites:      sites,
-		Pages:      pages,
-		Contents:   contents,
-		Assets:     assets,
-		Routes:     routes,
-		Forms:      forms,
-		Snapshots:  snapshots,
+		Sites:      services.Sites,
+		Pages:      services.Pages,
+		Contents:   services.Contents,
+		Assets:     services.Assets,
+		Routes:     services.Routes,
+		Forms:      services.Forms,
+		Snapshots:  services.Snapshots,
 		Logger:     logger,
 		AdminToken: cfg.AdminToken,
 	})
 	clientHandler := client.NewRouter(&client.App{
-		Sites:       sites,
-		Contents:    contents,
-		Assets:      assets,
-		Routes:      routes,
-		Forms:       forms,
-		Logger:      logger,
-		DefaultSlug: cfg.ClientDefaultSlug,
+		Sites:                   services.Sites,
+		Contents:                services.Contents,
+		Assets:                  services.Assets,
+		Routes:                  services.Routes,
+		Forms:                   services.Forms,
+		Logger:                  logger,
+		DefaultSlug:             cfg.ClientDefaultSlug,
+		DefaultRedirectStatus:   cfg.RedirectDefaultStatus,
+		AssetCacheMaxAgeSeconds: cfg.AssetCacheMaxAgeSeconds,
 	})
 
-	adminServer := &http.Server{Addr: cfg.AdminAddr, Handler: adminHandler, ReadHeaderTimeout: 5 * time.Second}
-	clientServer := &http.Server{Addr: cfg.ClientAddr, Handler: clientHandler, ReadHeaderTimeout: 5 * time.Second}
+	adminServer := &http.Server{Addr: cfg.AdminAddr, Handler: adminHandler, ReadHeaderTimeout: cfg.ReadHeaderTimeout}
+	clientServer := &http.Server{Addr: cfg.ClientAddr, Handler: clientHandler, ReadHeaderTimeout: cfg.ReadHeaderTimeout}
 
 	errCh := make(chan error, 2)
 	go serveListener(adminServer, logger, errCh)
@@ -111,7 +108,7 @@ func serve(ctx context.Context, cfg config.Config, sites *domain.SiteService, pa
 
 	select {
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer cancel()
 		_ = adminServer.Shutdown(shutdownCtx)
 		_ = clientServer.Shutdown(shutdownCtx)

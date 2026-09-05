@@ -1,26 +1,40 @@
 package client
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	httpapi "github.com/liapoldus/liapoldus/backend/internal/api/http"
+	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	routeapp "github.com/liapoldus/liapoldus/backend/internal/application/route"
+	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
 type App struct {
-	Sites    *domain.SiteService
-	Contents *domain.ContentService
-	Assets   *domain.AssetService
-	Routes   *domain.RouteService
-	Forms    *domain.FormService
+	Sites    *site.Service
+	Contents *content.Service
+	Assets   *asset.Service
+	Routes   *routeapp.Service
+	Forms    *form.Service
 	Logger   *slog.Logger
 
 	// DefaultSlug is the fallback site when the request Host does not match
 	// any site.hosts (LIAPOLDUS_CLIENT_DEFAULT_SLUG).
 	DefaultSlug string
+
+	// DefaultRedirectStatus is the status used for redirect routes without an
+	// explicit one (LIAPOLDUS_REDIRECT_DEFAULT_STATUS).
+	DefaultRedirectStatus int
+
+	// AssetCacheMaxAgeSeconds sets the Cache-Control max-age for asset file
+	// responses (LIAPOLDUS_ASSET_CACHE_MAX_AGE_SECONDS).
+	AssetCacheMaxAgeSeconds int
 }
 
 func (a *App) resolveSite(r *http.Request) (domain.Site, error) {
@@ -74,11 +88,11 @@ func NewRouter(a *App) http.Handler {
 	return httpapi.WithCORS(mux)
 }
 
-func serveAssetBytes(w http.ResponseWriter, r *http.Request, asset domain.Asset, reader io.ReadCloser) {
+func serveAssetBytes(w http.ResponseWriter, r *http.Request, asset domain.Asset, reader io.ReadCloser, cacheMaxAgeSeconds int) {
 	defer reader.Close()
 	w.Header().Set("Content-Type", asset.Mime)
 	w.Header().Set("ETag", `"`+asset.ETag+`"`)
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, immutable", cacheMaxAgeSeconds))
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, reader)
@@ -106,14 +120,14 @@ func (e *EdgeHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch route.Action.Type {
-	case domain.RouteServeAsset:
+	case routeapp.ServeAsset:
 		asset, reader, err := e.app.Assets.Open(r.Context(), route.Action.AssetID)
 		if err != nil {
 			httpapi.RespondError(w, err)
 			return
 		}
-		serveAssetBytes(w, r, asset, reader)
-	case domain.RouteRedirect:
+		serveAssetBytes(w, r, asset, reader, e.app.AssetCacheMaxAgeSeconds)
+	case routeapp.Redirect:
 		target := expandGroups(route.Action.Target, groups)
 		if route.Action.KeepQuery && r.URL.RawQuery != "" {
 			if strings.Contains(target, "?") {
@@ -124,10 +138,10 @@ func (e *EdgeHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		}
 		status := route.Action.Status
 		if status == 0 {
-			status = 301
+			status = e.app.DefaultRedirectStatus
 		}
 		http.Redirect(w, r, target, status)
-	case domain.RouteRenderPage:
+	case routeapp.RenderPage:
 		httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": "render page not implemented"})
 	default:
 		httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})

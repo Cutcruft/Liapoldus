@@ -1,42 +1,62 @@
-package admin
+package unit
 
 import (
 	"bytes"
-	"encoding/json"
-	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/liapoldus/liapoldus/backend/internal/domain"
-	"github.com/liapoldus/liapoldus/backend/internal/infra/store"
+	"github.com/liapoldus/liapoldus/backend/internal/api/admin"
+	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	"github.com/liapoldus/liapoldus/backend/internal/application/page"
+	"github.com/liapoldus/liapoldus/backend/internal/application/route"
+	"github.com/liapoldus/liapoldus/backend/internal/application/site"
+	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
 
-func newTestApp(t *testing.T) App {
+func newAdminHandlerTestApp(t *testing.T) admin.App {
 	t.Helper()
-	db := store.NewMemory()
-	blobs, err := store.NewDiskBlobStore(t.TempDir())
+	db := storage.NewMemory()
+	blobs, err := storage.NewDiskBlobStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return App{
-		Sites:     domain.NewSiteService(db),
-		Pages:     domain.NewPageService(db, db),
-		Snapshots: domain.NewSnapshotService(db, db, db),
-		Contents:  domain.NewContentService(db),
-		Assets:    domain.NewAssetService(db, blobs, db),
-		Routes:    domain.NewRouteService(db),
-		Forms:     domain.NewFormService(db, db),
-		Logger:    slog.Default(),
+	return admin.App{
+		Sites: site.NewService(db, site.Settings{DefaultLocale: "ru"}),
+		Pages: page.NewService(db, db, page.Settings{
+			InitialVersion: 1,
+			MaxDepth:       5,
+			Types:          map[string]bool{"Container": true, "Text": true},
+		}),
+		Snapshots: snapshot.NewService(db, db, db),
+		Contents:  content.NewService(db),
+		Assets: asset.NewService(db, blobs, db, asset.Settings{
+			MasterVariant: "master",
+			FallbackName:  "asset",
+			FallbackMime:  "application/octet-stream",
+			URLTemplate:   "/api/assets/{id}/file",
+		}),
+		Routes: route.NewService(db, route.Settings{
+			DefaultStatus: 301,
+			Allowed:       map[int]bool{301: true, 302: true},
+		}),
+		Forms:  form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
+		Logger: slog.Default(),
 	}
 }
 
+var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+
 func TestSiteAndPageFlow(t *testing.T) {
-	handler := NewRouter(newTestApp(t))
+	handler := admin.NewRouter(newAdminHandlerTestApp(t))
 
 	siteResponse := request(t, handler, http.MethodPost, "/api/sites", map[string]any{"name": "Demo", "slug": "demo"})
 	if siteResponse.Code != http.StatusCreated {
@@ -92,7 +112,7 @@ func TestSiteAndPageFlow(t *testing.T) {
 }
 
 func TestInvalidComponentIsRejected(t *testing.T) {
-	handler := NewRouter(newTestApp(t))
+	handler := admin.NewRouter(newAdminHandlerTestApp(t))
 	var created struct {
 		ID string `json:"id"`
 	}
@@ -106,7 +126,7 @@ func TestInvalidComponentIsRejected(t *testing.T) {
 }
 
 func TestContentTranslationMerge(t *testing.T) {
-	handler := NewRouter(newTestApp(t))
+	handler := admin.NewRouter(newAdminHandlerTestApp(t))
 	var created struct {
 		ID string `json:"id"`
 	}
@@ -137,7 +157,7 @@ func TestContentTranslationMerge(t *testing.T) {
 }
 
 func TestAssetUploadAndDelete(t *testing.T) {
-	handler := NewRouter(newTestApp(t))
+	handler := admin.NewRouter(newAdminHandlerTestApp(t))
 	var created struct {
 		ID string `json:"id"`
 	}
@@ -199,7 +219,7 @@ func TestAssetUploadAndDelete(t *testing.T) {
 }
 
 func TestRouteValidation(t *testing.T) {
-	handler := NewRouter(newTestApp(t))
+	handler := admin.NewRouter(newAdminHandlerTestApp(t))
 	var created struct {
 		ID string `json:"id"`
 	}
@@ -219,35 +239,5 @@ func TestRouteValidation(t *testing.T) {
 	})
 	if okRoute.Code != http.StatusCreated {
 		t.Fatalf("create route status = %d", okRoute.Code)
-	}
-}
-
-func request(t *testing.T, handler http.Handler, method, path string, body any) *httptest.ResponseRecorder {
-	t.Helper()
-	var reader io.Reader
-	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		reader = bytes.NewReader(data)
-	}
-	req := httptest.NewRequest(method, path, reader)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, req)
-	return response
-}
-
-func decodeResponse(t *testing.T, response *httptest.ResponseRecorder, target any) {
-	t.Helper()
-	data, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(data, target); err != nil {
-		t.Fatalf("decode %q: %v", string(data), err)
 	}
 }

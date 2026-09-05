@@ -1,4 +1,4 @@
-package store
+package storage
 
 import (
 	"context"
@@ -21,6 +21,8 @@ type Memory struct {
 	forms       map[string]domain.Form
 	submissions map[string][]domain.Submission
 }
+
+var _ domain.Storage = (*Memory)(nil)
 
 func NewMemory() *Memory {
 	return &Memory{

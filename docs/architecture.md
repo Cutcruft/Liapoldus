@@ -12,11 +12,12 @@ Backend реализован на Go как модульный монолит. �
 
 ## Границы модулей
 
-- `internal/domain` — сущности, ошибки, сервисы и контракты репозиториев.
-- `internal/infra/store` — реализации persistence-портов для in-memory и PostgreSQL.
-- `internal/api/http` — REST transport и преобразование HTTP-запросов в вызовы доменных сервисов.
-- `internal/config` — конфигурация процесса из переменных окружения.
-- `internal/cmd/server` — композиция зависимостей и жизненный цикл процесса.
+- `internal/domain` — сущности, ошибки, контракты репозиториев (`Storage` и `AssetBlobStore`).
+- `internal/application` — сервисы агрегатов (`site`, `page`, `snapshot`, `content`, `asset`, `route`, `form`) и фабрика `application.New`.
+- `internal/infra/storage`, `internal/infra/db` — реализации persistence-портов: in-memory/disk и PostgreSQL + миграции.
+- `internal/api/admin`, `internal/api/client`, `internal/api/http` — REST transport; преобразование HTTP-запросов в вызовы application-сервисов.
+- `internal/config` — конфигурация процесса из переменных окружения (без дефолтов).
+- `cmd/server` — композиция зависимостей и жизненный цикл процесса.
 
 ## Направление внешних запросов
 
@@ -36,7 +37,7 @@ External API
 
 Для backend-расширений предусмотрен универсальный ESB layer отдельно от typed management API, но в первой версии он не реализован.
 
-Такое разделение позволяет выбирать `store.Memory` или PostgreSQL без изменений в `site`, `page`, `snapshot` и HTTP API.
+Такое разделение позволяет выбирать `memory` или PostgreSQL без изменений в application-сервисах и HTTP API.
 
 ## Дерево компонентов
 

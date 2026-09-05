@@ -1,61 +1,75 @@
-package domain
+package site
 
 import (
 	"context"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/liapoldus/liapoldus/backend/internal/application/id"
+	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-type SiteService struct{ repo SiteRepository }
+// Settings carries the externally-configured defaults this aggregate service
+// relies on.
+type Settings struct {
+	DefaultLocale string
+}
 
-func NewSiteService(repo SiteRepository) *SiteService { return &SiteService{repo: repo} }
+type Service struct {
+	repo     domain.SiteRepository
+	settings Settings
+}
 
-func (s *SiteService) Create(ctx context.Context, name, slug, defaultLocale string, hosts []string) (Site, error) {
+func NewService(repo domain.SiteRepository, settings Settings) *Service {
+	return &Service{repo: repo, settings: settings}
+}
+
+func (s *Service) Create(ctx context.Context, name, slug, defaultLocale string, hosts []string) (domain.Site, error) {
 	name, slug = strings.TrimSpace(name), strings.TrimSpace(slug)
 	if name == "" || slug == "" {
-		return Site{}, fmt.Errorf("%w: name and slug are required", ErrInvalidRequest)
+		return domain.Site{}, fmt.Errorf("%w: name and slug are required", domain.ErrInvalidRequest)
 	}
 	defaultLocale = strings.TrimSpace(defaultLocale)
 	if defaultLocale == "" {
-		defaultLocale = "ru"
+		defaultLocale = s.settings.DefaultLocale
 	}
 	hosts = normalizeHosts(hosts)
-	id, err := NewID("site")
+	id, err := id.New(id.Site)
 	if err != nil {
-		return Site{}, err
+		return domain.Site{}, err
 	}
-	site := Site{ID: id, Name: name, Slug: slug, DefaultLocale: defaultLocale, Hosts: hosts, CreatedAt: time.Now().UTC()}
+	site := domain.Site{ID: id, Name: name, Slug: slug, DefaultLocale: defaultLocale, Hosts: hosts, CreatedAt: time.Now().UTC()}
 	if err := s.repo.CreateSite(ctx, site); err != nil {
-		return Site{}, err
+		return domain.Site{}, err
 	}
 	return site, nil
 }
 
-func (s *SiteService) Get(ctx context.Context, id string) (Site, error) {
+func (s *Service) Get(ctx context.Context, id string) (domain.Site, error) {
 	return s.repo.GetSite(ctx, id)
 }
 
-func (s *SiteService) GetBySlug(ctx context.Context, slug string) (Site, error) {
+func (s *Service) GetBySlug(ctx context.Context, slug string) (domain.Site, error) {
 	return s.repo.GetSiteBySlug(ctx, slug)
 }
 
-func (s *SiteService) List(ctx context.Context) ([]Site, error) {
+func (s *Service) List(ctx context.Context) ([]domain.Site, error) {
 	return s.repo.ListSites(ctx)
 }
 
 // Update applies an admin partial update: empty values leave fields unchanged,
 // except Hosts which is replaced when non-nil.
-func (s *SiteService) Update(ctx context.Context, id string, patch func(Site) Site) (Site, error) {
+func (s *Service) Update(ctx context.Context, id string, patch func(domain.Site) domain.Site) (domain.Site, error) {
 	current, err := s.repo.GetSite(ctx, id)
 	if err != nil {
-		return Site{}, err
+		return domain.Site{}, err
 	}
 	updated := patch(current)
 	updated.Name = strings.TrimSpace(updated.Name)
 	updated.Slug = strings.TrimSpace(updated.Slug)
 	if updated.Name == "" || updated.Slug == "" {
-		return Site{}, fmt.Errorf("%w: name and slug are required", ErrInvalidRequest)
+		return domain.Site{}, fmt.Errorf("%w: name and slug are required", domain.ErrInvalidRequest)
 	}
 	updated.DefaultLocale = strings.TrimSpace(updated.DefaultLocale)
 	if updated.DefaultLocale == "" {
@@ -63,12 +77,12 @@ func (s *SiteService) Update(ctx context.Context, id string, patch func(Site) Si
 	}
 	updated.Hosts = normalizeHosts(updated.Hosts)
 	if err := s.repo.UpdateSite(ctx, updated); err != nil {
-		return Site{}, err
+		return domain.Site{}, err
 	}
 	return updated, nil
 }
 
-func (s *SiteService) Delete(ctx context.Context, id string) error {
+func (s *Service) Delete(ctx context.Context, id string) error {
 	if _, err := s.repo.GetSite(ctx, id); err != nil {
 		return err
 	}
@@ -78,10 +92,10 @@ func (s *SiteService) Delete(ctx context.Context, id string) error {
 // ResolveByHost returns the site matching the request host (exact host or
 // wildcard *.domain); when nothing matches, falls back to the default slug
 // site. The context scope is resolved by the caller (client API server).
-func (s *SiteService) ResolveByHost(ctx context.Context, host, defaultSlug string) (Site, error) {
+func (s *Service) ResolveByHost(ctx context.Context, host, defaultSlug string) (domain.Site, error) {
 	sites, err := s.repo.ListSites(ctx)
 	if err != nil {
-		return Site{}, err
+		return domain.Site{}, err
 	}
 	host = strings.ToLower(strings.TrimSpace(host))
 	if h, _, ok := strings.Cut(host, ":"); ok {
@@ -95,7 +109,7 @@ func (s *SiteService) ResolveByHost(ctx context.Context, host, defaultSlug strin
 	if defaultSlug != "" {
 		return s.repo.GetSiteBySlug(ctx, defaultSlug)
 	}
-	return Site{}, fmt.Errorf("%w: no site for host %q", ErrNotFound, host)
+	return domain.Site{}, fmt.Errorf("%w: no site for host %q", domain.ErrNotFound, host)
 }
 
 func normalizeHosts(hosts []string) []string {

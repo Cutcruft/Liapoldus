@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/tests/unit/mocks"
 	"go.uber.org/mock/gomock"
@@ -33,20 +34,21 @@ func TestSnapshotServiceCreate(t *testing.T) {
 
 	snapshotRepo := mocks.NewMockSnapshotRepository(ctrl)
 	snapshotRepo.EXPECT().CreateSnapshot(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, snapshot domain.Snapshot) error {
-			if !strings.HasPrefix(snapshot.ID, "snapshot_") {
-				t.Fatalf("snapshot id = %q, want snapshot_ prefix", snapshot.ID)
+		func(_ context.Context, created domain.Snapshot) error {
+			if !strings.HasPrefix(created.ID, "snapshot_") {
+				t.Fatalf("snapshot id = %q, want snapshot_ prefix", created.ID)
 			}
-			if len(snapshot.Pages) != 2 {
-				t.Fatalf("snapshot pages = %#v", snapshot.Pages)
+			if len(created.Pages) != 2 {
+				t.Fatalf("snapshot pages = %#v", created.Pages)
 			}
-			if snapshot.Pages[0].PageID != "page_1" || snapshot.Pages[0].VersionID != "pagever_v2" || snapshot.Pages[0].Version != 2 {
-				t.Fatalf("snapshot page 0 = %#v, want latest version", snapshot.Pages[0])
+			if created.Pages[0].PageID != "page_1" || created.Pages[0].VersionID != "pagever_v2" || created.Pages[0].Version != 2 {
+				t.Fatalf("snapshot page 0 = %#v, want latest version", created.Pages[0])
 			}
 			return nil
 		})
 
-	snapshot, err := domain.NewSnapshotService(siteRepo, pageRepo, snapshotRepo).Create(context.Background(), "site_1", "Release 1")
+	service := snapshot.NewService(siteRepo, pageRepo, snapshotRepo)
+	snapshot, err := service.Create(context.Background(), "site_1", "Release 1")
 	if err != nil {
 		t.Fatalf("create snapshot: %v", err)
 	}
@@ -65,7 +67,7 @@ func TestSnapshotServiceCreateSiteNotFound(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	snapshotRepo := mocks.NewMockSnapshotRepository(ctrl)
 
-	_, err := domain.NewSnapshotService(siteRepo, pageRepo, snapshotRepo).Create(context.Background(), "site_missing", "Release 1")
+	_, err := snapshot.NewService(siteRepo, pageRepo, snapshotRepo).Create(context.Background(), "site_missing", "Release 1")
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
@@ -81,7 +83,7 @@ func TestSnapshotServiceCreateMissingName(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	snapshotRepo := mocks.NewMockSnapshotRepository(ctrl)
 
-	_, err := domain.NewSnapshotService(siteRepo, pageRepo, snapshotRepo).Create(context.Background(), "site_1", "  ")
+	_, err := snapshot.NewService(siteRepo, pageRepo, snapshotRepo).Create(context.Background(), "site_1", "  ")
 	if !errors.Is(err, domain.ErrInvalidRequest) {
 		t.Fatalf("error = %v, want ErrInvalidRequest", err)
 	}
@@ -102,7 +104,7 @@ func TestSnapshotServiceCreatePageWithoutVersions(t *testing.T) {
 
 	snapshotRepo := mocks.NewMockSnapshotRepository(ctrl)
 
-	_, err := domain.NewSnapshotService(siteRepo, pageRepo, snapshotRepo).Create(context.Background(), "site_1", "Release 1")
+	_, err := snapshot.NewService(siteRepo, pageRepo, snapshotRepo).Create(context.Background(), "site_1", "Release 1")
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}

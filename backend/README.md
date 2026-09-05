@@ -10,7 +10,7 @@ export PATH="/usr/local/go/bin:$(go env GOPATH)/bin:${PATH}"
 go run ./cmd/server
 ```
 
-По умолчанию запускаются два HTTP-сервера: admin (редакторский API) на `:8080` и client (публичный runtime) на `:18080`. Адреса меняются переменными `LIAPOLDUS_ADMIN_ADDR` и `LIAPOLDUS_CLIENT_ADDR` (устаревший алиас `LIAPOLDUS_ADDR` задаёт admin). Дополнительные настройки: `LIAPOLDUS_ADMIN_TOKEN` (Bearer для admin; пустой = открыто), `LIAPOLDUS_ASSET_DIR` (каталог файлов ассетов) и `LIAPOLDUS_CLIENT_DEFAULT_SLUG` (запасной сайт по умолчанию).
+Сервер запускает два HTTP-сервиса: admin (редакторский API) и client (публичный runtime). Конфигурация приходит только из переменных окружения (`LIAPOLDUS_*`) и не имеет дефолтов — образец полного набора в `backend/.env.example`. Ключевые переменные: `LIAPOLDUS_ADMIN_ADDR`, `LIAPOLDUS_CLIENT_ADDR` (адреса слушателей), `LIAPOLDUS_STORAGE` (`memory` | `postgres`) с `LIAPOLDUS_DATABASE_URL`, `LIAPOLDUS_ASSET_DIR` (каталог файлов ассетов), `LIAPOLDUS_ADMIN_TOKEN` (Bearer для admin; пустой = открыто) и `LIAPOLDUS_CLIENT_DEFAULT_SLUG` (запасной сайт по умолчанию).
 
 ## Проверка
 
@@ -39,4 +39,4 @@ bash scripts/test.sh
 
 Для PostgreSQL через Docker Compose см. [docs/postgres.md](../docs/postgres.md).
 
-Режим `memory` доступен для unit-тестов и локальной разработки. В этом режиме перезапуск процесса очищает данные; обычный запуск использует PostgreSQL.
+Режим `memory` доступен для unit-тестов и локальной разработки. В этом режиме перезапуск процесса очищает данные; режим `postgres` хранит данные в базе.

@@ -1,4 +1,4 @@
-package store
+package db
 
 import (
 	"context"
@@ -21,6 +21,8 @@ var migrationFiles embed.FS
 type Postgres struct {
 	pool *pgxpool.Pool
 }
+
+var _ domain.Storage = (*Postgres)(nil)
 
 func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)

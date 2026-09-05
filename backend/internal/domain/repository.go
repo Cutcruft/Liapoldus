@@ -4,6 +4,18 @@ import "context"
 
 //go:generate go run go.uber.org/mock/mockgen@v0.6.0 -source=repository.go -destination ../../tests/unit/mocks/repository.go -package mocks --self_package github.com/liapoldus/liapoldus/backend
 
+// Storage aggregates every repository the backend exposes so that a single
+// store instance can back all application services.
+type Storage interface {
+	SiteRepository
+	PageRepository
+	SnapshotRepository
+	ContentRepository
+	AssetRepository
+	RouteRepository
+	FormRepository
+}
+
 type SiteRepository interface {
 	CreateSite(context.Context, Site) error
 	GetSite(context.Context, string) (Site, error)
