@@ -3,8 +3,8 @@
 Цель: довести проект до рабочего MVP с полной функциональностью.
 `make dev` запускает всё.
 
-**Текущий статус:** M0–M2 + M3-slice 1 (Builds + публикация) — выполнены (`ddce23b`).
-Осталось: M3-slice 2–5 + инфраструктура + чистка.
+**Текущий статус:** M0–M2 + M3-slice 1 (Builds), слайсы 5 (Docker), 1 (Git), 2 (Auth+Dashboard+Settings) — выполнены (`cb5899e`).
+Осталось: слайсы 3 (Tokens), 4 (Deps UI), 6 (Cleanup).
 
 **Порядок слайсов:** 5 (Docker) → 1 (Git) → 2 (Auth) → 3 (Tokens) → 4 (Deps) → 6 (Cleanup)
 
@@ -890,19 +890,19 @@ VITE_CLIENT_URL=http://localhost:18080
 ## Порядок выполнения слайсов
 
 ```
-1. Docker + Dev Environment  ← СТАРТ (инфраструктура)
+1. Docker + Dev Environment  ✓ ВЫПОЛНЕНО
    docker-compose, Makefile, air, .env.example,
    vite proxy env vars
 
-2. Git + Snapshot Unification  ← ЯДРО
+2. Git + Snapshot Unification  ✓ ВЫПОЛНЕНО
    пересоздание bare repo (dev/main), gitsnapshot service,
    serialize, restore, admin API, model updates,
    git page, tests
 
-3. Auth + Dashboard + Settings  ← НУЖЕН ДЛЯ ИСПОЛЬЗОВАНИЯ
+3. Auth + Dashboard + Settings  ✓ ВЫПОЛНЕНО
    login, dashboard, settings, site edit, logout, tests
 
-4. Token Editor  ← НЕЗАВИСИМ
+4. Token Editor  ← СЛЕДУЮЩИЙ
    token service, DB, API, editor page, color picker,
    preview iframe (srcdoc), tests
 
@@ -948,12 +948,12 @@ VITE_CLIENT_URL=http://localhost:18080
 - [ ] `go build ./...` чисто
 
 ### Слайс 2: Auth + Dashboard + Settings
-- [ ] `/login` — ввод токена → validate → localStorage → redirect
-- [ ] Dashboard: количество сайтов, quick actions, recent builds/snapshots
-- [ ] Settings: admin token (masked), default locale, redirect status
-- [ ] SiteHomePage: edit name/locale/hosts
-- [ ] Logout: clear localStorage → redirect
-- [ ] Все unit-тесты проходят
+- [x] `/login` — ввод токена → validate → localStorage → redirect
+- [x] Dashboard: количество сайтов, quick actions, recent builds/snapshots
+- [x] Settings: admin token (masked), default locale, redirect status
+- [x] SiteHomePage: edit name/locale/hosts
+- [x] Logout: clear localStorage → redirect
+- [x] Все unit-тесты проходят
 
 ### Слайс 3: Token Editor
 - [ ] Страница «Токены»: categories sidebar, editor, live preview iframe
