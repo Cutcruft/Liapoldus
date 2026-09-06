@@ -2,6 +2,9 @@
 backend/bin/
 backend/*.log
 
+# e2e runtime data
+backend/data/
+
 # Env
 .env
 backend/.env

@@ -18,6 +18,7 @@ func setAllRequiredEnv(t *testing.T) {
 		"LIAPOLDUS_ADMIN_ADDR":                  ":9090",
 		"LIAPOLDUS_CLIENT_ADDR":                 ":19090",
 		"LIAPOLDUS_ASSET_DIR":                   "/tmp/assets",
+		"LIAPOLDUS_GIT_DIR":                     "/tmp/git",
 		"LIAPOLDUS_STORAGE":                     "memory",
 		"LIAPOLDUS_DEFAULT_LOCALE":              testDefaultLocale,
 		"LIAPOLDUS_REDIRECT_DEFAULT_STATUS":     "301",
@@ -58,6 +59,9 @@ func TestLoadCustomConfiguration(t *testing.T) {
 	}
 	if cfg.ClientDefaultSlug != "demo" {
 		t.Fatalf("client default slug = %q, want demo", cfg.ClientDefaultSlug)
+	}
+	if cfg.AssetDir != "/tmp/assets" || cfg.LocalGitDir != "/tmp/git" {
+		t.Fatalf("asset/git dirs = %q, %q", cfg.AssetDir, cfg.LocalGitDir)
 	}
 	if cfg.Storage != StorageMemory {
 		t.Fatalf("storage = %q, want %q", cfg.Storage, StorageMemory)

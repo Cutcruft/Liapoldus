@@ -58,6 +58,7 @@ func setupPostgres(t *testing.T) *application.Services {
 		ComponentMaxDepth:       5,
 		ComponentTypes:          []string{"Container", "Text"},
 		PageInitialVersion:      1,
+		LocalGitDir:             t.TempDir(),
 		EmailPattern:            nil,
 		MasterVariantName:       "master",
 		AssetFallbackName:       "asset",

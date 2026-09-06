@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
+	"github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
@@ -65,17 +66,26 @@ type fakeGitCommit struct {
 }
 
 type fakeGit struct {
-	commits []fakeGitCommit
-	inits   []string
-	head    string
+	commits     []fakeGitCommit
+	inits       []string
+	head        string
+	initErr     error
+	commitErr   error
+	checkoutErr error
 }
 
 func (f *fakeGit) Init(_ context.Context, siteID string) error {
+	if f.initErr != nil {
+		return f.initErr
+	}
 	f.inits = append(f.inits, siteID)
 	return nil
 }
 
 func (f *fakeGit) Commit(_ context.Context, siteID, definitionID, message string, files map[string][]byte) (string, error) {
+	if f.commitErr != nil {
+		return "", f.commitErr
+	}
 	sha := "git-sha" + string(rune('a'+len(f.commits)))
 	f.commits = append(f.commits, fakeGitCommit{siteID, definitionID, message, files, sha})
 	f.head = sha
@@ -93,6 +103,9 @@ func (f *fakeGit) ListVersions(_ context.Context, _ string, definitionID string)
 }
 
 func (f *fakeGit) Checkout(_ context.Context, _ string, sha string) (map[string][]byte, error) {
+	if f.checkoutErr != nil {
+		return nil, f.checkoutErr
+	}
 	for _, c := range f.commits {
 		if c.sha == sha {
 			return c.files, nil
@@ -107,7 +120,7 @@ func newComponentService(t *testing.T) (*component.Service, *fakeGit, *fakeDefs)
 	t.Helper()
 	fg := &fakeGit{}
 	fd := newFakeDefs()
-	return component.NewService(fd, fg), fg, fd
+	return component.NewService(fd, git.NewService(fg, fd)), fg, fd
 }
 
 var componentSchemaFixture = mustJSONMap(`{
@@ -160,11 +173,11 @@ func TestComponentDefine(t *testing.T) {
 	if c.message != "component card: Карточка статьи" {
 		t.Fatalf("commit message = %q", c.message)
 	}
-	if string(c.files[component.FileDefinition]) != d.Source {
+	if string(c.files[git.FileDefinition]) != d.Source {
 		t.Fatal("definition.tsx does not carry the source")
 	}
 	var committedSchema map[string]any
-	if err := json.Unmarshal(c.files[component.FileSchema], &committedSchema); err != nil {
+	if err := json.Unmarshal(c.files[git.FileSchema], &committedSchema); err != nil {
 		t.Fatalf("schema.json invalid: %v", err)
 	}
 	if !reflect.DeepEqual(committedSchema, d.Schema) {

@@ -9,7 +9,7 @@ let siteId: string
 let formId: string
 
 beforeAll(async () => {
-  const createSite = await api.post('/api/sites').send({
+  const createSite = await api.post('/api/sites').set('Authorization', 'Bearer e2e-admin-token').send({
     name: 'Client Demo',
     slug: 'client-demo',
     defaultLocale: 'ru',
@@ -18,7 +18,7 @@ beforeAll(async () => {
   expect(createSite.status).toBe(201)
   siteId = createSite.body.id
 
-  const createForm = await api.post(`/api/sites/${siteId}/forms`).send({
+  const createForm = await api.post(`/api/sites/${siteId}/forms`).set('Authorization', 'Bearer e2e-admin-token').send({
     name: 'contact',
     definition: { fields: [{ name: 'email', type: 'email', required: true }] },
   })
@@ -28,7 +28,7 @@ beforeAll(async () => {
 
 describe('Client API', () => {
   it('returns merged content by locale via host resolution', async () => {
-    const createContent = await api.post(`/api/sites/${siteId}/contents`).send({
+    const createContent = await api.post(`/api/sites/${siteId}/contents`).set('Authorization', 'Bearer e2e-admin-token').send({
       collectionId: 'col.articles',
       id: 'intro',
       fields: { title: 'Base title', description: 'Base description' },
@@ -37,6 +37,7 @@ describe('Client API', () => {
 
     const putTranslation = await api
       .put(`/api/sites/${siteId}/contents/intro/translations/ru`)
+      .set('Authorization', 'Bearer e2e-admin-token')
       .send({ fields: { title: 'Привет' } })
     expect(putTranslation.status).toBe(200)
 
@@ -67,7 +68,7 @@ describe('Client API', () => {
   })
 
   it('serves a redirect with group expansion from the edge', async () => {
-    const createRoute = await api.post(`/api/sites/${siteId}/routes`).send({
+    const createRoute = await api.post(`/api/sites/${siteId}/routes`).set('Authorization', 'Bearer e2e-admin-token').send({
       matcher: `^/products/([a-z0-9-]+)$`,
       priority: 0,
       action: { type: 'redirect', target: '/shop/$1', status: 302 },

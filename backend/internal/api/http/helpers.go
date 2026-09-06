@@ -20,6 +20,10 @@ func RespondError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		status = http.StatusNotFound
+	case errors.Is(err, domain.ErrVersionNotFound):
+		status = http.StatusNotFound
+	case errors.Is(err, domain.ErrRepoNotInitialized):
+		status = http.StatusNotFound
 	case errors.Is(err, domain.ErrAlreadyExists):
 		status = http.StatusConflict
 	case errors.Is(err, domain.ErrInvalidRequest):

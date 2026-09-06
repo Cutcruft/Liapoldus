@@ -2,8 +2,10 @@ package application
 
 import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	"github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
@@ -15,14 +17,15 @@ import (
 // Services bundles all aggregate services wired to one storage and the
 // externally-configured defaults.
 type Services struct {
-	Store     domain.Storage
-	Sites     *site.Service
-	Pages     *page.Service
-	Snapshots *snapshot.Service
-	Contents  *content.Service
-	Assets    *asset.Service
-	Routes    *route.Service
-	Forms     *form.Service
+	Store      domain.Storage
+	Sites      *site.Service
+	Pages      *page.Service
+	Snapshots  *snapshot.Service
+	Contents   *content.Service
+	Assets     *asset.Service
+	Routes     *route.Service
+	Forms      *form.Service
+	Components *component.Service
 }
 
 // New builds every aggregate service from the given storage, blob store and
@@ -33,6 +36,8 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 	for _, status := range cfg.RedirectAllowedStatuses {
 		redirectAllowed[status] = true
 	}
+	gitRepo := git.NewRepo(cfg.LocalGitDir)
+	comps := component.NewService(storage, git.NewService(gitRepo, storage))
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
@@ -40,8 +45,9 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 			InitialVersion: cfg.PageInitialVersion,
 			MaxDepth:       cfg.ComponentMaxDepth,
 		}),
-		Snapshots: snapshot.NewService(storage, storage, storage),
-		Contents:  content.NewService(storage),
+		Components: comps,
+		Snapshots:  snapshot.NewService(storage, storage, storage),
+		Contents:   content.NewService(storage),
 		Assets: asset.NewService(storage, blobs, storage, asset.Settings{
 			MasterVariant: cfg.MasterVariantName,
 			FallbackName:  cfg.AssetFallbackName,

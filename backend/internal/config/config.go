@@ -22,6 +22,7 @@ type Config struct {
 	ClientAddr              string
 	AdminToken              string
 	AssetDir                string
+	LocalGitDir             string
 	ClientDefaultSlug       string
 	Storage                 StorageDriver
 	DatabaseURL             string
@@ -53,6 +54,7 @@ func Load() (Config, error) {
 	clientAddr := os.Getenv("LIAPOLDUS_CLIENT_ADDR")
 	adminToken := os.Getenv("LIAPOLDUS_ADMIN_TOKEN")
 	assetDir := os.Getenv("LIAPOLDUS_ASSET_DIR")
+	localGitDir := os.Getenv("LIAPOLDUS_GIT_DIR")
 	clientDefaultSlug := os.Getenv("LIAPOLDUS_CLIENT_DEFAULT_SLUG")
 
 	storage := StorageDriver(strings.ToLower(strings.TrimSpace(os.Getenv("LIAPOLDUS_STORAGE"))))
@@ -88,7 +90,10 @@ func Load() (Config, error) {
 		problems = append(problems, err.Error())
 	}
 
-	componentTypes, err := parseStringList("LIAPOLDUS_COMPONENT_TYPES")
+	// ComponentTypes is deliberately optional (R4: page trees validate against
+	// the component registry, not against a static type allowlist). Retained
+	// for backward compatibility with older deployments.
+	componentTypes, err := parseStringListOptional("LIAPOLDUS_COMPONENT_TYPES")
 	if err != nil {
 		problems = append(problems, err.Error())
 	}
@@ -149,7 +154,7 @@ func Load() (Config, error) {
 	}
 
 	problems = append(problems, requireAll(
-		"LIAPOLDUS_ADMIN_ADDR", "LIAPOLDUS_CLIENT_ADDR", "LIAPOLDUS_ASSET_DIR",
+		"LIAPOLDUS_ADMIN_ADDR", "LIAPOLDUS_CLIENT_ADDR", "LIAPOLDUS_ASSET_DIR", "LIAPOLDUS_GIT_DIR",
 	)...)
 
 	if len(problems) > 0 {
@@ -169,6 +174,7 @@ func Load() (Config, error) {
 		ClientAddr:              strings.TrimSpace(clientAddr),
 		AdminToken:              strings.TrimSpace(adminToken),
 		AssetDir:                strings.TrimSpace(assetDir),
+		LocalGitDir:             strings.TrimSpace(localGitDir),
 		ClientDefaultSlug:       strings.TrimSpace(clientDefaultSlug),
 		Storage:                 storage,
 		DatabaseURL:             strings.TrimSpace(databaseURL),
@@ -259,6 +265,20 @@ func parseStringList(name string) ([]string, error) {
 	if raw == "" {
 		return nil, fmt.Errorf("%s is required", name)
 	}
+	return splitList(raw)
+}
+
+// parseStringListOptional parses a comma-separated env list but treats an empty
+// value as "not configured" instead of an error.
+func parseStringListOptional(name string) ([]string, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return nil, nil
+	}
+	return splitList(raw)
+}
+
+func splitList(raw string) ([]string, error) {
 	parts := strings.Split(raw, ",")
 	result := make([]string, 0, len(parts))
 	for _, part := range parts {

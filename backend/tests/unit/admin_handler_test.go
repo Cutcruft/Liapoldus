@@ -15,8 +15,10 @@ import (
 
 	"github.com/liapoldus/liapoldus/backend/internal/api/admin"
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	"github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
@@ -56,8 +58,9 @@ func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 			DefaultStatus: 301,
 			Allowed:       map[int]bool{301: true, 302: true},
 		}),
-		Forms:  form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
-		Logger: slog.Default(),
+		Forms:      form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
+		Components: component.NewService(db, git.NewService(git.NewRepo(t.TempDir()), db)),
+		Logger:     slog.Default(),
 	}, db
 }
 

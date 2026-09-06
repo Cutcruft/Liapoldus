@@ -520,7 +520,7 @@ func (m *Memory) Get(_ context.Context, siteID, id string) (*domain.ComponentDef
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
-	return clone(def), nil
+	return cloneDef(def), nil
 }
 
 func (m *Memory) List(_ context.Context, siteID string) ([]domain.ComponentDefinition, error) {
@@ -529,7 +529,7 @@ func (m *Memory) List(_ context.Context, siteID string) ([]domain.ComponentDefin
 	result := make([]domain.ComponentDefinition, 0, len(m.defs))
 	for _, def := range m.defs {
 		if def.SiteID == siteID {
-			result = append(result, clone(*def))
+			result = append(result, *cloneDef(def))
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
@@ -544,6 +544,29 @@ func (m *Memory) Delete(_ context.Context, siteID, id string) error {
 	}
 	delete(m.defs, m.defKey(siteID, id))
 	return nil
+}
+
+// cloneDef deep-copies a ComponentDefinition. The generic clone() would lose
+// Source because it is tagged json:"-" (source lives in git, R5); the registry
+// still needs to hand it back to services that reload definitions.
+func cloneDef(def *domain.ComponentDefinition) *domain.ComponentDefinition {
+	if def == nil {
+		return nil
+	}
+	out := *def
+	if def.Schema != nil {
+		out.Schema = make(map[string]any, len(def.Schema))
+		for k, v := range def.Schema {
+			out.Schema[k] = v
+		}
+	}
+	if def.Metadata != nil {
+		out.Metadata = make(map[string]any, len(def.Metadata))
+		for k, v := range def.Metadata {
+			out.Metadata[k] = v
+		}
+	}
+	return &out
 }
 
 func clone[T any](value T) T {

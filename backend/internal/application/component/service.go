@@ -2,7 +2,6 @@ package component
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -18,20 +17,13 @@ import (
 // Dots are allowed so hierarchies like "layout.main" work.
 var idRe = regexp.MustCompile(`^[a-z][a-z0-9_.-]*$`)
 
-// file layout inside a component commit (R5).
-const (
-	FileDefinition = "src/definition.tsx"
-	FileSchema     = "schema.json"
-	FileMetadata   = "metadata.json"
-)
-
 type Service struct {
 	defs domain.ComponentDefinitionRepository
-	git  git.Repository
+	git  *git.Service
 	now  func() time.Time
 }
 
-func NewService(defs domain.ComponentDefinitionRepository, g git.Repository) *Service {
+func NewService(defs domain.ComponentDefinitionRepository, g *git.Service) *Service {
 	return &Service{defs: defs, git: g, now: time.Now}
 }
 
@@ -94,20 +86,30 @@ func (s *Service) Delete(ctx context.Context, siteID, id string) error {
 	return s.defs.Delete(ctx, siteID, id)
 }
 
+// Versions lists the git releases of one definition in chronological order.
+func (s *Service) Versions(ctx context.Context, siteID, id string) ([]domain.ComponentVersion, error) {
+	return s.git.Releases(ctx, siteID, id)
+}
+
+// CheckoutVersion returns the file set of one release commit by sha.
+func (s *Service) CheckoutVersion(ctx context.Context, siteID, sha string) (map[string][]byte, error) {
+	return s.git.CheckoutVersion(ctx, siteID, sha)
+}
+
+// Rollback rewinds a definition to a released sha and rewrites the registry.
+func (s *Service) Rollback(ctx context.Context, siteID, id, sha string) error {
+	return s.git.Rollback(ctx, siteID, id, sha)
+}
+
 // release writes a new version: commits the definition files, then stores the
 // registry entry pointing at the new sha.
 func (s *Service) release(ctx context.Context, d domain.ComponentDefinition) (domain.ComponentVersion, error) {
-	files, err := filesFor(d)
-	if err != nil {
-		return domain.ComponentVersion{}, err
-	}
-	message := fmt.Sprintf("component %s: %s", d.ID, d.Name)
-	sha, err := s.git.Commit(ctx, d.SiteID, d.ID, message, files)
+	ver, err := s.git.Release(ctx, d.SiteID, d.ID, d.Name, d.Source, d.Schema, d.Metadata)
 	if err != nil {
 		return domain.ComponentVersion{}, err
 	}
 	now := s.now()
-	d.CurrentSHA = sha
+	d.CurrentSHA = ver.ID
 	d.UpdatedAt = now
 	if d.CreatedAt.IsZero() {
 		d.CreatedAt = now
@@ -115,13 +117,8 @@ func (s *Service) release(ctx context.Context, d domain.ComponentDefinition) (do
 	if err := s.defs.Save(ctx, &d); err != nil {
 		return domain.ComponentVersion{}, err
 	}
-	return domain.ComponentVersion{
-		ID:           sha,
-		SiteID:       d.SiteID,
-		DefinitionID: d.ID,
-		Message:      message,
-		CreatedAt:    now,
-	}, nil
+	ver.CreatedAt = now
+	return ver, nil
 }
 
 func validate(d domain.ComponentDefinition) error {
@@ -144,21 +141,4 @@ func validate(d domain.ComponentDefinition) error {
 		return err
 	}
 	return nil
-}
-
-// filesFor renders the files that one component release commits (R5).
-func filesFor(d domain.ComponentDefinition) (map[string][]byte, error) {
-	schemaJSON, err := json.Marshal(d.Schema)
-	if err != nil {
-		return nil, fmt.Errorf("%w: marshal schema: %v", domain.ErrInvalidRequest, err)
-	}
-	metadataJSON, err := json.Marshal(d.Metadata)
-	if err != nil {
-		return nil, fmt.Errorf("%w: marshal metadata: %v", domain.ErrInvalidRequest, err)
-	}
-	return map[string][]byte{
-		FileDefinition: []byte(d.Source),
-		FileSchema:     schemaJSON,
-		FileMetadata:   metadataJSON,
-	}, nil
 }

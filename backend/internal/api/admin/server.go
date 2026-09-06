@@ -6,6 +6,7 @@ import (
 
 	httpapi "github.com/liapoldus/liapoldus/backend/internal/api/http"
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
@@ -22,6 +23,7 @@ type App struct {
 	Routes     *route.Service
 	Forms      *form.Service
 	Snapshots  *snapshot.Service
+	Components *component.Service
 	Logger     *slog.Logger
 	AdminToken string
 }
@@ -36,6 +38,7 @@ func NewRouter(app App) http.Handler {
 	routeHandler := NewRouteHandler(app.Routes)
 	formHandler := NewFormHandler(app.Forms)
 	snapshotHandler := NewSnapshotHandler(app.Snapshots)
+	componentHandler := NewComponentHandler(app.Components)
 
 	// Health stays public (pre-auth).
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +106,15 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/sites/{siteID}/snapshots", snapshotHandler.List)
 	protected.HandleFunc("GET /api/snapshots/{snapshotID}", snapshotHandler.Get)
 	protected.HandleFunc("DELETE /api/snapshots/{snapshotID}", snapshotHandler.Delete)
+
+	protected.HandleFunc("POST /api/sites/{siteID}/components", componentHandler.Define)
+	protected.HandleFunc("GET /api/sites/{siteID}/components", componentHandler.List)
+	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}", componentHandler.Get)
+	protected.HandleFunc("PUT /api/sites/{siteID}/components/{componentID}", componentHandler.Update)
+	protected.HandleFunc("DELETE /api/sites/{siteID}/components/{componentID}", componentHandler.Delete)
+	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/versions", componentHandler.Versions)
+	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/versions/{sha}", componentHandler.CheckoutVersion)
+	protected.HandleFunc("POST /api/sites/{siteID}/components/{componentID}/rollback", componentHandler.Rollback)
 
 	mux.Handle("/", httpapi.BearerAuth(app.AdminToken, httpapi.WithCORS(protected)))
 
