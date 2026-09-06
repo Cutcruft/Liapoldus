@@ -29,9 +29,16 @@ export type Site = {
   createdAt?: string;
 };
 
+/** Источник значения свойства (literal = хранится как есть). */
+export type BindingSource =
+  | { source: 'literal' }
+  | { source: 'content' | 'route' | 'query' | 'operation' | 'form'; path: string };
+
 export type ComponentNode = {
   id: string;
   type: string;
+  props?: Record<string, unknown>;
+  bindings?: Record<string, BindingSource>;
   children?: ComponentNode[];
 };
 

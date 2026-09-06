@@ -3,6 +3,7 @@ export type {
   AdminForm,
   AssetMeta,
   AssetVariant,
+  BindingSource,
   ComponentNode,
   ContentDetail,
   ContentSummary,

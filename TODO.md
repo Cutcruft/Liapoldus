@@ -85,7 +85,7 @@
 - [x] `admin` SPA-каркас: Vite+React+TS+Tailwind v4+React Router, proxy `/api`→:8080 и `/runtime` `/build` `/dev`→:18080, AppShell+admin-context+роуты-заглушки.
 - [x] admin-runtime: AdminApi (fetch+токен+ошибки), реестр операций, token-store (slice-store), i18n строки + тесты на mock-fetch.
 - [x] M1 (слайс 1/3): списки+CRUD страниц/роутов: ops listPages/deletePage, use-operation, ConfirmButton/Field/EntityTable, Sites/SiteHome/SitePages/SiteRoutes страницы, роуты, EditorPlaceholder.
-- [ ] M1 (слайс 2/3): редактор дерева (tree render/select/insert/delete), инспектор schema-форм, bindings, draft+автосейв, canvas-превью.
+- [x] M1 (слайс 2/3): редактор дерева (tree render/select/insert/delete/undo-redo на slice-store page-store), инспектор schema-форм (SchemaForm: литералы+enum+числа, live-валидация R4), bindings (literal/content/route/query/operation/form), draft+автосейв (debounce 1500 → saveTree + индикатор «Сохранено, vN»), canvas-превью (design-mode: Container/Text/Image/Button, bindings как {{source:path}}), тесты 33→66.
 - [ ] Темы и токены; UI зависимостей «как package.json» (R9).
 - [ ] Git-операции из UI: commit/push/tag, новая версия, снапшот.
 - [ ] Публикация (снапшот → Build → environment), статусы Build, rollback.

@@ -1,0 +1,131 @@
+import { describe, expect, it } from 'vitest';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import type { Page } from '../../runtime';
+import { jsonResponse, renderApp } from '../test-utils';
+
+const PAGE: Page = {
+  id: 'p1',
+  siteId: 's1',
+  name: 'Главная',
+  slug: 'index',
+  version: 3,
+  root: {
+    id: 'root',
+    type: 'Container',
+    props: { layout: 'stack', gap: 8 },
+    children: [{ id: 't1', type: 'Text', props: { text: 'Привет', size: 'md', align: 'left' }, bindings: {} }],
+  },
+};
+
+const handler = (put: { root: unknown; version: number }) => (url: string, init: RequestInit) => {
+  if (url === '/api/pages/p1' && init.method === 'GET') return jsonResponse(200, PAGE);
+  if (url === '/api/pages/p1/tree' && init.method === 'PUT') {
+    put.root = JSON.parse(String(init.body))['root'];
+    put.version += 1;
+    return jsonResponse(200, { version: put.version });
+  }
+  return jsonResponse(404, { error: 'not found' });
+};
+
+describe('EditorPage', () => {
+  it('загружает страницу: дерево, инспектор, канвас', async () => {
+    const put = { root: null as unknown, version: 3 };
+    await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
+
+    expect(await screen.findByText('Привет')).toBeTruthy();
+    expect(screen.getByText('Container')).toBeTruthy();
+    expect(screen.getByText('Text', { exact: true })).toBeTruthy();
+    expect(screen.getByText('· Привет')).toBeTruthy();
+    expect(screen.getByText('Свойства · Container')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('· Привет'));
+    expect(await screen.findByText('Свойства · Text')).toBeTruthy();
+  });
+
+  it('правка пропа → автосейв PUT saveTree + обновление версии', async () => {
+    const put = { root: null as unknown, version: 3 };
+    const { calls } = await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
+
+    fireEvent.click(await screen.findByText('· Привет'));
+    const input = screen.getByDisplayValue('Привет');
+    fireEvent.change(input, { target: { value: 'Новый заголовок' } });
+
+    await waitFor(
+      () => {
+        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree');
+        expect(save).toBeTruthy();
+        const body = JSON.parse(String(save?.init.body)) as { root: Page['root'] };
+        expect(body.root.children?.[0]?.props?.['text']).toBe('Новый заголовок');
+      },
+      { timeout: 3000 },
+    );
+    expect(await screen.findByText('Сохранено, v4')).toBeTruthy();
+    expect(screen.queryByText('Есть несохранённые изменения')).toBeNull();
+  });
+
+  it('добавление узла через меню +, undo возвращает назад, redo повторяет', async () => {
+    const put = { root: null as unknown, version: 3 };
+    await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
+
+    fireEvent.click(await screen.findByTitle('Добавить'));
+    fireEvent.click(await screen.findByText('+ Текст'));
+
+    // canvas отражает живое дерево (design-mode)
+    expect(screen.getAllByText('Текст').length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.click(screen.getByTitle('Назад'));
+    expect(screen.getAllByText('Привет').length).toBe(1);
+    expect(screen.queryByText('· Текст')).toBeNull();
+
+    fireEvent.click(screen.getByTitle('Вперёд'));
+    expect(screen.getByText('· Текст')).toBeTruthy();
+  });
+
+  it('binding к контенту: выбирается источник + путь, уходит в PUT', async () => {
+    const put = { root: null as unknown, version: 3 };
+    const { calls } = await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
+
+    fireEvent.click(await screen.findByText('· Привет'));
+    const sourceSelect = screen.getAllByRole('combobox')[0]!;
+    fireEvent.change(sourceSelect, { target: { value: 'content' } });
+    const pathInput = screen.getByLabelText('Путь к данным');
+    fireEvent.change(pathInput, { target: { value: 'strings.hero' } });
+
+    await waitFor(
+      () => {
+        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree');
+        expect(save).toBeTruthy();
+        const body = JSON.parse(String(save?.init.body)) as { root: Page['root'] };
+        expect(body.root.children?.[0]?.bindings?.['text']).toEqual({ source: 'content', path: 'strings.hero' });
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it('удаление узла убирает его из дерева и канваса', async () => {
+    const put = { root: null as unknown, version: 3 };
+    await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
+
+    const removeButton = (await screen.findAllByTitle('Удалить'))[0]!;
+    fireEvent.click(removeButton);
+    await waitFor(() => expect(screen.queryByText('Привет')).toBeNull());
+    expect(screen.queryByText('· Привет')).toBeNull();
+    void put;
+  });
+
+  it('ошибка загрузки → сообщение + reload', async () => {
+    let attempts = 0;
+    await renderApp({
+      path: '/sites/s1/pages/p1',
+      handler: () => {
+        attempts += 1;
+        if (attempts === 1) return jsonResponse(500, { error: 'boom' });
+        return jsonResponse(200, PAGE);
+      },
+    });
+
+    expect(await screen.findByText(/Ошибка/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
+    expect(await screen.findByText('Привет')).toBeTruthy();
+  });
+});

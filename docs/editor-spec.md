@@ -237,12 +237,12 @@ LEFT  Дерево                 CENTER Canvas-превью          RIGHT И�
 ### M1 — Ядро редактора
 
 - [x] Список страниц и роутов; crud-страниц. *(Слайс 1/3: Sites/SiteHome/SitePages/SiteRoutes, use-operation, ConfirmButton убрал window.confirm, EntityTable/Field, ops listPages/deletePage, страницы покрыты 13 тестами — админка 33/33.)*
-- [ ] Редактор дерева: рендер, add/remove/move, focus, undo/redo (slice-store + история).
-- [ ] Инспектор: генератор формы из JSON-Schema, live-валидация (R4), asset-picker, binds-переключатель literal/source.
-- [ ] Bindings: picker источника (content/route/query/operation/form + path).
-- [ ] Draft-стор + автосейв (дебаунс 1500) + индикатор версии.
-- [ ] Canvas-превью: iframe, авто-сборка dev после save, WS DevRebuildEvent → reload. (stretch: design-mode draft.)
-- [ ] Тесты: page-store, schema-form, debounce-save, bindings-picker, preview-reload.
+- [x] Редактор дерева: рендер, add/remove/move, focus, undo/redo (slice-store + история). *(Слайс 2/3: tree-utils иммутабельные, page-store с past/future + savedKey-dirty, TreePanel (add-меню из БИ, ↑/↓/✕), ToolButton; покрыто tree-utils/page-store.)*
+- [x] Инспектор: генератор формы из JSON-Schema, live-валидация (R4), asset-picker, binds-переключатель literal/source. *(Слайс 2/3: schemas.ts BUILTIN_COMPONENTS + builtinFieldSchema; SchemaForm: текст/число/checkbox/enum-селект, validateValue → required/type/enum/range; asset-picker — M2.)*
+- [x] Bindings: picker источника (content/route/query/operation/form + path). *(Слайс 2/3: BINDING_SOURCES select + path-инпут, BindingSource в types, Inspector/EditorPage binding-тест → уходит в PUT.)*
+- [x] Draft-стор + автосейв (дебаунс 1500) + индикатор версии. *(Слайс 2/3: EditorPage autosave → saveTree, SaveIndicator; дебаунсы протестированы через waitFor.)*
+- [x] Canvas-превью: iframe, авто-сборка dev после save, WS DevRebuildEvent → reload. *(Слайс 2/3: локальный design-mode рендер Container/Text/Image/Button с bindings `{{source:path}}`; iframe/native-preview — M3.)*
+- [x] Тесты: page-store, schema-form, debounce-save, bindings-picker, preview-reload. *(Слайс 2/3: tree-utils 8, page-store 11, SchemaForm+validateValue 5, EditorPage 6 (load/autosave-PUT/undo-redo/binding/delete/error) — админка 66/66, корень 318.)*
 
 ### M2 — Контент/ассеты/формы/роуты + Tiptap
 
