@@ -93,7 +93,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		}),
 		Components:   comps,
 		GitSnapshots: gitSnaps,
-		Snapshots:    snapshot.NewService(storage, storage, storage, depsSvc),
+		Snapshots:    snapshot.NewService(storage, storage, storage, depsSvc).WithGit(gitSnaps),
 		Builds:       builds,
 		BuildEvents:  buildEvents,
 		Runtime:      runtime.NewService(storage, storage, storage, routes, builds, storage),

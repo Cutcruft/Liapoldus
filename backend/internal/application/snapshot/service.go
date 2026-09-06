@@ -15,6 +15,7 @@ type Service struct {
 	pages domain.PageRepository
 	repo  domain.SnapshotRepository
 	locks LockResolver
+	git   GitCommitter
 }
 
 // LockResolver freezes the site's dependency lock into a new snapshot
@@ -24,12 +25,26 @@ type LockResolver interface {
 	ResolveLock(context.Context, string) (domain.SnapshotLock, error)
 }
 
+// GitCommitter backs every snapshot with a commit of the serialized site state
+// (Этап 4 «снапшоты на git», design decision R5): the commit sha is recorded
+// as the snapshot's GitSHA. *gitsnapshot.Service implements it.
+type GitCommitter interface {
+	Commit(context.Context, string, string) (string, error)
+}
+
 func NewService(sites domain.SiteRepository, pages domain.PageRepository, repo domain.SnapshotRepository, locks ...LockResolver) *Service {
 	svc := &Service{sites: sites, pages: pages, repo: repo}
 	if len(locks) > 0 && locks[0] != nil {
 		svc.locks = locks[0]
 	}
 	return svc
+}
+
+// WithGit connects a GitCommitter so each Create commit stores the site state
+// on dev and stamps the snapshot with the commit sha. Returns the receiver.
+func (s *Service) WithGit(git GitCommitter) *Service {
+	s.git = git
+	return s
 }
 
 func (s *Service) Create(ctx context.Context, siteID, name string) (domain.Snapshot, error) {
@@ -69,6 +84,13 @@ func (s *Service) Create(ctx context.Context, siteID, name string) (domain.Snaps
 			return domain.Snapshot{}, fmt.Errorf("resolve dependencies: %w", err)
 		}
 		snapshot.DepsLock = lock
+	}
+	if s.git != nil {
+		gitSHA, err := s.git.Commit(ctx, siteID, "snapshot "+name)
+		if err != nil {
+			return domain.Snapshot{}, fmt.Errorf("snapshot on git: %w", err)
+		}
+		snapshot.GitSHA = gitSHA
 	}
 	if err := s.repo.CreateSnapshot(ctx, snapshot); err != nil {
 		return domain.Snapshot{}, err

@@ -12,6 +12,19 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// fakeGitCommitter satisfies snapshot.GitCommitter without a generated mock.
+type fakeGitCommitter struct {
+	commitFn func(ctx context.Context, siteID, message string) (string, error)
+}
+
+func (f fakeGitCommitter) Commit(ctx context.Context, siteID, message string) (string, error) {
+	return f.commitFn(ctx, siteID, message)
+}
+
+func newSnapshotServiceWithGit(siteRepo domain.SiteRepository, pageRepo domain.PageRepository, snapshotRepo domain.SnapshotRepository, git snapshot.GitCommitter) *snapshot.Service {
+	return snapshot.NewService(siteRepo, pageRepo, snapshotRepo).WithGit(git)
+}
+
 func TestSnapshotServiceCreate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -107,5 +120,76 @@ func TestSnapshotServiceCreatePageWithoutVersions(t *testing.T) {
 	_, err := snapshot.NewService(siteRepo, pageRepo, snapshotRepo).Create(context.Background(), "site_1", "Release 1")
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSnapshotServiceCreateCommitsToGit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	siteRepo := mocks.NewMockSiteRepository(ctrl)
+	siteRepo.EXPECT().GetSite(gomock.Any(), "site_1").Return(domain.Site{ID: "site_1"}, nil)
+
+	pageRepo := mocks.NewMockPageRepository(ctrl)
+	pageRepo.EXPECT().ListPagesBySite(gomock.Any(), "site_1").Return([]domain.Page{
+		{ID: "page_1", SiteID: "site_1"},
+	}, nil)
+	pageRepo.EXPECT().ListPageVersions(gomock.Any(), "page_1").Return([]domain.PageVersion{
+		{ID: "pagever_v1", PageID: "page_1", Number: 1},
+	}, nil)
+
+	snapshotRepo := mocks.NewMockSnapshotRepository(ctrl)
+	snapshotRepo.EXPECT().CreateSnapshot(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, created domain.Snapshot) error {
+			if created.GitSHA != "sha_dev" {
+				t.Fatalf("snapshot gitSha = %q, want sha_dev", created.GitSHA)
+			}
+			return nil
+		})
+
+	var commitMsg string
+	git := fakeGitCommitter{commitFn: func(_ context.Context, _ string, message string) (string, error) {
+		commitMsg = message
+		return "sha_dev", nil
+	}}
+
+	snapshot, err := newSnapshotServiceWithGit(siteRepo, pageRepo, snapshotRepo, git).Create(context.Background(), "site_1", "Release 1")
+	if err != nil {
+		t.Fatalf("create snapshot: %v", err)
+	}
+	if snapshot.GitSHA != "sha_dev" {
+		t.Fatalf("snapshot = %#v, want gitSha sha_dev", snapshot)
+	}
+	if commitMsg != "snapshot Release 1" {
+		t.Fatalf("git commit message = %q", commitMsg)
+	}
+}
+
+func TestSnapshotServiceCreateGitCommitFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	siteRepo := mocks.NewMockSiteRepository(ctrl)
+	siteRepo.EXPECT().GetSite(gomock.Any(), "site_1").Return(domain.Site{ID: "site_1"}, nil)
+
+	pageRepo := mocks.NewMockPageRepository(ctrl)
+	pageRepo.EXPECT().ListPagesBySite(gomock.Any(), "site_1").Return([]domain.Page{
+		{ID: "page_1", SiteID: "site_1"},
+	}, nil)
+	pageRepo.EXPECT().ListPageVersions(gomock.Any(), "page_1").Return([]domain.PageVersion{
+		{ID: "pagever_v1", PageID: "page_1", Number: 1},
+	}, nil)
+
+	// The snapshot row must not be written when the git commit fails.
+	snapshotRepo := mocks.NewMockSnapshotRepository(ctrl)
+	snapshotRepo.EXPECT().CreateSnapshot(gomock.Any(), gomock.Any()).Times(0)
+
+	git := fakeGitCommitter{commitFn: func(_ context.Context, _, _ string) (string, error) {
+		return "", errors.New("rebase conflict")
+	}}
+
+	_, err := newSnapshotServiceWithGit(siteRepo, pageRepo, snapshotRepo, git).Create(context.Background(), "site_1", "Release 1")
+	if err == nil || !strings.Contains(err.Error(), "snapshot on git") {
+		t.Fatalf("error = %v, want snapshot-on-git wrap", err)
 	}
 }

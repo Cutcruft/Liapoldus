@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
+	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
@@ -55,6 +56,50 @@ func snapshotList(t *testing.T, db *storage.Memory, siteID string) []domain.Snap
 		t.Fatalf("list snapshots: %v", err)
 	}
 	return snapshots
+}
+
+// TestSnapshotServiceCreateRecordsGitCommit covers the Этап 4 «снапшоты на
+// git» wiring: creating a snapshot through the plain snapshot service with
+// WithGit stamps the snapshot with the dev commit sha, and the serialized site
+// state lands in that commit's tree.
+func TestSnapshotServiceCreateRecordsGitCommit(t *testing.T) {
+	ctx := context.Background()
+	db := storage.NewMemory()
+	gitSvc, repo := newSnapshotService(t, db)
+	siteID := "snap-git-create"
+	seedSnapshotSite(t, db, siteID)
+
+	created, err := snapshot.NewService(db, db, db).WithGit(gitSvc).Create(ctx, siteID, "Release A")
+	if err != nil {
+		t.Fatalf("create snapshot: %v", err)
+	}
+	if created.GitSHA == "" {
+		t.Fatalf("snapshot gitSha is empty: %#v", created)
+	}
+
+	devSHA, err := repo.HeadSHA(ctx, siteID, gitsnapshot.BranchDev)
+	if err != nil {
+		t.Fatalf("dev head: %v", err)
+	}
+	if created.GitSHA != devSHA {
+		t.Fatalf("snapshot gitSha = %s, want dev head %s", created.GitSHA, devSHA)
+	}
+
+	files, err := repo.ReadFiles(ctx, siteID, created.GitSHA)
+	if err != nil {
+		t.Fatalf("read commit tree: %v", err)
+	}
+	for _, want := range []string{"site.json", "pages/p_home.json", "contents/c_1.json", "tokens.json"} {
+		if _, ok := files[want]; !ok {
+			t.Fatalf("commit tree missing %q: %d files", want, len(files))
+		}
+	}
+
+	// The snapshot list still comes from the DB row created by the service.
+	snapshots := snapshotList(t, db, siteID)
+	if len(snapshots) != 1 || snapshots[0].GitSHA != created.GitSHA {
+		t.Fatalf("snapshots = %#v", snapshots)
+	}
 }
 
 func TestSnapshotCommitPublishRestoreLifecycle(t *testing.T) {
