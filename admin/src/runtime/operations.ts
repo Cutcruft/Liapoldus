@@ -28,6 +28,9 @@ export type OperationKind =
   | 'createForm'
   | 'createSnapshot'
   | 'listSnapshots'
+  | 'deleteSnapshot'
+  | 'createBuild'
+  | 'getBuild'
   | 'runtimeStatus';
 
 export interface OperationSpec<TArgs extends Record<string, unknown> = Record<string, unknown>> {
@@ -270,6 +273,37 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     method: 'GET',
     route: (args) => `/api/sites/{siteId}/snapshots`,
     detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
+  },
+
+  deleteSnapshot: {
+    kind: 'deleteSnapshot',
+    labelKey: 'op.deleteSnapshot',
+    method: 'DELETE',
+    route: (args) => `/api/snapshots/{snapshotId}`,
+    detail: () => 'OK',
+  },
+
+  createBuild: {
+    kind: 'createBuild',
+    labelKey: 'op.createBuild',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/builds`,
+    body: (args) => ({ snapshotId: args.snapshotId, environment: args.environment }),
+    detail: (b, t) => {
+      const status = typeof b === 'object' && b !== null && 'status' in b ? String((b as { status: unknown }).status) : '';
+      return status ? status : t('result.count', { n: 0 });
+    },
+  },
+
+  getBuild: {
+    kind: 'getBuild',
+    labelKey: 'op.getBuild',
+    method: 'GET',
+    route: (args) => `/api/builds/{buildId}`,
+    detail: (b, t) => {
+      const status = typeof b === 'object' && b !== null && 'status' in b ? String((b as { status: unknown }).status) : '';
+      return status ? status : t('result.count', { n: 0 });
+    },
   },
 
   runtimeStatus: {

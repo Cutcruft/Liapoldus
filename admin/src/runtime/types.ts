@@ -126,6 +126,32 @@ export type Snapshot = {
   createdAt?: string;
 };
 
+export type BuildStatus = 'queued' | 'building' | 'ready' | 'failed';
+
+export type Build = {
+  id: string;
+  siteId: string;
+  snapshotId: string;
+  environment: string;
+  status: BuildStatus;
+  log: string[];
+  artifactDir: string;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+};
+
+/** Событие dev-ребортера (client `/dev/build/ws`). */
+export type DevRebuildEvent = {
+  siteId: string;
+  environment: string;
+  snapshotId: string;
+  artifactDir?: string;
+  status: BuildStatus;
+  error?: string;
+  updatedAt: string;
+};
+
 /** Статус рантайма сайта (Этап 4: /runtime/status — ожидается на бэкенде). */
 export type RuntimeStatus = {
   siteId: string;

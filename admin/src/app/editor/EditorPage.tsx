@@ -8,6 +8,8 @@ import { createEditorStore, editorActions } from './page-store';
 import { TreePanel } from './TreePanel';
 import { Inspector } from './Inspector';
 import { PreviewPane } from './PreviewPane';
+import { CanvasPreview, CanvasTabBar } from './CanvasPreview';
+import { createPreviewStore, previewActions } from './preview-store';
 import { ToolButton } from './controls';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed';
@@ -23,6 +25,10 @@ export function EditorPage() {
   const store = useMemo(() => createEditorStore(), []);
   const actions = useMemo(() => editorActions(store), [store]);
   const page = useOperation<Page>('getPage', { pageId });
+
+  const previewStore = useMemo(() => createPreviewStore(siteId), [siteId]);
+  const preview = useMemo(() => previewActions(previewStore, { api, t, siteId }), [previewStore, api, t, siteId]);
+  const [canvasView, setCanvasView] = useState<'design' | 'preview'>('design');
 
   const tree = useSelector(store, (s) => s.tree);
   const dirty = useSelector(store, (s) => s.dirty);
@@ -46,7 +52,8 @@ export function EditorPage() {
     const next = res.data as { version?: number } | undefined;
     actions.applySaved(next?.version ?? cur.version);
     setSaveState('saved');
-  }, [api, t, pageId, actions, store]);
+    void preview.requestBuild();
+  }, [api, t, pageId, actions, store, preview]);
 
   useEffect(() => {
     if (!dirty || !tree) return;
@@ -112,7 +119,12 @@ export function EditorPage() {
           <TreePanel store={store} actions={actions} t={t} />
         </section>
         <section className={`${PANEL_CLASS} overflow-auto`} aria-label={t('editor.canvas')}>
-          <PreviewPane store={store} t={t} />
+          <CanvasTabBar view={canvasView} onView={setCanvasView} t={t} />
+          {canvasView === 'design' ? (
+            <PreviewPane store={store} t={t} />
+          ) : (
+            <CanvasPreview siteId={siteId} previewStore={previewStore} preview={preview} t={t} />
+          )}
         </section>
         <section className={`${PANEL_CLASS} overflow-auto`} aria-label={t('editor.props')}>
           <Inspector store={store} actions={actions} t={t} />

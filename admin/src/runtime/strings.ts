@@ -88,6 +88,16 @@ export const STRINGS = {
   'field.error.enum': 'Значение не из списка',
   'field.error.range': 'Вне диапазона',
 
+  'canvas.design': 'Дизайн',
+  'canvas.preview': 'Превью',
+  'preview.build': 'Собрать превью',
+  'preview.building': 'Сборка…',
+  'preview.ready': 'Превью готово',
+  'preview.failed': 'Ошибка сборки: {error}',
+  'preview.empty': 'Соберите превью, чтобы видеть опубликованную страницу',
+  'preview.open': 'Открыть в новой вкладке',
+  'preview.refresh': 'Обновить превью',
+
   'op.listSites': 'Список сайтов',
   'op.createSite': 'Создать сайт',
   'op.getSite': 'Информация о сайте',
@@ -112,6 +122,9 @@ export const STRINGS = {
   'op.createForm': 'Создать форму',
   'op.createSnapshot': 'Создать снапшот',
   'op.listSnapshots': 'Список снапшотов',
+  'op.deleteSnapshot': 'Удалить снапшот',
+  'op.createBuild': 'Создать сборку',
+  'op.getBuild': 'Статус сборки',
   'op.runtimeStatus': 'Статус рантайма',
 
   'result.count': '{n} шт.',

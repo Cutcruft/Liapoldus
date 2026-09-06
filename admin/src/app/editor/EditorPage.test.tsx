@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Page } from '../../runtime';
 import { jsonResponse, renderApp } from '../test-utils';
+import { setDevSocketFactory, type WsLike } from './dev-ws';
+
+function inertSocket(): WsLike {
+  return { onmessage: null, onopen: null, onclose: null, onerror: null, close: () => {} };
+}
+
+beforeEach(() => {
+  setDevSocketFactory(() => inertSocket());
+  localStorage.clear();
+});
 
 const PAGE: Page = {
   id: 'p1',
@@ -127,5 +137,61 @@ describe('EditorPage', () => {
     expect(await screen.findByText(/Ошибка/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
     expect(await screen.findByText('Привет')).toBeTruthy();
+  });
+
+  it('после автосейва собирается dev build; таб Превью показывает iframe', async () => {
+    const put = { root: null as unknown, version: 3 };
+    const { calls } = await renderApp({
+      path: '/sites/s1/pages/p1',
+      handler: (url, init) => {
+        if (url === '/api/pages/p1' && init.method === 'GET') return jsonResponse(200, PAGE);
+        if (url === '/api/pages/p1/tree' && init.method === 'PUT') {
+          put.root = JSON.parse(String(init.body))['root'];
+          put.version += 1;
+          return jsonResponse(200, { version: put.version });
+        }
+        if (url === '/api/sites/s1/snapshots' && init.method === 'POST') {
+          const body = JSON.parse(String(init.body)) as { name: string };
+          return jsonResponse(201, { id: 'snap1', siteId: 's1', name: body.name });
+        }
+        if (url === '/api/sites/s1/builds' && init.method === 'POST') {
+          return jsonResponse(201, {
+            id: 'b1',
+            siteId: 's1',
+            snapshotId: 'snap1',
+            environment: 'development',
+            status: 'ready',
+            log: [],
+            artifactDir: '',
+            createdAt: new Date().toISOString(),
+          });
+        }
+        if (init.method === 'DELETE') return jsonResponse(204, undefined);
+        return jsonResponse(404, { error: 'not found' });
+      },
+    });
+
+    fireEvent.click(await screen.findByText('· Привет'));
+    fireEvent.change(screen.getByDisplayValue('Привет'), { target: { value: 'Заголовок' } });
+    await waitFor(
+      () => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree')).toBe(true),
+      { timeout: 3000 },
+    );
+    await waitFor(
+      () => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/sites/s1/builds')).toBe(true),
+      { timeout: 3000 },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Превью' }));
+    const iframe = (await screen.findByTitle('Превью готово')) as unknown as HTMLElement;
+    void iframe;
+    await waitFor(
+      () => {
+        const node = document.querySelector('iframe') as HTMLIFrameElement | null;
+        expect(node?.getAttribute('src')).toBe('/build/s1/development/snap1/dist/index.html');
+      },
+      { timeout: 3000 },
+    );
+    void put;
   });
 });

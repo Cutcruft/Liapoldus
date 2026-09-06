@@ -72,6 +72,39 @@ describe('runOperation', () => {
     expect(res.detail).toBe('Сохранено, версия 7');
   });
 
+  it('createBuild: POST → путь без query-мусора, статус в detail', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/builds');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toEqual({ snapshotId: 'snap1', environment: 'development' });
+      return json(201, { id: 'b1', siteId: 's1', snapshotId: 'snap1', environment: 'development', status: 'ready', log: [], artifactDir: '' });
+    });
+    const res = await runOperation(api, 'createBuild', { siteId: 's1', snapshotId: 'snap1', environment: 'development' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('ready');
+    expect(res.data).toMatchObject({ status: 'ready' });
+  });
+
+  it('getBuild: GET по buildId', async () => {
+    const api = fixtureApi(async (url) => {
+      expect(url).toBe('/api/builds/b1');
+      return json(200, { id: 'b1', status: 'building' });
+    });
+    const res = await runOperation(api, 'getBuild', { buildId: 'b1' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.data).toMatchObject({ status: 'building' });
+  });
+
+  it('deleteSnapshot: DELETE по snapshotId', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/snapshots/snap1');
+      expect(init.method).toBe('DELETE');
+      return new Response(null, { status: 204 });
+    });
+    const res = await runOperation(api, 'deleteSnapshot', { snapshotId: 'snap1' }, t);
+    expect(res.ok).toBe(true);
+  });
+
   it('runtimeStatus: 404 → miss', async () => {
     const api = fixtureApi(async () => json(404, { error: 'not found' }));
     const res = await runOperation(api, 'runtimeStatus', {}, t);
