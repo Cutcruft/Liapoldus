@@ -246,7 +246,7 @@ LEFT  Дерево                 CENTER Canvas-превью          RIGHT И�
 
 ### M2 — Контент/ассеты/формы/роуты + Tiptap
 
-- [ ] Контент: коллекции, items, translations overlay.
+- [x] Контент: коллекции, items, translations overlay. *(M2-слайс 1: ops createContent/deleteContent/deleteTranslation + listContents/getContent/updateContent/putTranslation; `JsonFieldsEditor` — строки «ключ/тип/значение» (string/number/bool/json textarea) с инлайн-валидацией (NaN/битый JSON держат предыдущее значение); SiteContentsPage — список с фильтр-чипами коллекций, форма создания `{collectionId, id?, fields}`, удаление через ConfirmButton, роут `/sites/:siteId/contents`; ContentEditorPage — base = defaultLocale (hint из getSite), переводы overlay: табы локлей + «Добавить локаль», PUT updateContent/putTranslation, DELETE deleteTranslation, роут `/sites/:siteId/contents/:contentId`; навигация SiteHomePage + роуты AppRoutes. Тесты: ops 4, JsonFieldsEditor 6, SiteContentsPage 4, ContentEditorPage 4 — админка 103/103, корень 355.)*
 - [ ] Ассеты: upload/list/preview/picker.
 - [ ] Формы: definition + submissions.
 - [ ] Роуты: CRUD + валидация matcher/action.

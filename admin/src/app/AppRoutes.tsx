@@ -5,6 +5,8 @@ import { SitesPage } from './pages/SitesPage';
 import { SiteHomePage } from './pages/SiteHomePage';
 import { SitePagesPage } from './pages/SitePagesPage';
 import { SiteRoutesPage } from './pages/SiteRoutesPage';
+import { SiteContentsPage } from './pages/SiteContentsPage';
+import { ContentEditorPage } from './pages/ContentEditorPage';
 import { EditorPage } from './editor/EditorPage';
 
 export const appRoutes: RouteObject[] = [
@@ -17,6 +19,8 @@ export const appRoutes: RouteObject[] = [
       { path: 'sites/:siteId', element: <SiteHomePage /> },
       { path: 'sites/:siteId/pages', element: <SitePagesPage /> },
       { path: 'sites/:siteId/pages/:pageId', element: <EditorPage /> },
+      { path: 'sites/:siteId/contents', element: <SiteContentsPage /> },
+      { path: 'sites/:siteId/contents/:contentId', element: <ContentEditorPage /> },
       { path: 'sites/:siteId/assets', element: <Placeholder titleKey="nav.assets" scope="—" /> },
       { path: 'sites/:siteId/routes', element: <SiteRoutesPage /> },
       { path: 'sites/:siteId/forms', element: <Placeholder titleKey="nav.forms" scope="—" /> },

@@ -16,8 +16,11 @@ export type OperationKind =
   | 'deletePage'
   | 'listContents'
   | 'getContent'
+  | 'createContent'
   | 'updateContent'
+  | 'deleteContent'
   | 'putTranslation'
+  | 'deleteTranslation'
   | 'listAssets'
   | 'uploadAsset'
   | 'listRoutes'
@@ -172,6 +175,19 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     },
   },
 
+  createContent: {
+    kind: 'createContent',
+    labelKey: 'op.createContent',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/contents`,
+    body: (args) => {
+      const body: Record<string, unknown> = { collectionId: args.collectionId, fields: args.fields ?? {} };
+      if (args.id) body.id = args.id;
+      return body;
+    },
+    detail: () => 'OK',
+  },
+
   updateContent: {
     kind: 'updateContent',
     labelKey: 'op.updateContent',
@@ -181,12 +197,28 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     detail: () => 'OK',
   },
 
+  deleteContent: {
+    kind: 'deleteContent',
+    labelKey: 'op.deleteContent',
+    method: 'DELETE',
+    route: (args) => `/api/sites/{siteId}/contents/{contentId}`,
+    detail: () => 'OK',
+  },
+
   putTranslation: {
     kind: 'putTranslation',
     labelKey: 'op.putTranslation',
     method: 'PUT',
     route: (args) => `/api/sites/{siteId}/contents/{contentId}/translations/{locale}`,
     body: (args) => ({ fields: args.fields }),
+    detail: () => 'OK',
+  },
+
+  deleteTranslation: {
+    kind: 'deleteTranslation',
+    labelKey: 'op.deleteTranslation',
+    method: 'DELETE',
+    route: (args) => `/api/sites/{siteId}/contents/{contentId}/translations/{locale}`,
     detail: () => 'OK',
   },
 

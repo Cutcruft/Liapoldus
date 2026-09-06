@@ -5,8 +5,12 @@ import { useAdmin } from '../admin-context';
 import { useOperation } from '../use-operation';
 import { ConfirmButton } from '../components/ConfirmButton';
 
-const SECTIONS: Array<{ to: string; labelKey: 'nav.pages' | 'nav.assets' | 'nav.routes' | 'nav.forms' | 'nav.snapshots' }> = [
+const SECTIONS: Array<{
+  to: string;
+  labelKey: 'nav.pages' | 'nav.contents' | 'nav.assets' | 'nav.routes' | 'nav.forms' | 'nav.snapshots';
+}> = [
   { to: 'pages', labelKey: 'nav.pages' },
+  { to: 'contents', labelKey: 'nav.contents' },
   { to: 'assets', labelKey: 'nav.assets' },
   { to: 'routes', labelKey: 'nav.routes' },
   { to: 'forms', labelKey: 'nav.forms' },

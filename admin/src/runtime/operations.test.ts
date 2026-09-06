@@ -19,6 +19,10 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+function noBody(status: number): Response {
+  return new Response(null, { status });
+}
+
 describe('operations: реестр', () => {
   it('содержит все createPage/saveTree/runtimeStatus и ищется по kind', () => {
     expect(operationByKind('createSite').labelKey).toBe('op.createSite');
@@ -99,9 +103,60 @@ describe('runOperation', () => {
     const api = fixtureApi(async (url, init) => {
       expect(url).toBe('/api/snapshots/snap1');
       expect(init.method).toBe('DELETE');
-      return new Response(null, { status: 204 });
+      return noBody(204);
     });
     const res = await runOperation(api, 'deleteSnapshot', { snapshotId: 'snap1' }, t);
+    expect(res.ok).toBe(true);
+  });
+
+  it('createContent: POST с телом {collectionId, id, fields}', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/contents');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toEqual({
+        collectionId: 'strings',
+        id: 'nav.home',
+        fields: { title: 'Главная' },
+      });
+      return json(201, { id: 'nav.home', collectionId: 'strings', fields: { title: 'Главная' } });
+    });
+    const res = await runOperation(
+      api,
+      'createContent',
+      { siteId: 's1', collectionId: 'strings', id: 'nav.home', fields: { title: 'Главная' } },
+      t,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+  });
+
+  it('createContent: id опционален и не попадает в тело', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(JSON.parse(init.body as string)).toEqual({ collectionId: 'c', fields: {} });
+      return json(201, { id: 'x', collectionId: 'c', fields: {} });
+    });
+    const res = await runOperation(api, 'createContent', { siteId: 's1', collectionId: 'c' }, t);
+    expect(res.ok).toBe(true);
+  });
+
+  it('deleteContent: DELETE → 204', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/contents/abc1');
+      expect(init.method).toBe('DELETE');
+      return noBody(204);
+    });
+    const res = await runOperation(api, 'deleteContent', { siteId: 's1', contentId: 'abc1' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+  });
+
+  it('deleteTranslation: DELETE → 204', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/contents/abc1/translations/en');
+      expect(init.method).toBe('DELETE');
+      return noBody(204);
+    });
+    const res = await runOperation(api, 'deleteTranslation', { siteId: 's1', contentId: 'abc1', locale: 'en' }, t);
     expect(res.ok).toBe(true);
   });
 
