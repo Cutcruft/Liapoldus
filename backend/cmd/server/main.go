@@ -98,6 +98,9 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 		Logger:      logger,
 		AdminToken:  cfg.AdminToken,
 		BuildEvents: services.BuildEvents,
+
+		DefaultLocale:         cfg.DefaultLocale,
+		RedirectDefaultStatus: cfg.RedirectDefaultStatus,
 	})
 	clientHandler := client.NewRouter(&client.App{
 		Sites:                   services.Sites,

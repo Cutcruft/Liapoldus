@@ -10,6 +10,8 @@ export type {
   ComponentNode,
   ContentDetail,
   ContentSummary,
+  Dashboard,
+  DashboardSite,
   DevRebuildEvent,
   FormDefinition,
   GitBranchStatus,
@@ -20,9 +22,12 @@ export type {
   OperationStatus,
   Page,
   PageVersion,
+  RecentBuild,
+  RecentSnapshot,
   Route,
   RouteAction,
   RuntimeStatus,
+  Settings,
   Site,
   Snapshot,
   Submission,
@@ -31,8 +36,9 @@ export { createAdminApi } from './api';
 export type { AdminApi, AdminApiEnv, ApiResponse, HttpMethod } from './api';
 export { OPERATIONS, operationByKind, runOperation } from './operations';
 export type { OperationKind, OperationSpec } from './operations';
-export { createTokenStore } from './token-store';
+export { createTokenStore, validateToken } from './token-store';
 export type { AdminAuthState } from './token-store';
+export { APP_VERSION, DEFAULT_BUILDS_WS_PATH, DEFAULT_DEV_WS_PATH, ENV_DEV } from './constants';
 export type { SliceStore } from '@liapoldus/ui-runtime';
 export { makeTranslate } from './i18n';
 export type { Translate } from './i18n';

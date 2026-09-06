@@ -200,3 +200,50 @@ export type GitOverview = {
   status: GitStatus;
   commits: GitCommitInfo[];
 };
+
+/** Один сайт в ответе дашборда: базовая модель + полный git-статус. */
+export type DashboardSite = {
+  siteId: string;
+  name: string;
+  slug: string;
+  defaultLocale: string;
+  hosts: string[];
+  git?: GitStatus;
+};
+
+/** Строка «последние сборки» дашборда (агрегирована по всем сайтам). */
+export type RecentBuild = {
+  id: string;
+  siteId: string;
+  siteName: string;
+  snapshotId: string;
+  environment: string;
+  status: BuildStatus;
+  createdAt: string;
+};
+
+/** Строка «последние снапшоты» дашборда (агрегирована по всем сайтам). */
+export type RecentSnapshot = {
+  id: string;
+  siteId: string;
+  siteName: string;
+  name: string;
+  gitSha?: string;
+  createdAt: string;
+};
+
+/** Ответ `GET /api/dashboard` (слайс 2.2). */
+export type Dashboard = {
+  siteCount: number;
+  sites: DashboardSite[];
+  recentBuilds: RecentBuild[];
+  recentSnapshots: RecentSnapshot[];
+  runtimeStatus: 'ok' | 'degraded' | 'no-builds' | string;
+};
+
+/** Ответ `GET /api/settings` (слайс 2.3); adminToken приходит замаскированным. */
+export type Settings = {
+  adminToken: string;
+  defaultLocale: string;
+  redirectDefaultStatus: number;
+};

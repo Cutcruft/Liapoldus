@@ -32,6 +32,10 @@ type App struct {
 	Deps       *deps.Service
 	Logger     *slog.Logger
 	AdminToken string
+	// DefaultLocale and RedirectDefaultStatus mirror server configuration so
+	// the Settings page can surface them (slice 2.3).
+	DefaultLocale         string
+	RedirectDefaultStatus int
 	// BuildEvents is the hub the /api/builds/ws channel relays (optional).
 	BuildEvents BuildEventSource
 }
@@ -49,6 +53,9 @@ func NewRouter(app App) http.Handler {
 	componentHandler := NewComponentHandler(app.Components)
 	buildHandler := NewBuildHandler(app.Builds)
 	depsHandler := NewDepsHandler(app.Deps)
+	dashboardHandler := NewDashboardHandler(app.Sites, app.Builds, app.Snapshots, app.Git)
+	settingsHandler := NewSettingsHandler(app.AdminToken, app.DefaultLocale, app.RedirectDefaultStatus)
+	authHandler := NewAuthHandler(app.AdminToken)
 
 	var gitHandler *GitHandler
 	if app.Git != nil {
@@ -67,8 +74,15 @@ func NewRouter(app App) http.Handler {
 		mux.Handle("GET /api/builds/ws", http.HandlerFunc(NewBuildsWsHandler(app.BuildEvents, app.AdminToken, app.Logger).Serve))
 	}
 
+	// Token validation is public (pre-BearerAuth) so the admin login page can
+	// authenticate before holding a valid token.
+	mux.HandleFunc("POST /api/auth/validate", authHandler.Validate)
+
 	// Everything else is behind the admin bearer token.
 	protected := http.NewServeMux()
+
+	protected.HandleFunc("GET /api/dashboard", dashboardHandler.Get)
+	protected.HandleFunc("GET /api/settings", settingsHandler.Get)
 
 	protected.HandleFunc("POST /api/sites", siteHandler.Create)
 	protected.HandleFunc("GET /api/sites", siteHandler.List)

@@ -47,7 +47,9 @@ export type OperationKind =
   | 'commitGit'
   | 'publishGit'
   | 'restoreGit'
-  | 'rollbackGit';
+  | 'rollbackGit'
+  | 'getDashboard'
+  | 'getSettings';
 
 export interface OperationSpec<TArgs extends Record<string, unknown> = Record<string, unknown>> {
   kind: OperationKind;
@@ -490,6 +492,28 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
       const sha = typeof b === 'object' && b !== null && 'sha' in b ? String((b as { sha: unknown }).sha) : '';
       return sha ? t('result.saved.sha', { sha: sha.slice(0, 8) }) : 'OK';
     },
+  },
+
+  getDashboard: {
+    kind: 'getDashboard',
+    labelKey: 'op.getDashboard',
+    method: 'GET',
+    route: () => '/api/dashboard',
+    detail: (b, t) => {
+      const count =
+        typeof b === 'object' && b !== null && 'siteCount' in b
+          ? Number((b as { siteCount: unknown }).siteCount)
+          : 0;
+      return t('dashboard.count.sites', { n: count });
+    },
+  },
+
+  getSettings: {
+    kind: 'getSettings',
+    labelKey: 'op.getSettings',
+    method: 'GET',
+    route: () => '/api/settings',
+    detail: () => 'OK',
   },
 };
 

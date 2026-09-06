@@ -1,6 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
 import { AppShell } from './AppShell';
-import { Placeholder } from './Placeholder';
+import { RequireAuth } from './RequireAuth';
 import { SitesPage } from './pages/SitesPage';
 import { SiteHomePage } from './pages/SiteHomePage';
 import { SitePagesPage } from './pages/SitePagesPage';
@@ -13,14 +13,22 @@ import { SiteFormsPage } from './pages/SiteFormsPage';
 import { FormEditorPage } from './pages/FormEditorPage';
 import { SiteBuildsPage } from './pages/SiteBuildsPage';
 import { SiteCommitsPage } from './pages/SiteCommitsPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { LoginPage } from './pages/LoginPage';
 import { EditorPage } from './editor/EditorPage';
 
 export const appRoutes: RouteObject[] = [
+  { path: 'login', element: <LoginPage /> },
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <RequireAuth>
+        <AppShell />
+      </RequireAuth>
+    ),
     children: [
-      { index: true, element: <Placeholder titleKey="nav.dashboard" /> },
+      { index: true, element: <DashboardPage /> },
       { path: 'sites', element: <SitesPage /> },
       { path: 'sites/:siteId', element: <SiteHomePage /> },
       { path: 'sites/:siteId/pages', element: <SitePagesPage /> },
@@ -34,7 +42,7 @@ export const appRoutes: RouteObject[] = [
       { path: 'sites/:siteId/forms/:formId', element: <FormEditorPage /> },
       { path: 'sites/:siteId/builds', element: <SiteBuildsPage /> },
       { path: 'sites/:siteId/git', element: <SiteCommitsPage /> },
-      { path: 'settings', element: <Placeholder titleKey="nav.settings" /> },
+      { path: 'settings', element: <SettingsPage /> },
     ],
   },
 ];

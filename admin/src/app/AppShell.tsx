@@ -1,6 +1,7 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar, Stack, Divider, Spacer } from '@liapoldus/ui-kit';
-import { useAdmin } from './admin-context';
+import { APP_VERSION } from '../runtime';
+import { useAdmin, ADMIN_TOKEN_KEY } from './admin-context';
 import type { AdminStringKey } from '../runtime';
 
 const NAV: Array<{ to: string; end?: boolean; key: AdminStringKey }> = [
@@ -27,7 +28,15 @@ function NavLinkItem({ to, end, label }: { to: string; end?: boolean; label: str
 
 /** Каркас админки: левая навигация + main-область (роутер). */
 export function AppShell() {
-  const { t } = useAdmin();
+  const { t, tokenStore } = useAdmin();
+  const navigate = useNavigate();
+
+  const logout = () => {
+    tokenStore.setState({ token: null });
+    globalThis.localStorage?.removeItem(ADMIN_TOKEN_KEY);
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div className="flex h-full min-h-0 bg-white text-neutral-900">
       <Sidebar side="left" width="sm" contentClassName="bg-neutral-50" className="border-r border-neutral-200">
@@ -45,7 +54,14 @@ export function AppShell() {
             </Stack>
           </nav>
           <Spacer />
-          <div className="px-2 py-1 text-xs text-neutral-400">v0.1 (M0)</div>
+          <div className="px-2 py-1 text-xs text-neutral-400">{APP_VERSION}</div>
+          <button
+            type="button"
+            onClick={logout}
+            className="block w-full rounded px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
+          >
+            {t('auth.logout')}
+          </button>
         </Stack>
         <main className="h-full min-w-0" aria-label="Контент">
           <Outlet />
