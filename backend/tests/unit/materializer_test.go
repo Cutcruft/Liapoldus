@@ -103,7 +103,7 @@ func TestMaterializeCreatesWorkspace(t *testing.T) {
 
 	// entry.tsx imports every definition and registers them before boot.
 	content := string(entry)
-	if !strings.Contains(content, `import { ComponentRegistry, boot } from "@liapoldus/ui-runtime";`) {
+	if !strings.Contains(content, `import { ComponentRegistry, mount } from "@liapoldus/ui-runtime";`) {
 		t.Fatalf("entry must import ui-runtime, got: %s", content)
 	}
 	if !strings.Contains(content, `import def_container from "./definitions/container";`) ||
@@ -119,7 +119,7 @@ func TestMaterializeCreatesWorkspace(t *testing.T) {
 			t.Fatalf("entry missing %q: %s", reg, content)
 		}
 	}
-	if !strings.Contains(content, `void boot("`+site.ID+`", "`+domain.EnvironmentDevelopment+`");`) {
+	if !strings.Contains(content, `void mount("`+site.ID+`", "`+domain.EnvironmentDevelopment+`");`) {
 		t.Fatalf("entry must call boot: %s", content)
 	}
 

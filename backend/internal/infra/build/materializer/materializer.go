@@ -232,10 +232,10 @@ func bareSubpathImports(source string, declared map[string]bool) []string {
 }
 
 // generateEntry builds src/entry.tsx: every definition is statically imported
-// and registered in the ComponentRegistry before boot().
+// and registered in the ComponentRegistry before mount().
 func generateEntry(siteID, environment string, definitionIds []string) string {
 	var builder strings.Builder
-	builder.WriteString("import { ComponentRegistry, boot } from \"@liapoldus/ui-runtime\";\n")
+	builder.WriteString("import { ComponentRegistry, mount } from \"@liapoldus/ui-runtime\";\n")
 	for _, id := range definitionIds {
 		fmt.Fprintf(&builder, "import %s from \"./definitions/%s\";\n", definitionName(id), id)
 	}
@@ -243,6 +243,6 @@ func generateEntry(siteID, environment string, definitionIds []string) string {
 	for _, id := range definitionIds {
 		fmt.Fprintf(&builder, "ComponentRegistry.registerDefinition(%q, %s);\n", id, definitionName(id))
 	}
-	fmt.Fprintf(&builder, "\nvoid boot(%q, %q);\n", siteID, environment)
+	fmt.Fprintf(&builder, "\nvoid mount(%q, %q);\n", siteID, environment)
 	return builder.String()
 }

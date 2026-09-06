@@ -165,6 +165,19 @@ export class TreeController {
     return tree ? (tree.root as ResolvedTreeInstance) : null;
   }
 
+  /**
+   * Пересчитывает bindings текущего дерева против актуального контекста
+   * (смена роута/контента/результатов операций/форм) и публикует `update`.
+   * В отличие от rebuild не сравнивает сигнатуру декларации — декларация та же,
+   * меняются только источники данных.
+   */
+  refresh(): void {
+    const current = this.store.getState().tree;
+    if (!current) return;
+    this.store.getState().setTree(resolveDeclaration(current, this.context(), this.resolveRuntime));
+    this.emit('update');
+  }
+
   /** Резолвит декларацию с bindings в разрешённое дерево. */
   resolve(declaration: TreeDeclaration, context?: BindingContext): TreeDeclaration {
     const ctx = context ?? this.context();

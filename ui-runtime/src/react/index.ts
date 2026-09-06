@@ -29,3 +29,5 @@ export {
   componentMapFromRegistry,
   registerBuiltinComponents,
 } from './builtin';
+export { mount } from './mount';
+export type { MountOptions, MountResult } from './mount';
