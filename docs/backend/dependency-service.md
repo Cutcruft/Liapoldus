@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода (фаза 2, слайс 1) — реализованы; осталось: полный subpath в вершинных deps, коллизии/вложенный версионный layout, CSS/ассеты**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; осталось: коллизии/вложенный версионный layout, CSS/ассеты**.
 
 ## 1. Цель и принципы
 
@@ -92,15 +92,15 @@ storage (новые tables `005_dependencies.sql`):
   target=es2022, external=SharedExternals` → единый ESM-файл на dep
   → артефакт `<snapshot>/_deps/<pkg>@<version>.js`. react/react-dom/ui-runtime НЕ дублируются:
   dep-бандл импортирует их bare (external) и резолвится через общий import-map (§7).
-- **subpath-импорты** (`lodash/map`, `pkg/foo.js`): реализовано (фаза 2, слайс 1) — на этапе
-  materialization сканируются definition-sources site-кода на bare-subpath спецификаторы
-  (`from/import`: regex `(?:^|[^.\w])(?:from|import)(?:\s*\(|\s+)…` — исключает `x.from()`);
-  учитываются только subpath объявленных вершинных deps; на каждый — отдельный бандл
-  `_deps/<pkg>@<ver>/<subpath>.js` + запись `manifest.deps` (ключ = спецификатор,
-  `dist/_deps/<pkg>@<ver>/<subpath>.js`) + `manifest.externals` += спецификатор. Subpath
-  нерезолвится → `DepBuildError`; non-JS ассет (`.css` и др.) → fail с hint. Subpath-импорты
-  изнутри самих вершинных deps инлайнятся в их бандл (вне скоупа этого слайса). Экзотика
-  (коллизии имён subpath между версиями) — фаза 2.
+- **subpath-импорты** (`lodash/map`, `pkg/foo.js`): реализовано (фаза 2, слайсы 1–2). На этапе
+  materialization сканируются definition-sources site-кода **и исходники самих вершинных deps**
+  на bare-subpath спецификаторы (общий сканер `build.ScanImportSpecifiers`, regex
+  `(?:^|[^.\w])(?:from|import)(?:\s*\(|\s+)…` — исключает `x.from()`); учитывается только subpath
+  **объявленных** вершинных deps. На каждый — отдельный бандл `_deps/<pkg>@<ver>/<subpath>.js`
+  + запись `manifest.deps` (ключ = спецификатор) + `manifest.externals` += спецификатор.
+  Потребляющий dep-бандл держит спецификатор external (shared import-map), транзитивные остаются
+  инлайн. Subpath нерезолвится → `DepBuildError`; non-JS ассет (`.css` и др.) → fail с hint
+  (одинаково для site-кода и dep-кода). Экзотика (коллизии имён subpath между версиями) — фаза 2.
 - **CSS/не-JS ассеты** пакетов: фаза 2 (import-map для CSS-запросов и `<link>`, взятие из
   бандла и самостоятельная отдача). Фаза 1: пакет с CSS-импортами → fail с ясным сообщением,
   что ассеты не поддерживаются ещё.
@@ -183,9 +183,12 @@ storage (новые tables `005_dependencies.sql`):
 
 **Фаза 2:** ✅ subpath-импорты из site-кода (слайс 1: сканирование definition-sources, отдельные
 бандлы `_deps/<pkg>@<ver>/<subpath>.js` + import-map + externals, scoped `%2F`, fail-fast на
-нерезолвящемся/CSS); осталось: subpath внутри вершинных deps, вложенные версионные layout
-(конфликты), CSS/ассеты, peer-политика (fail по неудовлетворённым peers), allowlist scopes,
-кэш-лимиты/эвикция.
+нерезолвящемся/CSS). ✅ subpath-импорты внутри вершинных deps (слайс 2: общий сканер
+`build.ScanImportSpecifiers` для layout+materializer, `scanDepSubpaths` по распакованным
+`node_modules/<dep>`, per-dep externals в бандле, shared-корни/react остаются external,
+транзитивные/self — инлайн, нерезолвящийся и non-JS subpath dep-кода → DepBuildError с hint).
+Осталось: вложенные версионные layout (конфликты), CSS/ассеты, peer-политика (fail по
+неудовлетворённым peers), allowlist scopes, кэш-лимиты/эвикция.
 
 **Фаза 3:** `cmd/dependency-build` (замена `scripts/build-shared`, npm больше нигде не упоминается),
 ликвидация shell-обёрток, SBOM/audit-экспорт.
@@ -195,5 +198,5 @@ storage (новые tables `005_dependencies.sql`):
 - Monorepo-/workspace-пакеты и git-спецификаторы npm (`user/repo#branch`) не поддерживаются
   (только registry-scoped).
 - Duplicate-версии — только фазой 2 (вложенный layout).
-- CSS/фонты пакетов — фаза 2; фаза 1 и subpath-слайс честно падают с hint.
+- CSS/фонты пакетов — фаза 2; фаза 1 и subpath-слайсы честно падают с hint.
 - Один npm-источник публичный; mirror/registry-proxy — вне scope.

@@ -128,15 +128,16 @@ func seedDepsBuildFixture(t *testing.T, reg *fakeRegistry, regClient *registry.C
 	_, helperSRI := reg.add(t, "helper", "1.0.0", map[string]string{
 		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
 		"index.js":     "export function doubling(x) { const marker = \"helper-squared\"; return x * 2 + marker.length * 0; }\n",
+		"lib/math.js":  "export const mathMarker = \"helper-math-live\";\nexport const scale = (n) => n * 10;\n",
 	})
 	_, agentSRI := reg.add(t, "agent", "1.0.0", map[string]string{
 		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js","dependencies":{"helper":"^1.0.0"}}`,
-		"index.js": `import { doubling } from "helper";
+		"index.js": `import { scale, mathMarker } from "helper/lib/math";
 import { createElement } from "react";
 import { utilMarker } from "./lib/util.js";
 export const agentName = "agent-live";
-export const agentTag = utilMarker;
-export default function Agent(props) { return createElement("span", null, agentName + ":" + doubling(props.n)); }
+export const agentTag = mathMarker + ":" + utilMarker;
+export default function Agent(props) { return createElement("span", null, agentName + ":" + scale(props.n)); }
 `,
 		"lib/util.js": "export const utilMarker = \"agent-util-live\";\n",
 	})
@@ -170,6 +171,15 @@ export default function Agent(props) { return createElement("span", null, agentN
 
 	if err := mem.CreateDependency(ctx, domain.Dependency{
 		SiteID: site.ID, Name: "agent", Spec: "^1.0.0",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// helper is a declared dependency too: the agent package's own subpath
+	// import of helper/lib/math resolves to a shared _deps artifact instead of
+	// being inlined into the agent bundle.
+	if err := mem.CreateDependency(ctx, domain.Dependency{
+		SiteID: site.ID, Name: "helper", Spec: "^1.0.0",
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatal(err)
@@ -226,12 +236,17 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 	artifactRoot := fx.artifacts.DirFor(fx.siteID, domain.EnvironmentDevelopment, fx.snapshotID)
 
 	// The dependency bundle was built, verified and published under _deps/.
+	// hero's subpath import of helper/lib/math stays external: one shared
+	// bundle for every consumer, import-mapped at runtime.
 	depBundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist/_deps", "agent@1.0.0.js"))
 	if err != nil {
 		t.Fatalf("published _deps bundle: %v", err)
 	}
-	if !strings.Contains(string(depBundle), "helper-squared") {
-		t.Fatalf("transitive helper must be inlined into the agent bundle")
+	if !strings.Contains(string(depBundle), `from "helper/lib/math"`) {
+		t.Fatalf("agent bundle must import the shared subpath externally:\n%s", depBundle)
+	}
+	if strings.Contains(string(depBundle), "helper-math-live") {
+		t.Fatalf("helper/lib/math must not be inlined into the agent bundle")
 	}
 	if !strings.Contains(string(depBundle), `from "react"`) {
 		t.Fatalf("react must stay external in the agent bundle:\n%s", depBundle)
@@ -256,6 +271,16 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 	}
 	if !strings.Contains(string(subpathBundle), "agent-util-live") {
 		t.Fatalf("subpath bundle must carry the module exports:\n%s", subpathBundle)
+	}
+
+	// The subpath of the helper package (imported from inside the agent
+	// dependency) gets its own _deps bundle likewise.
+	helperSubpathBundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist/_deps", "helper@1.0.0", "lib", "math.js"))
+	if err != nil {
+		t.Fatalf("published helper subpath bundle: %v", err)
+	}
+	if !strings.Contains(string(helperSubpathBundle), "helper-math-live") {
+		t.Fatalf("helper subpath bundle must carry the module exports:\n%s", helperSubpathBundle)
 	}
 
 	// The manifest is the import-map source: dist/_deps artifact + externals.
@@ -298,6 +323,24 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 	}
 	if !foundSub {
 		t.Fatalf("manifest externals must include agent/lib/util: %#v", manifest.Externals)
+	}
+	// The subpath imported from inside the agent dependency must be present in
+	// the import map too, so the runtime resolves it the same way.
+	helperRef, ok := manifest.Deps["helper/lib/math"]
+	if !ok {
+		t.Fatalf("manifest deps must include the dep-internal subpath: %#v", manifest.Deps)
+	}
+	if helperRef.PublicArtifact != "dist/_deps/helper@1.0.0/lib/math.js" {
+		t.Fatalf("helper subpath public artifact = %q", helperRef.PublicArtifact)
+	}
+	foundInternal := false
+	for _, ext := range manifest.Externals {
+		if ext == "helper/lib/math" {
+			foundInternal = true
+		}
+	}
+	if !foundInternal {
+		t.Fatalf("manifest externals must include helper/lib/math: %#v", manifest.Externals)
 	}
 }
 

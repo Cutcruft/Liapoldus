@@ -498,6 +498,223 @@ func TestLayoutSubpathMissingModuleFails(t *testing.T) {
 	}
 }
 
+func TestLayoutDepInternalSubpathBundledAndExternal(t *testing.T) {
+	helperData, helperSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export function doubling(x) { return x * 2; }\n",
+		"lib/math.js":  "export const mathMarker = \"hv-math\";\nexport const scale = (n) => n * 10;\n",
+	})
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js": `import { scale, mathMarker } from "helper/lib/math";
+import { createElement } from "react";
+export const tag = mathMarker;
+export default function agent() { return createElement("span", null, scale(2)); }
+`,
+	})
+	lay, _, root := layoutHarness(t,
+		map[string][]byte{"agent": agentData, "helper": helperData},
+		map[string]string{"agent": agentSRI, "helper": helperSRI},
+	)
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+			{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+		}},
+		TopLevel: []string{"agent", "helper"},
+	})
+	if err != nil {
+		t.Fatalf("materialize deps: %v", err)
+	}
+
+	subRef, ok := result.Deps["helper/lib/math"]
+	if !ok {
+		t.Fatalf("missing import-map entry for helper/lib/math: %#v", result.Deps)
+	}
+	if subRef.PublicArtifact != "dist/_deps/helper@1.0.0/lib/math.js" {
+		t.Fatalf("subpath public artifact = %q", subRef.PublicArtifact)
+	}
+	found := false
+	for _, ext := range result.Externals {
+		if ext == "helper/lib/math" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("externals must include helper/lib/math: %#v", result.Externals)
+	}
+
+	// The agent bundle keeps the subpath external instead of inlining it.
+	agentBundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent bundle: %v", err)
+	}
+	if !strings.Contains(string(agentBundle), `from "helper/lib/math"`) {
+		t.Fatalf("agent bundle must import helper/lib/math externally:\n%s", agentBundle)
+	}
+	if strings.Contains(string(agentBundle), "hv-math") {
+		t.Fatalf("helper/lib/math must not be inlined into the agent bundle:\n%s", agentBundle)
+	}
+
+	// Its own artifact carries the module exports.
+	subpathBundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "helper@1.0.0", "lib", "math.js"))
+	if err != nil {
+		t.Fatalf("read helper subpath bundle: %v", err)
+	}
+	if !strings.Contains(string(subpathBundle), "hv-math") {
+		t.Fatalf("helper subpath bundle must carry the module exports:\n%s", subpathBundle)
+	}
+}
+
+func TestLayoutDepInternalSubpathOfTransitiveStaysInlined(t *testing.T) {
+	helperData, helperSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+		"lib/math.js":  "export const mathMarker = \"hv-math\";\n",
+	})
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js": `import { mathMarker } from "helper/lib/math";
+export const tag = mathMarker;
+export default tag;
+`,
+	})
+	lay, _, root := layoutHarness(t,
+		map[string][]byte{"agent": agentData, "helper": helperData},
+		map[string]string{"agent": agentSRI, "helper": helperSRI},
+	)
+	// helper is locked but NOT declared top-level: its subpath must stay
+	// inlined into the agent bundle, with no artifact of its own.
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+			{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+		}},
+		TopLevel: []string{"agent"},
+	})
+	if err != nil {
+		t.Fatalf("materialize deps: %v", err)
+	}
+	if _, ok := result.Deps["helper/lib/math"]; ok {
+		t.Fatalf("subpath of a transitive-only dep must not be materialized: %#v", result.Deps)
+	}
+	if got, want := result.Externals, []string{"agent"}; len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("externals = %#v, want %#v", got, want)
+	}
+	agentBundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent bundle: %v", err)
+	}
+	if !strings.Contains(string(agentBundle), "hv-math") {
+		t.Fatalf("transitive subpath must be inlined into the agent bundle:\n%s", agentBundle)
+	}
+}
+
+func TestLayoutDepInternalSelfSubpathInlined(t *testing.T) {
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js": `import { utilMarker } from "agent/lib/util";
+export const tag = utilMarker;
+export default tag;
+`,
+		"lib/util.js": "export const utilMarker = \"self-subpath\";\n",
+	})
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	// A dep importing one of its own subpaths bare is a self-reference: it
+	// resolves from node_modules and inlines (no self-external artifact).
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"agent"},
+	})
+	if err != nil {
+		t.Fatalf("materialize deps: %v", err)
+	}
+	if len(result.Deps) != 1 {
+		t.Fatalf("self-subpath must not create an artifact: %#v", result.Deps)
+	}
+	agentBundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent bundle: %v", err)
+	}
+	if !strings.Contains(string(agentBundle), "self-subpath") {
+		t.Fatalf("self-subpath must be inlined into the agent bundle:\n%s", agentBundle)
+	}
+}
+
+func TestLayoutDepInternalSharedRootStaysExternal(t *testing.T) {
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js": `import { jsx } from "react/jsx-runtime";
+export const tag = jsx;
+export default tag;
+`,
+	})
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	// react isn't in the lock and must not be materialized: it is a shared
+	// runtime library, already external by default. The scan must neither
+	// bundle a react subpath nor fail on the unresolvable bare specifier.
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"agent"},
+	})
+	if err != nil {
+		t.Fatalf("materialize deps with shared-root subpath: %v", err)
+	}
+	if len(result.Deps) != 1 {
+		t.Fatalf("shared-root subpath must not create an artifact: %#v", result.Deps)
+	}
+	agentBundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent bundle: %v", err)
+	}
+	if !strings.Contains(string(agentBundle), `from "react/jsx-runtime"`) {
+		t.Fatalf("react/jsx-runtime must stay external:\n%s", agentBundle)
+	}
+}
+
+func TestLayoutDepInternalNonJSSubpathFailsWithHint(t *testing.T) {
+	helperData, helperSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+		"styles.css":   "body { color: red; }\n",
+	})
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js": `import "helper/styles.css";
+export default 1;
+`,
+	})
+	lay, _, root := layoutHarness(t,
+		map[string][]byte{"agent": agentData, "helper": helperData},
+		map[string]string{"agent": agentSRI, "helper": helperSRI},
+	)
+	// A top-level dep importing a non-JS asset of another declared dep fails
+	// with the same hint as a site-source CSS subpath import.
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+			{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+		}},
+		TopLevel: []string{"agent", "helper"},
+	})
+	var depErr *build.DepBuildError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected *build.DepBuildError for css subpath, got %T: %v", err, err)
+	}
+	if depErr.Pkg != "helper" || !strings.Contains(depErr.Hint, "CSS") {
+		t.Fatalf("css subpath must carry a hint on the owning package, got %#v", depErr)
+	}
+}
+
 func TestLayoutSubpathCssRejectedWithHint(t *testing.T) {
 	agentData, agentSRI := tarball(t, map[string]string{
 		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,

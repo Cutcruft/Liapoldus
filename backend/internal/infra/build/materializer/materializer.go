@@ -212,10 +212,7 @@ func uniqueSorted(items []string) []string {
 	return out
 }
 
-// importSpecifierRe matches module specifiers in static and dynamic import
-// statements ("from 'x'", "from \"x\"", "import 'x'", "import('x')"). The
-// leading [^.\w] guard keeps member call sites like obj.from("x") out.
-var importSpecifierRe = regexp.MustCompile(`(?:^|[^.\w])(?:from|import)(?:\s*\(|\s+)\s*["']([^"']+)["']`)
+// importSpecifierRe is gone — scanning lives in build.ScanImportSpecifiers.
 
 // bareSubpathImports returns the bare subpath specifiers (e.g. "lodash/map")
 // found in source that belong to a declared top-level dependency. Top-level
@@ -224,32 +221,13 @@ var importSpecifierRe = regexp.MustCompile(`(?:^|[^.\w])(?:from|import)(?:\s*\(|
 // intentionally left out.
 func bareSubpathImports(source string, declared map[string]bool) []string {
 	var out []string
-	for _, m := range importSpecifierRe.FindAllStringSubmatch(source, -1) {
-		spec := m[1]
-		top, _, isSub := splitTopLevel(spec)
+	for _, spec := range build.ScanImportSpecifiers(source) {
+		top, _, isSub := build.SplitBareSpecifier(spec)
 		if isSub && declared[top] {
 			out = append(out, spec)
 		}
 	}
 	return out
-}
-
-// splitTopLevel splits a bare import specifier into its package name and the
-// remaining subpath (if any): "lodash/map" → ("lodash", "map", true);
-// "@scope/pkg/sub" → ("@scope/pkg", "sub", true).
-func splitTopLevel(spec string) (top, rest string, isSub bool) {
-	if strings.HasPrefix(spec, "@") {
-		parts := strings.Split(spec, "/")
-		if len(parts) < 3 {
-			return spec, "", false
-		}
-		return parts[0] + "/" + parts[1], strings.Join(parts[2:], "/"), true
-	}
-	idx := strings.Index(spec, "/")
-	if idx < 0 {
-		return spec, "", false
-	}
-	return spec[:idx], spec[idx+1:], true
 }
 
 // generateEntry builds src/entry.tsx: every definition is statically imported

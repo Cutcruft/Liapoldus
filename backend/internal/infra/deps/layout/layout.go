@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -75,11 +76,31 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 		topSet[name] = true
 	}
 
-	// 2. Bundle the top-level deps (the site's declared bare imports) one by
-	// one. Only the shared libraries stay external: transitive dependencies
-	// are inlined into the top-level bundle, per spec §6.
+	// 2. Scan each top-level dependency's own source for bare subpath imports
+	// of other declared top-level deps (and of the shared runtime libraries).
+	// Those specifiers stay external in the dep bundle and get their own
+	// _deps/<name>@<ver>/<subpath>.js artifact (spec §6), so every consumer
+	// shares one import-mapped copy. Plain top-level imports, subpaths of
+	// transitive-only packages, self-subpaths and relative paths stay inlined
+	// (status quo), and non-JS subpaths of declared deps fail with the same
+	// hint as site-source subpaths.
+	perDepExternals := make(map[string][]string, len(req.TopLevel))
+	var discovered []string
+	for _, name := range req.TopLevel {
+		ext, subs, err := l.scanDepSubpaths(req.Dir, name, topSet)
+		if err != nil {
+			return build.DepLayout{}, err
+		}
+		perDepExternals[name] = ext
+		discovered = append(discovered, subs...)
+	}
+
+	// 3. Bundle the top-level deps (the site's declared bare imports) one by
+	// one. Only the shared libraries and the dep-internal subpath specifiers
+	// stay external; transitive dependencies are inlined into the top-level
+	// bundle, per spec §6.
 	result := build.DepLayout{Deps: map[string]build.DepRef{}}
-	externals := make([]string, 0, len(req.TopLevel)+len(req.Subpaths))
+	externals := make([]string, 0, len(req.TopLevel)+len(req.Subpaths)+len(discovered))
 	for _, name := range req.TopLevel {
 		dep, ok := byName[name]
 		if !ok {
@@ -87,7 +108,7 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 				Pkg: name, Hint: "declared dependency is absent from the snapshot lock (lock was frozen before the declaration)",
 			}
 		}
-		ref, err := l.bundle(ctx, req.Dir, dep, "")
+		ref, err := l.bundle(ctx, req.Dir, dep, "", perDepExternals[name]...)
 		if err != nil {
 			return build.DepLayout{}, err
 		}
@@ -95,14 +116,16 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 		externals = append(externals, dep.Name)
 	}
 
-	// 3. Bundle each bare subpath of a declared top-level dep the site source
-	// imports directly (spec §6): one _deps/<name>@<ver>/<subpath>.js artifact
-	// + import-map entry. Shared externals stay external; everything else is
-	// inlined into the subpath bundle exactly like the top-level one. Subpaths
-	// of undeclared (transitive) packages are not materialized — they resolve
-	// from node_modules and inline where imported.
-	for _, spec := range uniqueSorted(req.Subpaths) {
-		top, rest, ok := splitTopLevel(spec)
+	// 4. Bundle each bare subpath of a declared top-level dep that the site
+	// source or another top-level dep pulls in directly (spec §6): one
+	// _deps/<name>@<ver>/<subpath>.js artifact + import-map entry. Shared
+	// externals stay external; everything else is inlined into the subpath
+	// bundle exactly like the top-level one. Subpaths of undeclared
+	// (transitive) packages are not materialized — they resolve from
+	// node_modules and inline where imported.
+	subpaths := uniqueSorted(append(append([]string{}, req.Subpaths...), discovered...))
+	for _, spec := range subpaths {
+		top, rest, ok := build.SplitBareSpecifier(spec)
 		if !ok || !topSet[top] {
 			continue
 		}
@@ -184,8 +207,9 @@ func (l *Layout) blob(ctx context.Context, dep domain.LockedDep) ([]byte, error)
 // module so any named/default import the site source makes resolves at
 // runtime (esbuild omits a default re-export that has no binding, so the same
 // entry works for defaultless subpath modules too). Only the shared libraries
-// stay external (import-map-resolved); transitive deps are inlined (spec §6).
-func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep, subpath string) (build.DepRef, error) {
+// plus the declared extra externals (the dep-internal subpath specifiers) stay
+// external (import-map-resolved); transitive deps are inlined (spec §6).
+func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep, subpath string, extraExternal ...string) (build.DepRef, error) {
 	specifier := dep.Name
 	if subpath != "" {
 		specifier = dep.Name + "/" + subpath
@@ -212,7 +236,7 @@ func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep, s
 		return build.DepRef{}, fmt.Errorf("dependency %s: write entry: %w", specifier, err)
 	}
 
-	external := append([]string{}, build.SharedExternals...)
+	external := append(append([]string{}, build.SharedExternals...), extraExternal...)
 	result := api.Build(api.BuildOptions{
 		EntryPoints:   []string{entry},
 		Outfile:       outfile,
@@ -284,22 +308,104 @@ func artifactEntry(name string) string {
 	return strings.ReplaceAll(name, "/", "__") + ".ts"
 }
 
-// splitTopLevel splits a bare import specifier into its package name and the
-// remaining subpath (if any): "x" → ("x", "", false), "x/y/z" → ("x", "y/z",
-// true), "@scope/x/y" → ("@scope/x", "y", true).
-func splitTopLevel(spec string) (top, rest string, isSub bool) {
-	if strings.HasPrefix(spec, "@") {
-		parts := strings.Split(spec, "/")
-		if len(parts) < 3 {
-			return spec, "", false
+// splitTopLevel lives in the build package as build.SplitBareSpecifier; the
+// layout classifies with it throughout.
+
+// scanDepSubpaths walks the materialized source of one top-level dependency
+// and returns (a) the bare subpath specifiers that must stay external in this
+// dependency's bundle, and (b) the ones that additionally need their own
+// _deps/ subpath artifact (both lists: subpaths of other declared top-level
+// deps; (a) also covers exact shared-runtime specifiers). Anything else —
+// plain top-level imports, relative paths, subpaths of transitive-only
+// packages, self-subpaths — stays inlined, exactly as before. An unsafe or
+// non-JS subpath of a declared dep fails with the same hint as site-source
+// subpaths.
+func (l *Layout) scanDepSubpaths(dir, name string, declared map[string]bool) (externals, bundles []string, err error) {
+	pkgDir := filepath.Join(dir, "node_modules", name)
+	// A top-level name absent from the lock is reported by the bundling loop
+	// below ("declared dependency is absent from the snapshot lock"); nothing
+	// to scan here.
+	if _, statErr := os.Stat(pkgDir); statErr != nil {
+		if os.IsNotExist(statErr) {
+			return nil, nil, nil
 		}
-		return parts[0] + "/" + parts[1], strings.Join(parts[2:], "/"), true
+		return nil, nil, statErr
 	}
-	idx := strings.Index(spec, "/")
-	if idx < 0 {
-		return spec, "", false
+	err = filepath.WalkDir(pkgDir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			if path != pkgDir && d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !isJSFile(d.Name()) {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		for _, spec := range build.ScanImportSpecifiers(string(data)) {
+			top, rest, isSub := build.SplitBareSpecifier(spec)
+			if !isSub {
+				continue
+			}
+			if top == name {
+				continue
+			}
+			if sharedRoots[top] {
+				if sharedExternals[spec] {
+					externals = append(externals, spec)
+				}
+				continue
+			}
+			if !declared[top] {
+				continue
+			}
+			if !validSubpath(rest) {
+				return &build.DepBuildError{
+					Pkg: top, Hint: fmt.Sprintf("subpath %q is not a filesystem-safe JS module path", spec),
+				}
+			}
+			if reason := unsupportedSubpath(rest); reason != "" {
+				return &build.DepBuildError{Pkg: top, Hint: reason}
+			}
+			externals = append(externals, spec)
+			bundles = append(bundles, spec)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-	return spec[:idx], spec[idx+1:], true
+	return uniqueSorted(externals), uniqueSorted(bundles), nil
+}
+
+// isJSFile reports whether a package file is a JS module the bundle pipeline
+// scans for bare subpath imports.
+func isJSFile(name string) bool {
+	return strings.HasSuffix(name, ".js") || strings.HasSuffix(name, ".mjs") || strings.HasSuffix(name, ".cjs")
+}
+
+// sharedRoots and sharedExternals are derived from the immutable shared
+// libraries list: the backend-versioned runtime bundles (react, react-dom,
+// jsx-runtime, ui-runtime) must never be re-bundled for a site. Specifiers
+// that are part of the shared list already resolve via the import map; other
+// subpaths of a shared root are not bundled either.
+var (
+	sharedRoots     = map[string]bool{}
+	sharedExternals = map[string]bool{}
+)
+
+func init() {
+	for _, ext := range build.SharedExternals {
+		top, _, _ := build.SplitBareSpecifier(ext)
+		sharedRoots[top] = true
+		sharedExternals[ext] = true
+	}
 }
 
 // validSubpath reports whether a subpath is a safe, plain relative JS-module

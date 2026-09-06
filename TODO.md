@@ -66,7 +66,8 @@
 - [x] Фаза 1 — **материализация+бандлинг**: диск-стор tarball-блобов (`internal/infra/deps/store`, `<data>/deps/<name>/<version>.tgz`; таблица `dep_blobs` убрана); `node_modules`-layout; per-dep esbuild `dist/_deps/<name>@<version>.js` (scoped `%2F`) с транзитивами-инлайном и `SharedExternals`-external; `manifest.deps`+`manifest.externals`; `DepBuildError` (браузерные builtins); e2e (httptest-registry + реальный esbuild). Починен `artifactstore.copyTree` (вложенные `dist/_deps/` не копировались).
 - [x] Фаза 1 — финальные поверки (gofmt/vet/test, spec-обновление, коммит).
 - [x] Фаза 2 (слайс 1) — **subpath-импорты из site-кода**: сканирование definition-sources на bare-subpath спецификаторы объявленных вершинных deps (regex `from/import` без `x.from()`); отдельные бандлы `dist/_deps/<name>@<ver>/<subpath>.js` (scoped `%2F`, артефакт `dist/_deps/<base>/<subpath>.js`, fail-fast на нерезолвящемся и non-JS ассете); `manifest.deps` (ключ=спецификатор) + `manifest.externals` += subpath; unit + e2e.
-- [ ] **Фаза 2**: subpath внутри вершинных deps, вложенные версионные layout, CSS/ассеты пакетов, peer-fail, allowlist scopes.
+- [x] Фаза 2 (слайс 2) — **subpath-импорты внутри вершинных deps**: общий сканер `build.ScanImportSpecifiers`/`SplitBareSpecifier` (layout+materializer); `scanDepSubpaths` по распакованным `node_modules/<dep>`; per-dep externals в dep-бандле; объединённый список subpath-бандлов; shared-корни (`react` и др.) остаются external, транзитивные/self — инлайн, subpath объявленного dep → отдельный артефакт + external; нерезолвящийся/non-JS subpath dep-кода → `DepBuildError` с hint; e2e: агент импортирует `helper/lib/math`, helper объявлен сайтом.
+- [ ] **Фаза 2**: вложенные версионные layout, CSS/ассеты пакетов, peer-fail, allowlist scopes.
 - [ ] **Фаза 3**: `cmd/dependency-build` вместо `scripts/build-shared` (npm уходит полностью), ликвидация shell-обёрток, SBOM.
 
 ## Этап 5 — Boot и рендеринг на живой сборке
