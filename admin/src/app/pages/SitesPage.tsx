@@ -7,9 +7,9 @@ import { useOperation } from '../use-operation';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { EntityTable } from '../components/EntityTable';
 import { Field } from '../components/Field';
-
-const INPUT_CLASS =
-  'rounded border border-neutral-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function SitesPage() {
   const { api, t } = useAdmin();
@@ -53,69 +53,61 @@ export function SitesPage() {
     <Stack pad={8} gap={4}>
       <Inline justify="between" align="center">
         <h1 className="text-xl font-medium">{t('site.title')}</h1>
-        <button
-          type="button"
-          onClick={() => setFormOpen((v) => !v)}
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
-        >
+        <Button type="button" onClick={() => setFormOpen((v) => !v)}>
           {t('site.new')}
-        </button>
+        </Button>
       </Inline>
 
       {formOpen && (
-        <form onSubmit={create} className="rounded border border-neutral-200 bg-neutral-50 p-4">
+        <form onSubmit={create} className="rounded-lg border bg-card p-4">
           <Stack gap={3}>
             <Inline gap={3} align="end">
               <Field label={t('site.name')} required>
-                <input className={INPUT_CLASS} value={name} onChange={(e) => setName(e.target.value)} />
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
               </Field>
               <Field label={t('site.slug')} required>
-                <input className={INPUT_CLASS} value={slug} onChange={(e) => setSlug(e.target.value)} />
+                <Input value={slug} onChange={(e) => setSlug(e.target.value)} />
               </Field>
               <Field label={t('site.locale')}>
-                <select className={INPUT_CLASS} value={locale} onChange={(e) => setLocale(e.target.value)}>
+                <select
+                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={locale}
+                  onChange={(e) => setLocale(e.target.value)}
+                >
                   <option value="ru">ru</option>
                   <option value="en">en</option>
                 </select>
               </Field>
               <Inline gap={2}>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-                >
+                <Button type="submit" disabled={submitting}>
                   {t('common.create')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormOpen(false)}
-                  className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600"
-                >
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </Inline>
             </Inline>
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
           </Stack>
         </form>
       )}
 
-      {list.state.status === 'loading' && <p className="text-sm text-neutral-400">{t('common.loading')}</p>}
+      {list.state.status === 'loading' && <Skeleton className="h-10 w-72" />}
 
       {list.state.status === 'error' && (
         <Stack gap={2}>
-          <p className="text-sm text-red-600">
+          <p className="text-sm text-destructive">
             {t('common.error')}: {list.state.detail}
           </p>
-          <button type="button" onClick={list.reload} className="w-fit rounded border border-neutral-300 px-3 py-1 text-sm">
+          <Button type="button" variant="outline" onClick={list.reload} className="w-fit">
             {t('common.reload')}
-          </button>
+          </Button>
         </Stack>
       )}
 
       {list.state.status === 'success' &&
         (sites.length === 0 ? (
-          <p className="text-sm text-neutral-400">{t('site.none')}</p>
+          <p className="text-sm text-muted-foreground">{t('site.none')}</p>
         ) : (
           <EntityTable<Site>
             gridClass="grid-cols-[minmax(0,3fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,8rem)]"
@@ -131,12 +123,9 @@ export function SitesPage() {
                 className: 'text-right',
                 render: (s: Site) => (
                   <Inline gap={2} justify="end">
-                    <Link
-                      to={`/sites/${s.id}`}
-                      className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:border-blue-300 hover:text-blue-600"
-                    >
-                      {t('site.open')}
-                    </Link>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={`/sites/${s.id}`}>{t('site.open')}</Link>
+                    </Button>
                     <ConfirmButton label={t('common.delete')} onConfirm={() => remove(s)} />
                   </Inline>
                 ),

@@ -1,63 +1,67 @@
-import { useState } from 'react';
 import { useAdmin } from '../admin-context';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 
 /**
- * Двухшаговое подтверждение деструктивного действия: клик «Удалить» →
- * «Подтвердить»/«Отмена». Избегает window.confirm (нет в jsdom).
+ * Подтверждение деструктивного действия через AlertDialog. Избегает window.confirm.
  */
 export function ConfirmButton({
   label,
   confirmLabel,
   cancelLabel,
+  description,
   onConfirm,
 }: {
   label: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  description?: string;
   onConfirm: () => void | Promise<void>;
 }) {
   const { t } = useAdmin();
-  const [armed, setArmed] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const confirm = () => {
-    setBusy(true);
-    Promise.resolve(onConfirm()).finally(() => {
-      setBusy(false);
-      setArmed(false);
-    });
-  };
-
-  if (armed) {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={confirm}
-          className="rounded border border-red-300 bg-red-600 px-2 py-1 text-xs text-white disabled:opacity-50"
-        >
-          {confirmLabel ?? t('common.confirm')}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => setArmed(false)}
-          className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600"
-        >
-          {cancelLabel ?? t('common.cancel')}
-        </button>
-      </span>
-    );
-  }
 
   return (
-    <button
-      type="button"
-      onClick={() => setArmed(true)}
-      className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:border-red-300 hover:text-red-600"
-    >
-      {label}
-    </button>
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          {label}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{label}</AlertDialogTitle>
+          {description && <AlertDialogDescription>{description}</AlertDialogDescription>}
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel asChild>
+            <Button type="button" variant="outline" size="sm">
+              {cancelLabel ?? t('common.cancel')}
+            </Button>
+          </AlertDialogCancel>
+          <AlertDialogAction asChild>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                void onConfirm();
+              }}
+            >
+              {confirmLabel ?? t('common.confirm')}
+            </Button>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

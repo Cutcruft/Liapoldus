@@ -48,6 +48,10 @@
 
 Каждый U-слайс: зелёный `npm test` + `tsc --noEmit` + `build`, строка в `docs/feature-status.md`.
 
+### Выполнено
+
+- **[x] U0 + U1 (одним слайсом).** `components.json` (new-york, neutral, lucide), тема в `styles.css` (`@theme inline`, oklch-переменные + `.dark`-блок, `tw-animate-css`), `src/lib/utils.ts` (`cn`), алиас `@/` (tsconfig paths + vite resolve) — добавлено в `admin/vite.config.ts` и `tsconfig.json`. Базовый набор в `src/components/ui/`: button, input, label, badge, skeleton, alert-dialog, sonner. Зависимости: `@radix-ui/react-alert-dialog|label|slot`, `cva`, `clsx`, `tailwind-merge`, `lucide-react`, `sonner`, `tw-animate-css` (React 18 deduped, peer-чисто). `src/test-setup.ts` (setupFiles): полифилы ResizeObserver/PointerEvent/hasPointerCapture/scrollIntoView/matchMedia для Radix в jsdom. `ConfirmButton` → AlertDialog (layout-независимый API сохранён; busy-состояние убрано). `SitesPage` — эталон списка на Button/Input/Skeleton/AlertDialog. `Toaster` смонтирован в `main.tsx` (вне тестов). Тесты: админка 114/114 (AlertDialog-флоу confirm'ов проходят без правок тестов), корень 366/366, typecheck чистый, build OK (JS 389 kB, CSS 31.79 kB).
+
 ## Риски
 
 - **React 18 vs 19**: peer-deps Radix обычно поддерживают 18, но на U0 проверяем `npm ls react`; при конфликте — фикс версий или legacy-инсталляция shadcn.

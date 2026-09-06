@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@liapoldus/ui-kit': fileURLToPath(new URL('../ui-kit/src/index.ts', import.meta.url)),
       '@liapoldus/ui-runtime': fileURLToPath(new URL('../ui-runtime/src/index.ts', import.meta.url)),
     },
@@ -23,5 +24,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
+    setupFiles: ['./src/test-setup.ts'],
   },
 });
