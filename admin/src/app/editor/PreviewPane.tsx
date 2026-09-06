@@ -54,10 +54,11 @@ function RenderNode({ node, t }: { node: ComponentNode; t: Translate }) {
           </div>
         );
       }
+      const src = /^[\w-]+:/.test(assetId) || assetId.startsWith('/') ? assetId : `/api/assets/${assetId}/file`;
       return (
         <img
           data-node={node.type}
-          src={assetId}
+          src={src}
           alt={String(props['alt'] ?? '')}
           style={{ width: Number(props['width'] ?? 320) }}
         />

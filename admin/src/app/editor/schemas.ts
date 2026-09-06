@@ -11,6 +11,8 @@ export type JSONSchemaProperty = {
   min?: number;
   max?: number;
   required?: boolean;
+  /** Семантика редактирования: 'asset' → asset-picker вместо строкового инпута. */
+  format?: 'asset';
 };
 
 export type JSONSchema = {
@@ -89,7 +91,7 @@ export const BUILTIN_COMPONENTS: BuiltinComponent[] = [
       title: 'Картинка',
       default: { alt: '', width: 320 },
       properties: {
-        assetId: { type: 'string', title: 'ID ассета', default: '' },
+        assetId: { type: 'string', title: 'Ассет', format: 'asset', default: '' },
         alt: { type: 'string', title: 'Alt', default: '' },
         width: { type: 'number', title: 'Ширина', default: 320, min: 1, max: 1920 },
       },

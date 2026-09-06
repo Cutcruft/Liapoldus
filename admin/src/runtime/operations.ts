@@ -23,6 +23,8 @@ export type OperationKind =
   | 'deleteTranslation'
   | 'listAssets'
   | 'uploadAsset'
+  | 'getAsset'
+  | 'deleteAsset'
   | 'listRoutes'
   | 'createRoute'
   | 'updateRoute'
@@ -236,6 +238,23 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     method: 'POST',
     route: (args) => `/api/sites/{siteId}/assets`,
     body: (args) => args.form as FormData | undefined,
+    detail: (b) => (typeof b === 'object' && b !== null && 'name' in b ? String((b as { name: unknown }).name) : 'OK'),
+  },
+
+  getAsset: {
+    kind: 'getAsset',
+    labelKey: 'op.getAsset',
+    method: 'GET',
+    route: (args) => `/api/assets/{assetId}`,
+    detail: (b) =>
+      typeof b === 'object' && b !== null && 'name' in b ? String((b as { name: unknown }).name) : '',
+  },
+
+  deleteAsset: {
+    kind: 'deleteAsset',
+    labelKey: 'op.deleteAsset',
+    method: 'DELETE',
+    route: (args) => `/api/assets/{assetId}`,
     detail: () => 'OK',
   },
 

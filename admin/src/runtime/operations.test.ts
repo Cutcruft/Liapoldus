@@ -160,6 +160,44 @@ describe('runOperation', () => {
     expect(res.ok).toBe(true);
   });
 
+  it('uploadAsset: POST multipart → FormData передаётся телом, mime не трогаем', async () => {
+    const form = new FormData();
+    form.append('file', new Blob(['x']), 'logo.png');
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/assets');
+      expect(init.method).toBe('POST');
+      expect(init.body).toBe(form);
+      expect((init.headers as Record<string, string> | undefined)?.['Content-Type']).toBeUndefined();
+      return json(201, { id: 'a1', siteId: 's1', name: 'logo.png', mime: 'image/png', size: 1, variants: [] });
+    });
+    const res = await runOperation(api, 'uploadAsset', { siteId: 's1', form }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('logo.png');
+    expect(res.data).toMatchObject({ id: 'a1', name: 'logo.png' });
+  });
+
+  it('getAsset: GET → метаданные, name в detail', async () => {
+    const api = fixtureApi(async (url) => {
+      expect(url).toBe('/api/assets/a1');
+      return json(200, { id: 'a1', siteId: 's1', name: 'logo.png', mime: 'image/png', size: 1, variants: [] });
+    });
+    const res = await runOperation(api, 'getAsset', { assetId: 'a1' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('logo.png');
+    expect(res.data).toMatchObject({ id: 'a1' });
+  });
+
+  it('deleteAsset: DELETE по assetId → 204', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/assets/a1');
+      expect(init.method).toBe('DELETE');
+      return noBody(204);
+    });
+    const res = await runOperation(api, 'deleteAsset', { assetId: 'a1' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+  });
+
   it('runtimeStatus: 404 → miss', async () => {
     const api = fixtureApi(async () => json(404, { error: 'not found' }));
     const res = await runOperation(api, 'runtimeStatus', {}, t);

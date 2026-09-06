@@ -127,7 +127,7 @@ export function EditorPage() {
           )}
         </section>
         <section className={`${PANEL_CLASS} overflow-auto`} aria-label={t('editor.props')}>
-          <Inspector store={store} actions={actions} t={t} />
+          <Inspector store={store} actions={actions} t={t} siteId={siteId} />
         </section>
       </div>
     </div>

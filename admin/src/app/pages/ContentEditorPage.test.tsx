@@ -38,16 +38,18 @@ describe('ContentEditorPage', () => {
   });
 
   it('правка базового поля → PUT /api/sites/s1/contents/abc1 {fields}', async () => {
+    const detail = { id: 'abc1', siteId: 's1', collectionId: 'strings', fields: { title: 'Главная', count: 1 }, translations: {} };
     const { calls } = await renderApp({
       path: '/sites/s1/contents/abc1',
       handler: (url) => {
         if (url === '/api/sites/s1') return jsonResponse(200, SITE);
-        if (url === '/api/sites/s1/contents/abc1') return jsonResponse(200, DETAIL);
+        if (url === '/api/sites/s1/contents/abc1') return jsonResponse(200, detail);
         return jsonResponse(200, []);
       },
     });
 
     expect(await screen.findByText('abc1')).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByLabelText('Значение').length).toBe(2));
     const baseValue = screen.getAllByLabelText('Значение')[0] as HTMLInputElement;
     fireEvent.change(baseValue, { target: { value: 'Главная v2' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Сохранить поля' })[0]!);

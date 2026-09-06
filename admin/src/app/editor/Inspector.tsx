@@ -4,6 +4,7 @@ import { builtinFieldSchema } from './schemas';
 import type { BindingSourceName } from './field-form';
 import { SchemaForm, type ValidationCode } from './field-form';
 import { findSelected } from './TreePanel';
+import { AssetFieldControl } from '../assets/AssetFieldControl';
 import type { EditorStore, EditorActions } from './page-store';
 import type { AdminStringKey, Translate } from '../../runtime';
 
@@ -23,7 +24,17 @@ const VALIDATION_LABEL: Record<ValidationCode, AdminStringKey> = {
   range: 'field.error.range',
 };
 
-export function Inspector({ store, actions, t }: { store: EditorStore; actions: EditorActions; t: Translate }) {
+export function Inspector({
+  store,
+  actions,
+  t,
+  siteId,
+}: {
+  store: EditorStore;
+  actions: EditorActions;
+  t: Translate;
+  siteId: string;
+}) {
   const tree = useSelector(store, (s) => s.tree);
   const selectionId = useSelector(store, (s) => s.selectionId);
   const node = findSelected(tree, selectionId);
@@ -54,6 +65,9 @@ export function Inspector({ store, actions, t }: { store: EditorStore; actions: 
           errorLabel={errorLabel}
           onChange={(field, value) => actions.updateProp(node.id, field, value)}
           onBindingChange={(field, binding) => actions.setBinding(node.id, field, binding)}
+          renderAssetField={(value, onChange) => (
+            <AssetFieldControl siteId={siteId} value={value} onChange={(id) => onChange(id)} />
+          )}
         />
       )}
     </div>

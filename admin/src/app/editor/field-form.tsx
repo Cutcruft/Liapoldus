@@ -45,6 +45,7 @@ export function SchemaForm({
   errorLabel,
   onChange,
   onBindingChange,
+  renderAssetField,
 }: {
   schema: JSONSchema;
   values: Record<string, unknown>;
@@ -54,6 +55,8 @@ export function SchemaForm({
   errorLabel: (code: ValidationCode) => string;
   onChange: (field: string, value: unknown) => void;
   onBindingChange: (field: string, binding: BindingSource) => void;
+  /** Поле с format:'asset' рендерится переданным контролом (asset-picker). */
+  renderAssetField?: (value: unknown, onChange: (value: unknown) => void) => React.ReactNode;
 }) {
   const fields = Object.entries(schema.properties);
 
@@ -99,6 +102,8 @@ export function SchemaForm({
                 placeholder={pathLabel}
                 onChange={(e) => onBindingChange(field, { source: binding.source, path: e.target.value })}
               />
+            ) : prop.format === 'asset' && renderAssetField ? (
+              <div>{renderAssetField(literalValue, (v) => onChange(field, v))}</div>
             ) : (
               <LiteralInput prop={prop} value={literalValue} onChange={(v) => onChange(field, v)} />
             )}

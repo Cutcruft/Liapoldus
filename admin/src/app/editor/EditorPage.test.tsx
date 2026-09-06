@@ -139,6 +139,72 @@ describe('EditorPage', () => {
     expect(await screen.findByText('Привет')).toBeTruthy();
   });
 
+  it('выбор ассета через пикер в инспекторе пишет assetId и уходит в PUT', async () => {
+    const put = { root: null as unknown, version: 3 };
+    const imagePage: Page = {
+      ...PAGE,
+      root: {
+        id: 'root',
+        type: 'Container',
+        props: {},
+        children: [{ id: 'i1', type: 'Image', props: { assetId: '', alt: '', width: 320 }, bindings: {} }],
+      },
+    };
+    const { calls } = await renderApp({
+      path: '/sites/s1/pages/p1',
+      handler: (url, init) => {
+        if (url === '/api/pages/p1' && init.method === 'GET') return jsonResponse(200, imagePage);
+        if (url === '/api/pages/p1/tree' && init.method === 'PUT') {
+          put.root = JSON.parse(String(init.body))['root'];
+          put.version += 1;
+          return jsonResponse(200, { version: put.version });
+        }
+        if (url === '/api/sites/s1/assets') {
+          return jsonResponse(200, [
+            {
+              id: 'logo1',
+              siteId: 's1',
+              name: 'logo.png',
+              mime: 'image/png',
+              size: 1024,
+              variants: [],
+            },
+          ]);
+        }
+        if (url === '/api/assets/logo1') {
+          return jsonResponse(200, {
+            id: 'logo1',
+            siteId: 's1',
+            name: 'logo.png',
+            mime: 'image/png',
+            size: 1024,
+            variants: [],
+          });
+        }
+        return jsonResponse(404, { error: 'not found' });
+      },
+    });
+
+    fireEvent.click(await screen.findByText('Image'));
+    fireEvent.click(screen.getByRole('button', { name: 'Выбрать ассет' }));
+
+    const item = await screen.findByTestId('asset-picker-item');
+    fireEvent.click(item);
+
+    await waitFor(
+      () => {
+        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree');
+        expect(save).toBeTruthy();
+        const body = JSON.parse(String(save?.init.body)) as { root: Page['root'] };
+        expect(body.root.children?.[0]?.props?.['assetId']).toBe('logo1');
+      },
+      { timeout: 3000 },
+    );
+    // превью выбранного ассета в инспекторе (getAsset → имя + миниатюра)
+    expect(await screen.findByAltText('logo.png')).toBeTruthy();
+    void put;
+  });
+
   it('после автосейва собирается dev build; таб Превью показывает iframe', async () => {
     const put = { root: null as unknown, version: 3 };
     const { calls } = await renderApp({
