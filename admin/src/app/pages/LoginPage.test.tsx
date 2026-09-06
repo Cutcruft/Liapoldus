@@ -33,7 +33,7 @@ describe('LoginPage', () => {
     });
     fireEvent.change(screen.getByLabelText('Токен'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Войти' }));
-    expect(await screen.findByRole('heading', { name: 'Обзор' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Сайты' })).toBeTruthy();
     expect(tokenStore.getState().token).toBe('secret');
   });
 });

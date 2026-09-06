@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderApp, jsonResponse } from '../test-utils';
+import { renderPage, jsonResponse } from '../test-utils';
+import { DashboardPage } from './DashboardPage';
 
 const DASHBOARD = {
   siteCount: 2,
@@ -46,13 +47,13 @@ const DASHBOARD = {
 
 describe('DashboardPage', () => {
   it('без сайтов — empty-state с CTA', async () => {
-    await renderApp({ path: '/' });
+    await renderPage(<DashboardPage />);
     expect(await screen.findByText('Создайте первый сайт')).toBeTruthy();
     expect(screen.getByText('Создать сайт')).toBeTruthy();
   });
 
   it('агрегирует сайты, git-статус, последние сборки и снапшоты', async () => {
-    await renderApp({ path: '/', handler: () => jsonResponse(200, DASHBOARD) });
+    await renderPage(<DashboardPage />, { handler: () => jsonResponse(200, DASHBOARD) });
 
     expect(await screen.findByRole('heading', { name: 'Обзор' })).toBeTruthy();
     expect(screen.getByText('требует внимания')).toBeTruthy();
@@ -72,7 +73,7 @@ describe('DashboardPage', () => {
   });
 
   it('reload повторяет запрос', async () => {
-    const { calls } = await renderApp({ path: '/', handler: () => jsonResponse(200, DASHBOARD) });
+    const { calls } = await renderPage(<DashboardPage />, { handler: () => jsonResponse(200, DASHBOARD) });
     await screen.findByRole('heading', { name: 'Обзор' });
     const before = calls.filter((c) => c.url === '/api/dashboard').length;
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));

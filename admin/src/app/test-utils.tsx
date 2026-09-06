@@ -1,5 +1,6 @@
 import { cleanup, render } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { AdminProvider } from './admin-context';
 import { appRoutes } from './AppRoutes';
 import { createAdminApi, createTokenStore } from '../runtime';
@@ -45,6 +46,35 @@ export async function renderApp(opts: RenderAppOptions) {
   const api = createAdminApi({ baseUrl: '', getToken: () => tokenStore.getState().token, fetchFn });
   cleanup();
   const router = createMemoryRouter(appRoutes, { initialEntries: [opts.path] });
+  const utils = render(
+    <AdminProvider api={api} tokenStore={tokenStore}>
+      <RouterProvider router={router} />
+    </AdminProvider>,
+  ) as ReturnType<typeof render> & { calls: MockCall[]; api: typeof api };
+  return { ...utils, calls, api, tokenStore };
+}
+
+/**
+ * Рендер одиночной страницы без AppShell/роутов приложения (для прямых
+ * регресс-тестов старых страниц, выселенных из продакшен-маршрутов R1).
+ */
+export function renderPage(
+  element: ReactNode,
+  opts?: { path?: string; token?: string | null; handler?: RenderAppOptions['handler'] },
+) {
+  const path = opts?.path ?? '/';
+  const calls: MockCall[] = [];
+  const handler = opts?.handler ?? (() => jsonResponse(200, EMPTY_DASHBOARD));
+  const fetchFn = async (input: string | URL | RequestInfo, init?: RequestInit) => {
+    const url = String(input);
+    const safeInit = init ?? {};
+    calls.push({ url, method: safeInit.method ?? 'GET', init: safeInit });
+    return handler(url, safeInit, calls);
+  };
+  const tokenStore = createTokenStore(opts?.token === undefined ? 'test-token' : opts.token);
+  const api = createAdminApi({ baseUrl: '', getToken: () => tokenStore.getState().token, fetchFn });
+  cleanup();
+  const router = createMemoryRouter([{ path, element }], { initialEntries: [path] });
   const utils = render(
     <AdminProvider api={api} tokenStore={tokenStore}>
       <RouterProvider router={router} />

@@ -16,6 +16,17 @@ export const STRINGS = {
   'nav.settings': 'Настройки',
   'nav.git': 'Git',
 
+  'app.name': 'Liapoldus',
+
+  'tab.settings': 'Настройки',
+  'tab.close': 'Закрыть вкладку',
+  'tab.new': 'Новая вкладка',
+  'tab.placeholder.title': 'Сайт открыт',
+  'tab.placeholder.text': 'Режимы «Обслуживание» и «Редактор» появятся на следующем слайсе (R2).',
+  'home.sites': 'Сайты',
+  'home.settings': 'Системные настройки',
+  'home.settingsHint': 'Настройки сервера и токен',
+
   'page.overview': 'Обзор',
   'page.overview.empty': 'Выберите объект в меню слева',
 
