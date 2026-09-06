@@ -3,7 +3,7 @@
 // shared ./embed). It is the zero-node replacement for scripts/build-shared:
 // react/react-dom/jsx-runtime are resolved and fetched straight from the npm
 // registry over plain HTTP (no node/npm on the host), and the ui-runtime bundle
-// is compiled from ui-runtime/src with Go esbuild.
+// is compiled from ui-runtime/src with Go esbuild (slice 8b).
 //
 // The generator is standalone by design: it wires its own infra (registry
 // client + tarball store) and never touches the application/DB, so

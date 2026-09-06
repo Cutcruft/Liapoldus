@@ -21,8 +21,9 @@ type Artifact struct {
 }
 
 // Artifacts is the import-map surface of the site bundler. It MUST stay in
-// sync with scripts/build-shared/build.mjs — bump both together and re-run
-// `npm ci && npm run build` so the committed bundles match.
+// sync with the generator's pins (cmd/dependency-build, which resolves and
+// bundles every entry below) — bump both together and re-run
+// `go run ./cmd/dependency-build generate` so the committed bundles match.
 var Artifacts = []Artifact{
 	{Key: "react", Version: "18.3.1"},
 	{Key: "react-dom", Version: "18.3.1"},

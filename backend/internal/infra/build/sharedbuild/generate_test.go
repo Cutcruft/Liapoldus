@@ -188,21 +188,41 @@ func (r *sharedRegistry) requestPaths() []string {
 	return append([]string(nil), r.paths...)
 }
 
-func TestGenerateProducesReactFamily(t *testing.T) {
+// fixtureUIRuntimeSrc returns the absolute path of the bundled ui-runtime test
+// fixture (testdata/ui-runtime/src) wired into the generator for the whole
+// Artifacts-table coverage path.
+func fixtureUIRuntimeSrc(t *testing.T) string {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Join("testdata", "ui-runtime", "src"))
+	if err != nil {
+		t.Fatalf("fixtureUIRuntimeSrc: %v", err)
+	}
+	return abs
+}
+
+// newFullGenerator wires a generator whose scope covers the whole Artifacts
+// table (react family from the fake registry + ui-runtime from the fixture),
+// returning it alongside the fake registry for request assertions.
+func newFullGenerator(t *testing.T, tempDir string) (*Generator, *sharedRegistry) {
+	t.Helper()
 	reg := newSharedRegistry()
 	seedReact(reg)
-	client := reg.start(t)
+	return NewGenerator(reg.start(t), tempDir).WithUIRuntime(fixtureUIRuntimeSrc(t)), reg
+}
 
-	gen := NewGenerator(client, t.TempDir())
+func TestGenerateProducesSharedArtifacts(t *testing.T) {
+	gen, reg := newFullGenerator(t, t.TempDir())
 	bundles, err := gen.Generate(context.Background())
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 
+	// The whole Artifacts table is produced (slice 8b full-surface).
 	for _, rel := range []string{
 		"embed/react/18.3.1.js",
 		"embed/react-dom/18.3.1.js",
 		"embed/react/jsx-runtime/18.3.1.js",
+		"embed/@liapoldus/ui-runtime/0.1.0.js",
 	} {
 		if _, ok := bundles[rel]; !ok {
 			t.Errorf("Generate produced no %s", rel)
@@ -231,6 +251,20 @@ func TestGenerateProducesReactFamily(t *testing.T) {
 		t.Errorf("jsx-runtime bundle missing jsx")
 	}
 
+	// ui-runtime (slice 8b): compiled from ui-runtime/src with the React
+	// surface externalized (shared import map), public exports and the
+	// automatic-JSX import intact.
+	uiRuntime := string(bundles["embed/@liapoldus/ui-runtime/0.1.0.js"])
+	if !strings.Contains(uiRuntime, "boot") {
+		t.Errorf("ui-runtime bundle missing boot export")
+	}
+	if strings.Contains(uiRuntime, `from "react"`) || strings.Contains(uiRuntime, `from"react"`) {
+		t.Errorf("ui-runtime bundle bundled react instead of keeping it external")
+	}
+	if !strings.Contains(uiRuntime, "react/jsx-runtime") {
+		t.Errorf("ui-runtime bundle did not use the shared react/jsx-runtime")
+	}
+
 	// react-dom's dependency scheduler must have been fetched.
 	var sawScheduler bool
 	for _, p := range reg.requestPaths() {
@@ -244,11 +278,7 @@ func TestGenerateProducesReactFamily(t *testing.T) {
 }
 
 func TestGenerateIsDeterministic(t *testing.T) {
-	reg := newSharedRegistry()
-	seedReact(reg)
-	client := reg.start(t)
-
-	gen := NewGenerator(client, t.TempDir())
+	gen, _ := newFullGenerator(t, t.TempDir())
 	ctx := context.Background()
 	first, err := gen.Generate(ctx)
 	if err != nil {
@@ -318,4 +348,38 @@ func TestVerifyBundlesCompares(t *testing.T) {
 	if err := verifyBundles(got, tampered); !strings.Contains(err.Error(), "react-dom") {
 		t.Errorf("verifyBundles(different bytes) error %q does not name react-dom", err)
 	}
+}
+
+// TestVerifyEnforcesFullArtifactCoverage proves the verify gate covers the whole
+// Artifacts table (slice 8b): a generator without the ui-runtime source fails
+// exactly because @liapoldus/ui-runtime is outside its scope, never because it
+// is skipped.
+func TestVerifyEnforcesFullArtifactCoverage(t *testing.T) {
+	reg := newSharedRegistry()
+	seedReact(reg)
+
+	t.Run("missing ui-runtime source fails the gate", func(t *testing.T) {
+		gen := NewGenerator(reg.start(t), t.TempDir())
+		err := gen.Verify(context.Background())
+		if err == nil {
+			t.Fatalf("Verify without ui-runtime source = nil, want coverage error")
+		}
+		for _, want := range []string{"does not cover", "@liapoldus/ui-runtime"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("Verify error %q does not mention %q", err.Error(), want)
+			}
+		}
+	})
+
+	t.Run("wired ui-runtime reaches bytes comparison", func(t *testing.T) {
+		gen := NewGenerator(reg.start(t), t.TempDir()).
+			WithUIRuntime(fixtureUIRuntimeSrc(t))
+		err := gen.Verify(context.Background())
+		if err == nil {
+			t.Fatalf("Verify with fixture ui-runtime = nil, want committed-bytes mismatch")
+		}
+		if strings.Contains(err.Error(), "does not cover") {
+			t.Errorf("Verify error %q still reports an uncovered artifact (ui-runtime was in scope)", err.Error())
+		}
+	})
 }

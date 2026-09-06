@@ -1,16 +1,17 @@
 // Command dependency-build regenerates the versioned shared runtime bundles
 // embedded into the Go server (internal/infra/build/shared/embed) with zero
 // node/npm on the host: react/react-dom/jsx-runtime are resolved and fetched
-// straight from the npm registry and bundled with esbuild-as-a-Go-library.
-// It is the replacement for scripts/build-shared (spec §10).
+// straight from the npm registry, and @liapoldus/ui-runtime is compiled from
+// the monorepo's ui-runtime/src with esbuild-as-a-Go-library — covering the
+// whole Artifacts table (spec §10).
 //
 // Usage:
 //
 //	dependency-build generate [--registry URL] [--temp-dir DIR]
 //	dependency-build verify   [--registry URL] [--temp-dir DIR]
 //
-// generate bundles the react family and writes
-// internal/infra/build/shared/embed/<key>/<version>.js for each artifact;
+// generate bundles every shared artifact and writes
+// internal/infra/build/shared/embed/<key>/<version>.js for each one;
 // verify regenerates in a temp workspace and fails if any committed artifact
 // differs from the freshly generated bundle (CI gate on schema-sync).
 package main
@@ -50,6 +51,11 @@ func main() {
 
 	ctx := context.Background()
 	gen := sharedbuild.NewGenerator(registry.New(*registryURL), *tempDir)
+	src, err := uiRuntimeSrc()
+	if err != nil {
+		fatal(err)
+	}
+	gen = gen.WithUIRuntime(src)
 
 	switch cmd {
 	case "generate":
@@ -108,6 +114,29 @@ func embedRoot() (string, error) {
 		return filepath.Abs(try)
 	}
 	return "", fmt.Errorf("cannot locate shared/embed (run from the backend module root): %w", os.ErrNotExist)
+}
+
+// uiRuntimeSrc locates the monorepo's ui-runtime/src by walking up from the
+// working directory until an ancestor contains ui-runtime/src/index.ts. Unlike
+// embedRoot it does not assume a particular starting module, so generate/verify
+// work from both the repo root and the backend module root.
+func uiRuntimeSrc() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for i := 0; i < 12; i++ {
+		cand := filepath.Join(dir, "ui-runtime", "src")
+		if info, serr := os.Stat(filepath.Join(cand, "index.ts")); serr == nil && !info.IsDir() {
+			return cand, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "", fmt.Errorf("cannot locate ui-runtime/src (run dependency-build from the repo or backend module root)")
 }
 
 func defaultRegistry() string {

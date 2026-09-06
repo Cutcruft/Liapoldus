@@ -19,8 +19,15 @@ import (
 // returns the embed-relative path -> bytes for the caller to write (Generate) or
 // compare (Verify).
 type Generator struct {
-	client  *registry.Client
-	tempDir string // preserved across Generate calls so a verify reuses the fetch+materialize
+	client *registry.Client
+	// tempDir is preserved across Generate calls so a verify reuses the
+	// fetch+materialize (the ui-runtime source is compiled in place).
+	tempDir string
+	// uiRuntimeSrc is the absolute path to the monorepo's ui-runtime/src.
+	// When set, Generate also compiles @liapoldus/ui-runtime (slice 8b);
+	// cmd/dependency-build always wires it, so generate covers the full
+	// Artifacts table.
+	uiRuntimeSrc string
 }
 
 // NewGenerator wires the standalone infra (registry client + temp workspace).
@@ -33,8 +40,17 @@ func NewGenerator(client *registry.Client, tempDir string) *Generator {
 	}
 }
 
-// Generate resolves + materializes the react family and bundles the reexport
-// entries, returning them keyed by the embed-relative path (forward slash) the
+// WithUIRuntime points the generator at the checkout of ui-runtime/src (the
+// monorepo's runtime source). Required for generate/verify to cover the whole
+// Artifacts table.
+func (g *Generator) WithUIRuntime(src string) *Generator {
+	g.uiRuntimeSrc = src
+	return g
+}
+
+// Generate resolves + materializes the react family, bundles the reexport
+// entries and — when wired via WithUIRuntime — compiles @liapoldus/ui-runtime,
+// returning the bundles keyed by embed-relative path (forward slash) the
 // shared package expects (embed/react/18.3.1.js, ...).
 func (g *Generator) Generate(ctx context.Context) (map[string][]byte, error) {
 	result, err := resolveLock(ctx, g.client)
@@ -70,14 +86,27 @@ func (g *Generator) Generate(ctx context.Context) (map[string][]byte, error) {
 	for rel, data := range bundled {
 		out[filepath.ToSlash(rel)] = data
 	}
+
+	if g.uiRuntimeSrc != "" {
+		art, err := uiRuntimeArtifact()
+		if err != nil {
+			return nil, err
+		}
+		uiBundle, err := bundleUIRuntime(art.Version, g.uiRuntimeSrc)
+		if err != nil {
+			return nil, err
+		}
+		uiRel := filepath.ToSlash(filepath.Join("embed", art.Key, art.Version+".js"))
+		out[uiRel] = uiBundle
+	}
 	return out, nil
 }
 
-// Verify regenerates the react family and compares every produced bundle
-// against the committed artifact bytes embedded in the binary. Artifacts
-// outside the generator's scope (e.g. @liapoldus/ui-runtime before slice 8b)
-// are skipped — the full-surface verify is gated on `dependency-build verify`
-// after all families are implemented.
+// Verify regenerates every shared artifact and compares each produced bundle
+// against the committed artifact bytes embedded in the binary. It is the
+// full-surface gate on the Artifacts table: an artifact the generator did not
+// produce — e.g. a ui-runtime pin when WithUIRuntime was not wired — fails the
+// verify instead of being skipped.
 func (g *Generator) Verify(ctx context.Context) error {
 	generated, err := g.Generate(ctx)
 	if err != nil {
@@ -87,11 +116,21 @@ func (g *Generator) Verify(ctx context.Context) error {
 	for rel := range generated {
 		generatedKeys[rel] = true
 	}
+
+	var missing []string
 	for _, a := range shared.Artifacts {
 		rel := "embed/" + a.Key + "/" + a.Version + ".js"
 		if !generatedKeys[rel] {
-			continue // not in this generator's scope; skip
+			missing = append(missing, a.Key)
 		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("verify: generator scope does not cover artifacts %s (full-surface gate; wire its build step)",
+			strings.Join(missing, ", "))
+	}
+
+	for _, a := range shared.Artifacts {
+		rel := "embed/" + a.Key + "/" + a.Version + ".js"
 		data, err := fs.ReadFile(shared.Files, rel)
 		if err != nil {
 			return fmt.Errorf("verify %s: committed artifact missing: %w", a.Key, err)
