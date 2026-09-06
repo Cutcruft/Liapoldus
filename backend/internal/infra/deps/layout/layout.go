@@ -129,8 +129,10 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 	// 3. Bundle the top-level deps (the site's declared bare imports) one by
 	// one. Only the shared libraries and the dep-internal subpath specifiers
 	// stay external; transitive dependencies are inlined into the top-level
-	// bundle, per spec §6.
+	// bundle, per spec §6. A stylesheet reached from a bundle's own files is
+	// extracted by esbuild into a combined .css artifact (spec §12).
 	result := build.DepLayout{Deps: map[string]build.DepRef{}}
+	var styles []string
 	externals := make([]string, 0, len(req.TopLevel)+len(req.Subpaths)+len(discovered))
 	for _, name := range req.TopLevel {
 		key, ok := hoisted(name)
@@ -146,6 +148,9 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 		}
 		result.Deps[dep.Name] = ref
 		externals = append(externals, dep.Name)
+		if ref.CSSArtifact != "" {
+			styles = append(styles, ref.CSSArtifact)
+		}
 	}
 
 	// 4. Bundle each bare subpath of a declared top-level dep that the site
@@ -166,14 +171,30 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 				Pkg: top, Hint: fmt.Sprintf("subpath %q is not a filesystem-safe JS module path", spec),
 			}
 		}
-		if reason := unsupportedSubpath(rest); reason != "" {
-			return build.DepLayout{}, &build.DepBuildError{Pkg: top, Hint: reason}
-		}
 		key, ok := hoisted(top)
 		if !ok {
 			return build.DepLayout{}, &build.DepBuildError{
 				Pkg: top, Hint: fmt.Sprintf("subpath import %q names a package absent from the snapshot lock", spec),
 			}
+		}
+		// A CSS subpath becomes a .css artifact (+ import-map stub) instead of
+		// a JS re-export bundle (spec §12): the consuming bundle keeps the bare
+		// import external, the shell injects a <link> and maps the specifier to
+		// the stub so the route-effect import stays a valid ES module.
+		if isCssSubpath(rest) {
+			ref, err := l.bundleCSS(ctx, req.Dir, instances[key], rest)
+			if err != nil {
+				return build.DepLayout{}, err
+			}
+			result.Deps[spec] = ref
+			externals = append(externals, spec)
+			if ref.CSSArtifact != "" {
+				styles = append(styles, ref.CSSArtifact)
+			}
+			continue
+		}
+		if reason := unsupportedSubpath(rest); reason != "" {
+			return build.DepLayout{}, &build.DepBuildError{Pkg: top, Hint: reason}
 		}
 		ref, err := l.bundle(ctx, req.Dir, instances[key], rest)
 		if err != nil {
@@ -181,9 +202,13 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 		}
 		result.Deps[spec] = ref
 		externals = append(externals, spec)
+		if ref.CSSArtifact != "" {
+			styles = append(styles, ref.CSSArtifact)
+		}
 	}
 
 	result.Externals = uniqueSorted(externals)
+	result.Styles = uniqueSorted(styles)
 	return result, nil
 }
 
@@ -313,7 +338,10 @@ func (l *Layout) blob(ctx context.Context, dep domain.LockedDep) ([]byte, error)
 // runtime (esbuild omits a default re-export that has no binding, so the same
 // entry works for defaultless subpath modules too). Only the shared libraries
 // plus the declared extra externals (the dep-internal subpath specifiers) stay
-// external (import-map-resolved); transitive deps are inlined (spec §6).
+// external (import-map-resolved); transitive deps are inlined (spec §6). The
+// css loader turns every stylesheet reachable from the entry's JS graph into a
+// sibling .css artifact (combined CSS, spec §12) and strips the import from
+// the JS output.
 func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep, subpath string, extraExternal ...string) (build.DepRef, error) {
 	specifier := dep.Name
 	if subpath != "" {
@@ -352,6 +380,7 @@ func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep, s
 		Target:        api.ES2020,
 		TreeShaking:   api.TreeShakingTrue,
 		AbsWorkingDir: dir,
+		Loader:        map[string]api.Loader{".css": api.LoaderCSS},
 		External:      external,
 		LogLevel:      api.LogLevelSilent,
 	})
@@ -359,21 +388,76 @@ func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep, s
 		return build.DepRef{}, depBuildError(dep, result.Errors)
 	}
 
-	return build.DepRef{
+	ref := build.DepRef{
 		Name:           dep.Name,
 		Version:        dep.Version,
 		PublicArtifact: filepath.ToSlash(filepath.Join("dist", "_deps", artifact)),
+		Integrity:      dep.Integrity,
+	}
+	// A stylesheet the dep's JS graph reaches is extracted by esbuild into a
+	// sibling .css file of the JS artifact; publish it as the combined CSS.
+	cssRel := strings.TrimSuffix(filepath.ToSlash(filepath.Join("dist", "_deps", artifact)), ".js") + ".css"
+	if _, statErr := os.Stat(filepath.Join(dir, filepath.FromSlash(cssRel))); statErr == nil {
+		ref.CSSArtifact = cssRel
+	}
+	return ref, nil
+}
+
+// bundleCSS builds the two artifacts a bare CSS subpath of a declared
+// top-level dependency needs (spec §12): the .css bundle itself (esbuild,
+// @import/url() within the package inlined) and the JS stub the import map
+// maps the specifier to, so the consuming bundle's route-effect import stays a
+// valid ES module while the real stylesheet is injected as <link> by the
+// runtime shell.
+func (l *Layout) bundleCSS(ctx context.Context, dir string, dep domain.LockedDep, subpath string) (build.DepRef, error) {
+	specifier := dep.Name + "/" + subpath
+	entry := filepath.Join(dir, "node_modules", filepath.FromSlash(dep.Name), filepath.FromSlash(subpath))
+	cssArtifact := cssArtifactPath(dep, subpath)
+	outCSS := filepath.Join(dir, filepath.FromSlash(cssArtifact))
+	stubArtifact := cssArtifact + ".js"
+	outStub := filepath.Join(dir, filepath.FromSlash(stubArtifact))
+
+	if err := os.MkdirAll(filepath.Dir(outStub), 0o755); err != nil {
+		return build.DepRef{}, fmt.Errorf("dependency %s: mkdir dist: %w", specifier, err)
+	}
+	result := api.Build(api.BuildOptions{
+		EntryPoints:   []string{entry},
+		Outfile:       outCSS,
+		Bundle:        true,
+		Write:         true,
+		Loader:        map[string]api.Loader{".css": api.LoaderCSS},
+		AbsWorkingDir: dir,
+		LogLevel:      api.LogLevelSilent,
+	})
+	if len(result.Errors) > 0 {
+		return build.DepRef{}, depBuildError(dep, result.Errors)
+	}
+	if err := os.WriteFile(outStub, []byte("export default undefined;\n"), 0o644); err != nil {
+		return build.DepRef{}, fmt.Errorf("dependency %s: write css stub: %w", specifier, err)
+	}
+	return build.DepRef{
+		Name:           dep.Name,
+		Version:        dep.Version,
+		PublicArtifact: stubArtifact,
+		CSSArtifact:    cssArtifact,
 		Integrity:      dep.Integrity,
 	}, nil
 }
 
 // depBuildError turns esbuild failures for one dependency into a DepBuildError
-// with a targeted hint for the phase-1 blocked cases (node builtins).
+// with a targeted hint for the phase-blocked cases: static assets with no
+// loader, node builtins, and every other unresolvable module.
 func depBuildError(dep domain.LockedDep, messages []api.Message) error {
 	var details []string
 	for _, msg := range messages {
 		details = append(details, msg.Text)
 		line := strings.ToLower(msg.Text)
+		if strings.Contains(line, "no loader is configured") {
+			return &build.DepBuildError{
+				Pkg: dep.Name, Version: dep.Version,
+				Hint: "the package references a static asset (font, image, ...) that the bundle pipeline does not support yet; CSS itself is supported — if a stylesheet pull fails, split it into its own CSS file",
+			}
+		}
 		for builtin := range blockedBuiltins {
 			if strings.Contains(line, "\""+builtin+"\"") || strings.Contains(line, "'"+builtin+"'") {
 				return &build.DepBuildError{
@@ -475,6 +559,13 @@ func (l *Layout) scanDepSubpaths(dir, name string, declared map[string]bool) (ex
 					Pkg: top, Hint: fmt.Sprintf("subpath %q is not a filesystem-safe JS module path", spec),
 				}
 			}
+			// A CSS subpath of a declared dep is its own artifact like any
+			// other subpath (spec §12); non-CSS assets stay a failure.
+			if isCssSubpath(rest) {
+				externals = append(externals, spec)
+				bundles = append(bundles, spec)
+				continue
+			}
 			if reason := unsupportedSubpath(rest); reason != "" {
 				return &build.DepBuildError{Pkg: top, Hint: reason}
 			}
@@ -525,19 +616,36 @@ func validSubpath(subpath string) bool {
 	return true
 }
 
+// isCssSubpath reports whether a bare subpath names a stylesheet
+// ("agent/styles.css"), which the pipeline bundles as its own .css artifact
+// plus an import-map stub instead of a JS re-export (spec §12).
+func isCssSubpath(subpath string) bool {
+	return strings.EqualFold(filepath.Ext(subpath), ".css")
+}
+
+// cssArtifactPath is the public artifact path of a CSS subpath bundle:
+// dist/_deps/<name>@<version>/<subpath>.css (scoped packages keep the %2F
+// escape, exactly like JS subpath artifacts).
+func cssArtifactPath(dep domain.LockedDep, subpath string) string {
+	base := strings.TrimSuffix(artifactName(dep.Name, dep.Version), ".js")
+	return filepath.ToSlash(filepath.Join("dist", "_deps", base, subpath))
+}
+
 // unsupportedSubpath returns a plain-language reason when a subpath imports a
-// non-JS asset, which the current bundle pipeline does not support (spec §12).
+// static asset that the bundle pipeline does not support (spec §12): CSS is
+// bundled (own artifact + <link>), fonts/images/… are still a failure.
 func unsupportedSubpath(subpath string) string {
 	ext := strings.ToLower(filepath.Ext(subpath))
 	if !unsupportedSubpathExts[ext] {
 		return ""
 	}
-	return fmt.Sprintf("subpath %q imports a non-JS asset; CSS and static assets are not bundled yet — import the package's JS module instead", subpath)
+	return fmt.Sprintf("subpath %q imports a static asset; CSS is supported (own .css artifact + <link>), but fonts, images and other assets are not bundled yet — import the package's JS or CSS file instead", subpath)
 }
 
 // unsupportedSubpathExts is the asset-extension guard for subpath bundles.
+// .css is deliberately absent: it is handled by bundleCSS.
 var unsupportedSubpathExts = map[string]bool{
-	".css": true, ".scss": true, ".sass": true, ".less": true,
+	".scss": true, ".sass": true, ".less": true,
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".svg": true,
 	".woff": true, ".woff2": true, ".ttf": true, ".wasm": true,
 }

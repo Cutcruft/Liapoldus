@@ -26,7 +26,15 @@ type DepRef struct {
 	Version string `json:"version"`
 	// PublicArtifact is the artifact-relative path of the bundle, e.g.
 	// "dist/_deps/lodash@4.17.21.js" (served at /build/<site>/<env>/<snap>/…).
+	// For a CSS subpath specifier ("agent/styles.css") this is the JS stub the
+	// import map maps the specifier to; the real stylesheet lives in CSSArtifact
+	// and is loaded via <link> by the runtime shell.
 	PublicArtifact string `json:"publicArtifact"`
+	// CSSArtifact is the artifact-relative path of the stylesheet the dep's JS
+	// graph reaches (spec §12): either the dep's combined CSS for the main
+	// bundle ("dist/_deps/agent@1.0.0.css") or the per-subpath CSS bundle
+	// ("dist/_deps/agent@1.0.0/styles.css"). The shell injects a <link> for it.
+	CSSArtifact string `json:"cssArtifact,omitempty"`
 	// Integrity is the sha512 of the source tarball the bundle was built from
 	// (supply chain, spec §9).
 	Integrity string `json:"integrity"`
@@ -80,6 +88,9 @@ type DepLayoutRequest struct {
 type DepLayout struct {
 	Deps      map[string]DepRef
 	Externals []string
+	// Styles is the deduped, sorted list of public CSS artifact paths the
+	// manifest publishes for the runtime shell's <link> injection (spec §12).
+	Styles []string
 }
 
 // DepLayouter fetches, verifies and unpacks every package of a frozen lock
@@ -107,6 +118,10 @@ type Manifest struct {
 	// Deps is the import map for site dependencies (bare specifier → frozen
 	// bundle artifact, published under this snapshot's dist/_deps/).
 	Deps map[string]DepRef `json:"deps,omitempty"`
+	// Styles lists the public CSS artifact paths to inject as <link rel=…>
+	// before the site bundle mounts (spec §12): one per reachable stylesheet
+	// of a dependency (combined per-bundle CSS or a bare CSS subpath).
+	Styles []string `json:"styles,omitempty"`
 }
 
 // SharedExternals are the runtime libraries the site bundle does not include;

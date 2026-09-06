@@ -619,3 +619,160 @@ func TestDependencyBuildFailsOnNodeBuiltin(t *testing.T) {
 		t.Fatalf("error must name the node builtin: %v", err)
 	}
 }
+
+func TestDependencyBuildCSSArtifacts(t *testing.T) {
+	ctx := context.Background()
+	reg := newFakeRegistry()
+	regClient := reg.start(t)
+	// helper.reset.css is a css subpath of a declared dep that agent pulls via
+	// a bare specifier; agent.theme.css is another css subpath the site source
+	// pulls directly; agent.brand.css rides the agent main bundle's relative
+	// import and becomes the bundle's combined css.
+	_, helperSRI := reg.add(t, "helper", "1.0.0", map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+		"reset.css":    ".helper-reset { margin: 0; }\n",
+	})
+	_, agentSRI := reg.add(t, "agent", "1.0.0", map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js","dependencies":{"helper":"^1.0.0"}}`,
+		"index.js": `import "./brand.css";
+import "helper/reset.css";
+export const agentName = "agent-css-live";
+export default "agent-css-live";
+`,
+		"brand.css": ".agent-brand { color: #112233; }\n",
+		"theme.css": ".agent-theme { background: #445566; }\n",
+	})
+
+	mem := storage.NewMemory()
+	site := seedBuildSiteInMemory(t, mem, "site_dep_css")
+	seedDefinitionSource(t, mem, site.ID, "text",
+		"import \"agent/theme.css\";\nimport { agentName } from \"agent\";\nexport default (props) => props?.title ?? agentName;\n")
+
+	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "text"}
+	page := domain.Page{ID: "page_dep_css", SiteID: site.ID, Name: "Home", Root: root, Version: 1,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_dep_css", PageID: "page_dep_css", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	if err := mem.CreatePage(ctx, page, version); err != nil {
+		t.Fatal(err)
+	}
+	lock := domain.SnapshotLock{Deps: []domain.LockedDep{
+		{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+	}}
+	snapshot := domain.Snapshot{ID: "snapshot_dep_css", SiteID: site.ID,
+		Pages:    []domain.SnapshotPage{{PageID: "page_dep_css", VersionID: "pagever_dep_css", Version: 1}},
+		DepsLock: lock, CreatedAt: time.Now().UTC()}
+	if err := mem.CreateSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"agent", "helper"} {
+		if err := mem.CreateDependency(ctx, domain.Dependency{
+			SiteID: site.ID, Name: name, Spec: "^1.0.0",
+			CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, locked := range lock.Deps {
+		if err := mem.CreateDepPackage(ctx, domain.DepPackage{
+			Name: locked.Name, Version: locked.Version, Integrity: locked.Integrity,
+			TarballURL: reg.baseURL + reg.URLFor(locked.Name, locked.Version),
+			FetchedAt:  time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	depsLayout := layout.New(layout.LayoutOptions{
+		Packages: mem,
+		Store:    store.New(t.TempDir()),
+		Fetch:    tarballFetcherAdapter{client: regClient},
+	})
+	artifacts := artifactstore.New(t.TempDir())
+	builds := build.NewService(mem, mem, mem,
+		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout),
+		builder.New(), artifacts)
+
+	result, err := builds.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment)
+	if err != nil {
+		t.Fatalf("build.Create: %v", err)
+	}
+	if result.Status != domain.BuildStatusReady {
+		t.Fatalf("status = %s, log = %#v", result.Status, result.Log)
+	}
+	artifactRoot := artifacts.DirFor(site.ID, domain.EnvironmentDevelopment, snapshot.ID)
+
+	manifestData, err := os.ReadFile(filepath.Join(artifactRoot, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read published manifest: %v", err)
+	}
+	var manifest build.Manifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("manifest decode: %v", err)
+	}
+
+	// Combined css of the agent main bundle, plus the two bare css subpaths:
+	// the site's agent/theme.css and the dep-internal helper/reset.css. The
+	// <link> callback source for the runtime shell.
+	wantStyles := []string{
+		"dist/_deps/agent@1.0.0.css",
+		"dist/_deps/agent@1.0.0/theme.css",
+		"dist/_deps/helper@1.0.0/reset.css",
+	}
+	if len(manifest.Styles) != len(wantStyles) {
+		t.Fatalf("manifest.styles = %#v, want %#v", manifest.Styles, wantStyles)
+	}
+	for i, want := range wantStyles {
+		if manifest.Styles[i] != want {
+			t.Fatalf("manifest.styles = %#v, want %#v", manifest.Styles, wantStyles)
+		}
+	}
+
+	// The full agent bundle carries no CSS at all: the relative brand.css was
+	// stripped into the combined artifact, the bare helper/reset.css stays an
+	// external import for the import map to resolve to the stub.
+	agentBundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent bundle: %v", err)
+	}
+	if strings.Contains(string(agentBundle), ".agent-brand") || strings.Contains(string(agentBundle), "#112233") {
+		t.Fatalf("combined css must not leak into the JS bundle:\n%s", agentBundle)
+	}
+	if !strings.Contains(string(agentBundle), `"helper/reset.css"`) {
+		t.Fatalf("helper/reset.css must stay external in the agent bundle:\n%s", agentBundle)
+	}
+
+	// Every published css artifact + its import-map stub.
+	for _, cssRel := range []string{
+		"dist/_deps/agent@1.0.0.css",
+		"dist/_deps/agent@1.0.0/theme.css",
+		"dist/_deps/helper@1.0.0/reset.css",
+	} {
+		css, err := os.ReadFile(filepath.Join(artifactRoot, filepath.FromSlash(cssRel)))
+		if err != nil {
+			t.Fatalf("read css artifact %s: %v", cssRel, err)
+		}
+		if !strings.Contains(string(css), "{") || !strings.Contains(string(css), "}") {
+			t.Fatalf("css artifact %s has no rules: %q", cssRel, css)
+		}
+	}
+
+	// The two bare css subpaths get JS stubs in the import map.
+	for _, spec := range []string{"agent/theme.css", "helper/reset.css"} {
+		ref, ok := manifest.Deps[spec]
+		if !ok {
+			t.Fatalf("manifest deps must include css subpath %q: %#v", spec, manifest.Deps)
+		}
+		stub, err := os.ReadFile(filepath.Join(artifactRoot, filepath.FromSlash(ref.PublicArtifact)))
+		if err != nil {
+			t.Fatalf("read css stub %s: %v", ref.PublicArtifact, err)
+		}
+		if string(stub) != "export default undefined;\n" {
+			t.Fatalf("css stub must be a bare valid ESM module, got %q", stub)
+		}
+		if ref.CSSArtifact == "" {
+			t.Fatalf("css subpath %q must name its css artifact: %#v", spec, ref)
+		}
+	}
+}

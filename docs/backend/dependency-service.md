@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; осталось: CSS/ассеты, peer-политика, allowlist scopes**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; осталось: peer-политика, allowlist scopes**.
 
 ## 1. Цель и принципы
 
@@ -115,12 +115,26 @@ storage (новые tables `005_dependencies.sql`):
   **объявленных** вершинных deps. На каждый — отдельный бандл `_deps/<pkg>@<ver>/<subpath>.js`
   + запись `manifest.deps` (ключ = спецификатор) + `manifest.externals` += спецификатор.
   Потребляющий dep-бандл держит спецификатор external (shared import-map), транзитивные остаются
-  инлайн. Subpath нерезолвится → `DepBuildError`; non-JS ассет (`.css` и др.) → fail с hint
-  (одинаково для site-кода и dep-кода). Коллизии имён subpath между разными версиями одного
-  пакета резолвятся тем же физическим walk-up (§5): субпат-артефакт берётся из hoisted-экземпляра.
-- **CSS/не-JS ассеты** пакетов: фаза 2 (import-map для CSS-запросов и `<link>`, взятие из
-  бандла и самостоятельная отдача). Фаза 1: пакет с CSS-импортами → fail с ясным сообщением,
-  что ассеты не поддерживаются ещё.
+инлайн. Subpath нерезолвится → `DepBuildError`; non-JS/CSS ассет (`.png`/`.woff`/…) →
+   fail с hint (одинаково для site-кода и dep-кода). Коллизии имён subpath между разными
+   версиями одного пакета резолвятся тем же физическим walk-up (§5): субпат-артефакт берётся
+   из hoisted-экземпляра.
+- **CSS/не-JS ассеты пакетов** (слайс 4): CSS поддерживается тремя путями, всё остальное
+  (`.png`/`.woff`/…) — честный fail с hint.
+  - **Combined CSS** бандла: относительный/self-баре CSS-импорт внутри пакета
+    (`import "./brand.css"`) — esbuild css-loader в `bundle()`: импорт вырезается из JS,
+    стили собираются в **соседний** `.css`-артефакт `_deps/<pkg>@<ver>.css` (тот же
+    basename, `.js`→`.css`), `DepRef.CSSArtifact` фиксируется. Stub не нужен.
+  - **Bare CSS-subpath** (`agent/theme.css`) из site-кода или из кода вершинного dep —
+    `bundleCSS()`: css-бандл физического `node_modules/<pkg>/<subpath>` → артефакт
+    `_deps/<pkg>@<ver>/<subpath>.css` + **JS-stub** `…css.js` (`export default undefined;`),
+    на который import-map мапит спецификатор (голый CSS-импорт невалиден в ESM);
+    спецификатор → `manifest.externals` + `manifest.deps`.
+  - `<link>`-источник: `manifest.styles` = дедуплицированный отсортированный список публичных
+    `.css`-артефактов (combined + subpath-ные); runtime-shell инжектит `<link rel=stylesheet>`
+    до монтажа site-бандла. Self-баре css-субпат пакета инлайнится в combined css автоматически.
+  - Фонт/картинка в бандле → `DepBuildError` с hint («No loader is configured» → «…CSS
+    поддерживается, ассеты (шрифты/картинки) — нет»).
 - **Несовместимые**: esbuild-ошибка/нерезолвимое импорт → оборачиваем в `DepBuildError`
   `{pkg, version, missing, hint}` (hint: «fs/net/child_process — браузерный рантайм не
   предоставляет; выберите альтернативу без node-API»). Список заблокированных builtins
@@ -136,8 +150,12 @@ storage (новые tables `005_dependencies.sql`):
 - `manifest.json` пополняется:
   ```
   "deps": { "lodash": "/build/<site>/<env>/<snapshot>/_deps/lodash@4.17.21.js",
-            "lodash/map": "/build/.../_deps/lodash@4.17.21/map.js" }
+            "lodash/map": "/build/.../_deps/lodash@4.17.21/map.js",
+            "agent/theme.css": "/build/.../_deps/agent@1.0.0/theme.css.js" }
+  "styles": ["/build/<site>/<env>/<snapshot>/_deps/agent@1.0.0.css",
+             "/build/.../_deps/agent@1.0.0/theme.css"]
   ```
+  `deps[<css-спецификатор>]` указывает на JS-stub, реальный CSS — в `manifest.styles` для `<link>`.
 - `manifest.externals` = `SharedExternals` + вершинные deps сайта (+ их subpath-импорты).
 - Включение react во внешние deps: dep-бандл импортирует `react` bare, import-map (Этап 5)
   склеивает `manifest.shared + manifest.deps` в `<script type="importmap">` — react из
@@ -212,7 +230,13 @@ hoisted → корневой `node_modules/<name>`, несовместимая �
 физический walk-up резолвит каждому потребителю свою версию; legacy flat-locks без маркеров
 читаются как прежде; `ErrVersionConflict` не эмитится; unit-тесты резолвера и layout + e2e
 двух вершинных deps с разными версиями транзитивного).
-Осталось: CSS/ассеты, peer-политика (fail по неудовлетворённым peers), allowlist scopes,
+✅ CSS/не-JS ассеты пакетов (слайс 4: combined css соседним `.css`-артефактом через
+esbuild css-loader в `bundle()`; bare css-subpath — `bundleCSS()`: свой `.css`-артефакт +
+JS-stub `…css.js` в import-map; `.css` убран из unsupported-ext; non-CSS ассеты так же
+fail-fast с hint, «No loader is configured» детектится в `depBuildError`;
+`manifest.styles` (dedup, сортировка) для `<link>`; инверсия css-reject-тестов на png +
+unit-тесты трёх путей + e2e `TestDependencyBuildCSSArtifacts`).
+Осталось: peer-политика (fail по неудовлетворённым peers), allowlist scopes,
 кэш-лимиты/эвикция.
 
 **Фаза 3:** `cmd/dependency-build` (замена `scripts/build-shared`, npm больше нигде не упоминается),
@@ -223,5 +247,7 @@ hoisted → корневой `node_modules/<name>`, несовместимая �
 - Monorepo-/workspace-пакеты и git-спецификаторы npm (`user/repo#branch`) не поддерживаются
   (только registry-scoped).
 - Duplicate-версии — поддержаны вложенным версионным layout (слайс 3); см. §5.
-- CSS/фонты пакетов — фаза 2; фаза 1 и subpath-слайсы честно падают с hint.
+- Шрифты/картинки/др. статические ассеты пакетов — не бандлятся (fail с hint); CSS
+  поддерживается (слайс 4): combined css соседним артефактом + bare css-subpath
+  (`manifest.styles` для `<link>`).
 - Один npm-источник публичный; mirror/registry-proxy — вне scope.

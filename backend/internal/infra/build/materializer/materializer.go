@@ -140,6 +140,7 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		manifest.Deps = layout.Deps
 		manifest.Externals = append(append([]string{}, build.SharedExternals...), layout.Externals...)
 		manifest.Externals = uniqueSorted(manifest.Externals)
+		manifest.Styles = layout.Styles
 	}
 
 	entry := generateEntry(req.SiteID, req.Environment, definitionIds)

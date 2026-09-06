@@ -907,15 +907,15 @@ export default tag;
 	}
 }
 
-func TestLayoutDepInternalNonJSSubpathFailsWithHint(t *testing.T) {
+func TestLayoutDepInternalStaticAssetSubpathFailsWithHint(t *testing.T) {
 	helperData, helperSRI := tarball(t, map[string]string{
 		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
 		"index.js":     "export default 1;\n",
-		"styles.css":   "body { color: red; }\n",
+		"logo.png":     "not a png",
 	})
 	agentData, agentSRI := tarball(t, map[string]string{
 		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
-		"index.js": `import "helper/styles.css";
+		"index.js": `import "helper/logo.png";
 export default 1;
 `,
 	})
@@ -923,8 +923,9 @@ export default 1;
 		map[string][]byte{"agent": agentData, "helper": helperData},
 		map[string]string{"agent": agentSRI, "helper": helperSRI},
 	)
-	// A top-level dep importing a non-JS asset of another declared dep fails
-	// with the same hint as a site-source CSS subpath import.
+	// A top-level dep importing a static asset of another declared dep fails
+	// with the same hint as a site-source asset subpath import (CSS itself is
+	// supported; images/fonts are not).
 	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
 		Dir: root,
 		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
@@ -935,18 +936,18 @@ export default 1;
 	})
 	var depErr *build.DepBuildError
 	if !errors.As(err, &depErr) {
-		t.Fatalf("expected *build.DepBuildError for css subpath, got %T: %v", err, err)
+		t.Fatalf("expected *build.DepBuildError for asset subpath, got %T: %v", err, err)
 	}
-	if depErr.Pkg != "helper" || !strings.Contains(depErr.Hint, "CSS") {
-		t.Fatalf("css subpath must carry a hint on the owning package, got %#v", depErr)
+	if depErr.Pkg != "helper" || !strings.Contains(depErr.Hint, "asset") {
+		t.Fatalf("asset subpath must carry a hint on the owning package, got %#v", depErr)
 	}
 }
 
-func TestLayoutSubpathCssRejectedWithHint(t *testing.T) {
+func TestLayoutStaticAssetSubpathFailsWithHint(t *testing.T) {
 	agentData, agentSRI := tarball(t, map[string]string{
 		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
 		"index.js":     "export default 1;\n",
-		"styles.css":   "body { color: red; }\n",
+		"logo.png":     "not a png",
 	})
 	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
 	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
@@ -955,13 +956,177 @@ func TestLayoutSubpathCssRejectedWithHint(t *testing.T) {
 			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
 		}},
 		TopLevel: []string{"agent"},
-		Subpaths: []string{"agent/styles.css"},
+		Subpaths: []string{"agent/logo.png"},
 	})
 	var depErr *build.DepBuildError
 	if !errors.As(err, &depErr) {
-		t.Fatalf("expected *build.DepBuildError for css subpath, got %T: %v", err, err)
+		t.Fatalf("expected *build.DepBuildError for asset subpath, got %T: %v", err, err)
 	}
-	if !strings.Contains(depErr.Hint, "CSS") {
-		t.Fatalf("css subpath must carry a hint, got %#v", depErr)
+	if !strings.Contains(depErr.Hint, "asset") {
+		t.Fatalf("asset subpath must carry a hint, got %#v", depErr)
+	}
+}
+
+func TestLayoutTopLevelDepCombinedCSSArtifact(t *testing.T) {
+	// The site imports the package's main entry; the entry pulls ./styles.css
+	// relatively. esbuild's css loader strips the import from the JS bundle and
+	// emits a sibling combined .css artifact, which the layout publishes.
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js": `import "./styles.css";
+export const tag = "agent-with-css";
+export default tag;
+`,
+		"styles.css": ".agent-with-css { color: #123456; }\n",
+	})
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"agent"},
+	})
+	if err != nil {
+		t.Fatalf("materialize dep with css: %v", err)
+	}
+	ref, ok := result.Deps["agent"]
+	if !ok {
+		t.Fatalf("missing import-map entry for agent: %#v", result.Deps)
+	}
+	if ref.CSSArtifact != "dist/_deps/agent@1.0.0.css" {
+		t.Fatalf("combined css artifact = %q", ref.CSSArtifact)
+	}
+	if got := result.Styles; len(got) != 1 || got[0] != ref.CSSArtifact {
+		t.Fatalf("styles = %#v, want only the combined css", got)
+	}
+
+	bundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent bundle: %v", err)
+	}
+	if strings.Contains(string(bundle), ".agent-with-css") || strings.Contains(string(bundle), "#123456") {
+		t.Fatalf("css must be stripped from the JS bundle:\n%s", bundle)
+	}
+	css, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0.css"))
+	if err != nil {
+		t.Fatalf("read combined css artifact: %v", err)
+	}
+	if !strings.Contains(string(css), ".agent-with-css") {
+		t.Fatalf("combined css artifact must carry the rule:\n%s", css)
+	}
+}
+
+func TestLayoutSiteCSSSubpathBundledWithStub(t *testing.T) {
+	// The site pulls agent/styles.css directly: it becomes its own .css
+	// artifact + a JS stub the import map maps the specifier to.
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+		"styles.css":   ".agent-css-subpath { color: #654321; }\n",
+	})
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"agent"},
+		Subpaths: []string{"agent/styles.css"},
+	})
+	if err != nil {
+		t.Fatalf("materialize css subpath: %v", err)
+	}
+	ref, ok := result.Deps["agent/styles.css"]
+	if !ok {
+		t.Fatalf("missing import-map entry for agent/styles.css: %#v", result.Deps)
+	}
+	if ref.PublicArtifact != "dist/_deps/agent@1.0.0/styles.css.js" {
+		t.Fatalf("css subpath stub artifact = %q", ref.PublicArtifact)
+	}
+	if ref.CSSArtifact != "dist/_deps/agent@1.0.0/styles.css" {
+		t.Fatalf("css subpath artifact = %q", ref.CSSArtifact)
+	}
+	if mainRef, ok := result.Deps["agent"]; !ok || mainRef.PublicArtifact != "dist/_deps/agent@1.0.0.js" {
+		t.Fatalf("main dep ref must survive alongside the css subpath: %#v", result.Deps)
+	}
+	if got, want := result.Externals, []string{"agent", "agent/styles.css"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("externals = %#v, want %#v", got, want)
+	}
+	if got := result.Styles; len(got) != 1 || got[0] != ref.CSSArtifact {
+		t.Fatalf("styles = %#v, want the css subpath artifact", got)
+	}
+
+	stub, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0", "styles.css.js"))
+	if err != nil {
+		t.Fatalf("read css stub: %v", err)
+	}
+	if string(stub) != "export default undefined;\n" {
+		t.Fatalf("css stub must be a bare valid ESM module, got %q", stub)
+	}
+	css, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0", "styles.css"))
+	if err != nil {
+		t.Fatalf("read css artifact: %v", err)
+	}
+	if !strings.Contains(string(css), ".agent-css-subpath") {
+		t.Fatalf("css artifact must carry the rule:\n%s", css)
+	}
+}
+
+func TestLayoutDepInternalBareCSSSubpathBundled(t *testing.T) {
+	// helper/styles.css is a css subpath of a declared dep; agent pulls it via
+	// a bare specifier. The scan must detect it, the agent bundle must keep the
+	// import external, and the css subpath gets its own artifact + stub.
+	helperData, helperSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+		"styles.css":   ".helper-dep-css { color: #abcdef; }\n",
+	})
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js": `import "helper/styles.css";
+export const tag = "agent-uses-css";
+export default tag;
+`,
+	})
+	lay, _, root := layoutHarness(t,
+		map[string][]byte{"agent": agentData, "helper": helperData},
+		map[string]string{"agent": agentSRI, "helper": helperSRI},
+	)
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+			{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+		}},
+		TopLevel: []string{"agent", "helper"},
+	})
+	if err != nil {
+		t.Fatalf("materialize dep-internal css subpath: %v", err)
+	}
+	ref, ok := result.Deps["helper/styles.css"]
+	if !ok {
+		t.Fatalf("missing import-map entry for helper/styles.css: %#v", result.Deps)
+	}
+	if ref.CSSArtifact != "dist/_deps/helper@1.0.0/styles.css" {
+		t.Fatalf("dep-internal css subpath artifact = %q", ref.CSSArtifact)
+	}
+	if got := result.Styles; len(got) != 1 || got[0] != ref.CSSArtifact {
+		t.Fatalf("styles = %#v, want the dep-internal css artifact", got)
+	}
+
+	agentBundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent bundle: %v", err)
+	}
+	if !strings.Contains(string(agentBundle), `"helper/styles.css"`) {
+		t.Fatalf("helper/styles.css must stay external in the agent bundle:\n%s", agentBundle)
+	}
+	css, err := os.ReadFile(filepath.Join(root, "dist/_deps", "helper@1.0.0", "styles.css"))
+	if err != nil {
+		t.Fatalf("read dep-internal css artifact: %v", err)
+	}
+	if !strings.Contains(string(css), ".helper-dep-css") {
+		t.Fatalf("dep-internal css artifact must carry the rule:\n%s", css)
 	}
 }
