@@ -623,19 +623,27 @@ function useReady(): boolean
 
 ---
 
-## 12a. ComponentRegistry (определения компонентов)
+## 12a. ComponentRegistry + runtime-шелл живой сборки
+
+Реализация — статический singleton (`src/core/component-registry.ts`): entry-бандл
+сайта регистрирует определения до `mount()`, builtin-каталог регистрируется
+идемпотентно при загрузке модуля.
 
 ```ts
 class ComponentRegistry {
   registerDefinition(id: string, component: ComponentDefinition): void;
   getDefinition(id: string): ComponentDefinition;
   hasDefinition(id: string): boolean;
+  ids(): string[];
+  clear(): void;
 }
 ```
 
 - `ComponentDefinition` — React-компонент (исходники `.tsx`), который знает только как рендерить; `metadata/schema` — отдельные дескрипторы, в рантайм не зашиты.
-- `PageRenderer` по `instanceId → definitionId` забирает компонент из реестра и передаёт `props` + резолвенные binding-значения.
+- `PageRenderer` по `instanceId → definitionId` забирает компонент из реестра и передаёт `props` + резолвенные binding-значения; `componentMapFromRegistry()` строит карту компонентов из реестра.
 - неизвестный `definitionId` → `ComponentNotFoundError` (рендер placeholder, не падение всего дерева).
+- **Mount** (`src/react/mount.tsx`): `mount(siteId, environment, opts)` — `boot()` + `RuntimeProvider` + `PageRenderer` поверх карты реестра; `baseUrl` по умолчанию `location.origin`. Shell (`dist/index.html`, пакет `internal/infra/build/shell`): import-map (shared → `/build/_shared/…`, dep-бандлы → `./_deps/…`), `<link>` для dep-стилей, `#root` + `entry.js`.
+- **Refresh**: `TreeController.refresh()` пересчитывает bindings против актуального контекста без смены декларации; mount подписывается на срезы `route/content/operationResults/forms` — синк данных (poll/WS) на живой сборке пересобирает дерево без полной пересборки страницы.
 
 ---
 

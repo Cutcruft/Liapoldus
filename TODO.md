@@ -80,9 +80,9 @@
 
 ## Этап 5 — Boot и рендеринг на живой сборке
 
-- [ ] index.html shell + boot(siteId, environment) против реального Build-контракта.
-- [ ] ComponentRegistry из бандла сайта; binding (props ← контент/route/query/операция).
-- [ ] Пересборка структуры vs синк данных (poll/WS) на живой сборке; кэш-политики.
+- [x] index.html shell + boot/mount(siteId, environment) против реального Build-контракта. *(shell в `internal/infra/build/shell` — import-map + dep `<link>` + `#root` + `entry.js`, пишется в Build и dev-rebuilder; `mount()` — boot + RuntimeProvider + PageRenderer, baseUrl = origin; entry регистрирует определения через `ComponentRegistry.registerDefinition`.)*
+- [x] ComponentRegistry из бандла сайта; binding (props ← контент/route/query/операция/form). *(резолв полный в tree.ts; builtin-компоненты Container/Text/Image/Button регистрируются при загрузке модуля.)*
+- [ ] Пересборка структуры vs синк данных (poll/WS) на живой сборке; кэш-политики. *(частично: `TreeController.refresh()` + подписка mount на route/content/operationResults/forms; осталось — E2E живой сборки на real-сервере и кэш-политики.)*
 - [ ] Постраничная раздача (loadable): build-time per-page чанки — materializer генерит entry на страницу, esbuild выдаёт `dist/pages/<pageId>.js` только с definition-ами этой страницы (корневой бандл = shell+boot+роуты+import-map); contract.initialTree знает стартовую страницу → её чанк тэгается в index.html/import-map (первый экран без round-trip); при навигации Router/PageRenderer догружает чанк `pageId` dynamic import-ом (placeholder в ожидании; общие определения пересекаются по чанкам, dedup по мере необходимости).
 
 ## Этап 6 — Редактор `admin/` (React)
