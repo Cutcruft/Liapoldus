@@ -83,6 +83,7 @@
 - [ ] index.html shell + boot(siteId, environment) против реального Build-контракта.
 - [ ] ComponentRegistry из бандла сайта; binding (props ← контент/route/query/операция).
 - [ ] Пересборка структуры vs синк данных (poll/WS) на живой сборке; кэш-политики.
+- [ ] Постраничная раздача (loadable): build-time per-page чанки — materializer генерит entry на страницу, esbuild выдаёт `dist/pages/<pageId>.js` только с definition-ами этой страницы (корневой бандл = shell+boot+роуты+import-map); contract.initialTree знает стартовую страницу → её чанк тэгается в index.html/import-map (первый экран без round-trip); при навигации Router/PageRenderer догружает чанк `pageId` dynamic import-ом (placeholder в ожидании; общие определения пересекаются по чанкам, dedup по мере необходимости).
 
 ## Этап 6 — Редактор `admin/` (React)
 
