@@ -209,36 +209,30 @@ type ContractHandler struct{ app *App }
 
 func NewContractHandler(a *App) *ContractHandler { return &ContractHandler{app: a} }
 
+// Contract serves the snapshot-pinned boot contract (Этап 4): ?siteId (or the
+// request Host), ?environment and optional ?versionId (a snapshot id). Without
+// versionId the newest ready build of the environment is the boot release.
 func (h *ContractHandler) Contract(w http.ResponseWriter, r *http.Request) {
 	site, err := h.app.resolveSite(r)
 	if err != nil {
 		httpapi.RespondError(w, err)
 		return
 	}
-	routes, err := h.app.Routes.List(r.Context(), site.ID)
+	if h.app.Runtime == nil {
+		httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": "runtime contract is not configured"})
+		return
+	}
+	environment := r.URL.Query().Get("environment")
+	contract, err := h.app.Runtime.BootContract(r.Context(), site, environment, r.URL.Query().Get("versionId"))
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
 		httpapi.RespondError(w, err)
 		return
 	}
-	forms, err := h.app.Forms.List(r.Context(), site.ID)
-	if err != nil {
-		httpapi.RespondError(w, err)
-		return
-	}
-	formDescriptors := make([]map[string]any, 0, len(forms))
-	for _, form := range forms {
-		formDescriptors = append(formDescriptors, form.Definition)
-	}
-	httpapi.RespondJSON(w, http.StatusOK, map[string]any{
-		"siteId":        site.ID,
-		"defaultLocale": site.DefaultLocale,
-		"routes":        routes,
-		"forms":         formDescriptors,
-		"operations":    []any{},
-		"endpoints":     []any{},
-		"environments":  []any{},
-		"theme":         nil,
-	})
+	httpapi.RespondJSON(w, http.StatusOK, contract)
 }
 
 func (h *ContractHandler) Routes(w http.ResponseWriter, r *http.Request) {

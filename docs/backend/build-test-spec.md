@@ -136,6 +136,19 @@ vitest (`tests/e2e/build.test.ts`, шаблон `api.test.ts` с Bearer-auth): �
 
 Тесты: unit `shared` (все декларированные артефакты вшиты, URL/import-map, `Install` идемпотентен и не перезаписывает), unit materializer (import-map попадает в `manifest.json` только при наличии резолвера), integration `httptest` + FileServer (4 бандла отдаются 200 `text/javascript`, неизвестные версии — 404), e2e §8 (клиентский сервер отдаёт 3 shared-бандла).
 
+## §9 Boot-контракт (Этап 4, часть 1) — выдача снапшота + автономный boot-скрипт
+
+Реализовано: `GET /runtime/contract` переписан на `internal/application/runtime.Service` — дескриптор-контракт, который `ui-runtime` парсит „как есть" через `parseDescriptors`/`extractTree` (JSON-формы совпадают с `ContractDescriptor`/`RouteDescriptor`/`TreeDeclaration` в `ui-runtime/src/types`).
+
+- Привязка к снапшоту (§3 спеки): `versionId` → точный снапшот (с проверкой siteID); без версии → последний `ready`-билд окружения (`build.Service.Published`) → его снапшот; `contract.version` = snapshot.ID. `environment` по умолчанию `production`, валидные только `development`/`production` (иначе 400); нет published-билда → 404.
+- Дерево: boot-страница = самая приоритетная `renderPage`-страница снапшота (priority desc, затем created) через роут, иначе первая страница снапшота; нет страниц → `tree` отсутствует. `tree.versionId` = ID версии страницы.
+- Wire-дерево (`TreeNode`): `props`/`bindings`/`children` **всегда** присутствуют. Это отдельное решение: `domain.ComponentNode` использует `omitempty`, а `resolveInstance()` в ui-runtime итерирует `bindings`/`children` напрямую (`for…of`) — без нормализации boot падал бы на листьях.
+- Роуты мапятся в `RouteDescriptor` только с якорями `^…$` и компилируемым regex (иначе `parseDescriptors` бросил бы DescriptorValidationError и boot не стартовал). `providers/operations/endpoints` = `[]` (builtin из `registerBuiltin` регистрируется автоматически), `themes` = `[]` (токены — Этап 4, часть 2), `enabledChannels {ws,sse}`, `capabilities {formSubmissions, dev: env==development}`.
+- Автономный boot-скрипт: `tests/integration/fixtures/ui-runtime-core.mjs` — self-contained ESM-бандл `ui-runtime/src/core/boot.ts` (без react: core не импортирует react) от `scripts/build-shared/build.mjs`; `fixtures/boot.mjs` — node-пробник `boot(siteId, env, {baseUrl, env:{fetch, storage}})` → JSON (ready, locale, hasContentOp, homePageId, tree root). Integration-тест гоняет `node boot.mjs` против httptest client-сервера (skip при отсутствии node).
+- Решённое решение: производственный boot не открывает dev-WS (`dev: false`), поэтому пробник работает headless без `WebSocket`/`window`.
+
+Тесты (integration `try runtime_contract_test.go`): pinned boot release (мета/роуты/дерево/capabilities), versionId override + чужой snapshot → 404, ошибки (bad env 400, unpublished 404), автономный boot-скрипт (реальный `boot()`: ready/hasContentOp/homePageId/tree root).
+
 ## Решённые решения (подтверждены пользователем)
 
 - **Источник исходников**: определения берутся из **реестра** (`Source`+`CurrentSHA`); git checkout на этапе сборки не вызывается (реестр зеркалит хэд).

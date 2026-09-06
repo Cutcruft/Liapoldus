@@ -12,6 +12,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	routeapp "github.com/liapoldus/liapoldus/backend/internal/application/route"
+	appruntime "github.com/liapoldus/liapoldus/backend/internal/application/runtime"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
@@ -22,6 +23,7 @@ type App struct {
 	Assets   *asset.Service
 	Routes   *routeapp.Service
 	Forms    *form.Service
+	Runtime  *appruntime.Service
 	Logger   *slog.Logger
 
 	// DefaultSlug is the fallback site when the request Host does not match

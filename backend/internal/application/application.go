@@ -9,6 +9,7 @@ import (
 	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
+	"github.com/liapoldus/liapoldus/backend/internal/application/runtime"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
@@ -33,6 +34,7 @@ type Services struct {
 	Forms      *form.Service
 	Components *component.Service
 	Builds     *buildapp.Service
+	Runtime    *runtime.Service
 }
 
 // New builds every aggregate service from the given storage, blob store and
@@ -52,6 +54,10 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		builder.New(),
 		artifacts,
 	)
+	routes := route.NewService(storage, route.Settings{
+		DefaultStatus: cfg.RedirectDefaultStatus,
+		Allowed:       redirectAllowed,
+	})
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
@@ -62,6 +68,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Components: comps,
 		Snapshots:  snapshot.NewService(storage, storage, storage),
 		Builds:     builds,
+		Runtime:    runtime.NewService(storage, storage, storage, routes, builds),
 		Contents:   content.NewService(storage),
 		Assets: asset.NewService(storage, blobs, storage, asset.Settings{
 			MasterVariant: cfg.MasterVariantName,
@@ -69,10 +76,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 			FallbackMime:  cfg.AssetFallbackMime,
 			URLTemplate:   cfg.AssetFileURLTemplate,
 		}),
-		Routes: route.NewService(storage, route.Settings{
-			DefaultStatus: cfg.RedirectDefaultStatus,
-			Allowed:       redirectAllowed,
-		}),
-		Forms: form.NewService(storage, storage, form.Settings{EmailPattern: cfg.EmailPattern}),
+		Routes: routes,
+		Forms:  form.NewService(storage, storage, form.Settings{EmailPattern: cfg.EmailPattern}),
 	}
 }

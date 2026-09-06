@@ -100,6 +100,28 @@ export { Fragment, jsx, jsxs };
     external: ['react', 'react-dom'],
   }, '@liapoldus/ui-runtime')
 
+  // Boot-core fixture: a self-contained ESM module of ui-runtime's core boot
+  // (no react — the core never imports it) so backend integration tests can
+  // drive a real boot() against a live contract in Node. Registry and boot
+  // stay autonomous; the fixture is committed and only regenerated on purpose.
+  const fixtureOut = resolve(backendRoot, 'tests/integration/fixtures/ui-runtime-core.mjs')
+  await mkdir(dirname(fixtureOut), { recursive: true })
+  const fixture = await esbuild.build({
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    target: 'node18',
+    minify: false,
+    logLevel: 'silent',
+    entryPoints: [resolve(backendRoot, '../ui-runtime/src/core/boot.ts')],
+    outfile: fixtureOut,
+  })
+  if (fixture.errors.length > 0) {
+    for (const err of fixture.errors) console.error(err.text)
+    throw new Error(`boot-core fixture failed`)
+  }
+  console.log('ui-runtime-core fixture            bytes')
+
   // Static smoke checks: each output must parse as ESM and carry its expected
   // public surface.
   for (const [name, file, markers] of [

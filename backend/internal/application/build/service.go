@@ -260,3 +260,30 @@ func (s *Service) ListBySite(ctx context.Context, siteID string) ([]domain.Build
 	}
 	return s.builds.ListBuildsBySite(ctx, siteID)
 }
+
+// Published returns the newest ready build of a site/environment — the boot
+// release the runtime binds to when no versionId is given. ErrNotFound when
+// nothing has been published for the environment yet.
+func (s *Service) Published(ctx context.Context, siteID, environment string) (domain.Build, error) {
+	if !validEnvironments()[environment] {
+		return domain.Build{}, fmt.Errorf("%w: environment must be one of development, production", domain.ErrInvalidRequest)
+	}
+	all, err := s.builds.ListBuildsBySite(ctx, siteID)
+	if err != nil {
+		return domain.Build{}, err
+	}
+	var best domain.Build
+	found := false
+	for _, b := range all {
+		if b.Environment != environment || b.Status != domain.BuildStatusReady {
+			continue
+		}
+		if !found || b.CreatedAt.After(best.CreatedAt) {
+			best, found = b, true
+		}
+	}
+	if !found {
+		return domain.Build{}, fmt.Errorf("%w: no published build for site %s environment %s", domain.ErrNotFound, siteID, environment)
+	}
+	return best, nil
+}

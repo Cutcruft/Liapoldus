@@ -102,6 +102,7 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 		Assets:                  services.Assets,
 		Routes:                  services.Routes,
 		Forms:                   services.Forms,
+		Runtime:                 services.Runtime,
 		Logger:                  logger,
 		DefaultSlug:             cfg.ClientDefaultSlug,
 		DefaultRedirectStatus:   cfg.RedirectDefaultStatus,
