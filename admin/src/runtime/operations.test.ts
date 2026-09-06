@@ -216,6 +216,59 @@ describe('runOperation', () => {
   });
 });
 
+describe('runOperation: формы', () => {
+  it('getForm: GET → name в detail', async () => {
+    const api = fixtureApi(async (url) => {
+      expect(url).toBe('/api/sites/s1/forms/form.contact');
+      return json(200, { id: 'form.contact', siteId: 's1', name: 'Contact', definition: {} });
+    });
+    const res = await runOperation(api, 'getForm', { siteId: 's1', formId: 'form.contact' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('Contact');
+    expect(res.data).toMatchObject({ id: 'form.contact' });
+  });
+
+  it('updateForm: PUT → тело {name, definition} (patch)', async () => {
+    const definition = { id: 'form.contact', fields: [], submit: { endpoint: 'form.contact' } };
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/forms/form.contact');
+      expect(init.method).toBe('PUT');
+      expect(JSON.parse(init.body as string)).toEqual({ name: 'Contact v2', definition });
+      return json(200, { id: 'form.contact', siteId: 's1', name: 'Contact v2', definition });
+    });
+    const res = await runOperation(
+      api,
+      'updateForm',
+      { siteId: 's1', formId: 'form.contact', patch: { name: 'Contact v2', definition } },
+      t,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+  });
+
+  it('deleteForm: DELETE → 204', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/forms/form.contact');
+      expect(init.method).toBe('DELETE');
+      return noBody(204);
+    });
+    const res = await runOperation(api, 'deleteForm', { siteId: 's1', formId: 'form.contact' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+  });
+
+  it('listSubmissions: GET → count в detail', async () => {
+    const api = fixtureApi(async (url) => {
+      expect(url).toBe('/api/sites/s1/forms/form.contact/submissions');
+      return json(200, [{ id: 'subm_1', formId: 'form.contact', siteId: 's1', payload: {}, createdAt: '2026-01-01' }]);
+    });
+    const res = await runOperation(api, 'listSubmissions', { siteId: 's1', formId: 'form.contact' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('1 шт.');
+    expect(res.data).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'subm_1' })]));
+  });
+});
+
 describe('OPERS_PATH (pathWithQuery через executor)', () => {
   it('подставляет siteId и убирает его из query', async () => {
     const api = fixtureApi(async (url) => {

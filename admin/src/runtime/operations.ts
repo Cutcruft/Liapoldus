@@ -31,6 +31,10 @@ export type OperationKind =
   | 'deleteRoute'
   | 'listForms'
   | 'createForm'
+  | 'getForm'
+  | 'updateForm'
+  | 'deleteForm'
+  | 'listSubmissions'
   | 'createSnapshot'
   | 'listSnapshots'
   | 'deleteSnapshot'
@@ -307,6 +311,42 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     route: (args) => `/api/sites/{siteId}/forms`,
     body: (args) => ({ name: args.name, definition: args.definition }),
     detail: () => 'OK',
+  },
+
+  getForm: {
+    kind: 'getForm',
+    labelKey: 'op.getForm',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/forms/{formId}`,
+    detail: (b, t) => {
+      const name = typeof b === 'object' && b !== null && 'name' in b ? String((b as { name: unknown }).name) : '';
+      return name || t('result.count', { n: 0 });
+    },
+  },
+
+  updateForm: {
+    kind: 'updateForm',
+    labelKey: 'op.updateForm',
+    method: 'PUT',
+    route: (args) => `/api/sites/{siteId}/forms/{formId}`,
+    body: (args) => args.patch ?? {},
+    detail: () => 'OK',
+  },
+
+  deleteForm: {
+    kind: 'deleteForm',
+    labelKey: 'op.deleteForm',
+    method: 'DELETE',
+    route: (args) => `/api/sites/{siteId}/forms/{formId}`,
+    detail: () => 'OK',
+  },
+
+  listSubmissions: {
+    kind: 'listSubmissions',
+    labelKey: 'op.listSubmissions',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/forms/{formId}/submissions`,
+    detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
   },
 
   createSnapshot: {

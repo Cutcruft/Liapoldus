@@ -8,6 +8,8 @@ import { SiteRoutesPage } from './pages/SiteRoutesPage';
 import { SiteContentsPage } from './pages/SiteContentsPage';
 import { ContentEditorPage } from './pages/ContentEditorPage';
 import { SiteAssetsPage } from './pages/SiteAssetsPage';
+import { SiteFormsPage } from './pages/SiteFormsPage';
+import { FormEditorPage } from './pages/FormEditorPage';
 import { EditorPage } from './editor/EditorPage';
 
 export const appRoutes: RouteObject[] = [
@@ -24,7 +26,8 @@ export const appRoutes: RouteObject[] = [
       { path: 'sites/:siteId/contents/:contentId', element: <ContentEditorPage /> },
       { path: 'sites/:siteId/assets', element: <SiteAssetsPage /> },
       { path: 'sites/:siteId/routes', element: <SiteRoutesPage /> },
-      { path: 'sites/:siteId/forms', element: <Placeholder titleKey="nav.forms" scope="—" /> },
+      { path: 'sites/:siteId/forms', element: <SiteFormsPage /> },
+      { path: 'sites/:siteId/forms/:formId', element: <FormEditorPage /> },
       { path: 'sites/:siteId/snapshots', element: <Placeholder titleKey="nav.snapshots" scope="—" /> },
       { path: 'settings', element: <Placeholder titleKey="nav.settings" /> },
     ],

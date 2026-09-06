@@ -248,7 +248,7 @@ LEFT  Дерево                 CENTER Canvas-превью          RIGHT И�
 
 - [x] Контент: коллекции, items, translations overlay. *(M2-слайс 1: ops createContent/deleteContent/deleteTranslation + listContents/getContent/updateContent/putTranslation; `JsonFieldsEditor` — строки «ключ/тип/значение» (string/number/bool/json textarea) с инлайн-валидацией (NaN/битый JSON держат предыдущее значение); SiteContentsPage — список с фильтр-чипами коллекций, форма создания `{collectionId, id?, fields}`, удаление через ConfirmButton, роут `/sites/:siteId/contents`; ContentEditorPage — base = defaultLocale (hint из getSite), переводы overlay: табы локлей + «Добавить локаль», PUT updateContent/putTranslation, DELETE deleteTranslation, роут `/sites/:siteId/contents/:contentId`; навигация SiteHomePage + роуты AppRoutes. Тесты: ops 4, JsonFieldsEditor 6, SiteContentsPage 4, ContentEditorPage 4 — админка 103/103, корень 355.)*
 - [x] Ассеты: upload/list/preview/picker. *(M2-слайс 2: ops getAsset/deleteAsset (uploadAsset уже был: multipart FormData через api.request — `delete headers['Content-Type']`, тело без JSON.stringify); `assets/` — AssetThumb (img по `/api/assets/{id}/file` для image/*, бейдж расширения иначе), assetUrl/formatBytes/extensionOf; SiteAssetsPage — список (превью, имя, mime, размер), форма upload (file + опц. name), открытие файла, удаление через ConfirmButton, роут `/sites/:siteId/assets` (был Placeholder); AssetPicker — модалка: поиск, upload-inline, выбор id, клик по карточке закрывает; AssetFieldControl — trigger «Выбрать ассет» + миниатюра выбранного (getAsset) + сброс; формат `asset` в JSONSchemaProperty (Image.assetId), SchemaForm рендерит asset-поле через renderAssetField; Inspector принимает siteId; design-превью Image: src резолвится в `/api/assets/{id}/file`. Тесты: ops 3, SiteAssetsPage 4, AssetPicker 3, EditorPage +1 — админка 114/114, корень 366.)*
-- [ ] Формы: definition + submissions.
+- [x] Формы: definition + submissions. *(M2-слайс 3: ops getForm/updateForm/deleteForm/listSubmissions (createForm/listForms уже были); `forms/form-utils` — slugifyFormId (`form.<slug>` из названия; латиница+цифры, пробелы→доты), createDefaultDefinition (`{id, fields:[], submit:{endpoint}}` — как пример api-admin §Формы), validateDefinition — JSON + схема §10 (id непустая, fields + type ∈ {text,email,password,number,select,checkbox,textarea,custom}, submit.target или .endpoint; бэкенд хранит as-is, поэтому валидация лёгкая); SiteFormsPage — список (имя, id, число полей), создание name→id, удаление через ConfirmButton, «Открыть» → редактор, роут `/sites/:siteId/forms` (был Placeholder); FormEditorPage — `/sites/:siteId/forms/:formId`: имя + монo-textarea definition с валидацией при сохранении (PUT updateForm), табы «Определение | Сабмиты» (inline-кнопки как у локлей), сабмиты через listSubmissions (id/дата/payload в `<details>`-JSON), DELETE deleteForm → возврат к списку. Тесты: ops 4, form-utils 13, SiteFormsPage 4, FormEditorPage 5 — админка 141/141, корень 393.)*
 - [ ] Роуты: CRUD + валидация matcher/action.
 - [ ] Tiptap: `@tiptap/*`, slash-меню, asset-Image, HTML round-trip.
 - [ ] Тесты соответствующих менеджеров и Tiptap-утилит.
@@ -264,6 +264,16 @@ LEFT  Дерево                 CENTER Canvas-превью          RIGHT И�
 ### Миграция на shadcn/ui (U-слайсы)
 
 Поэтапная замена инлайн-Tailwind-контролов на shadcn/ui — слайсами, попутно с фичами M2–M3 (без big-bang): U0 setup+тема, U1 примитивы+AlertDialog, U2 таблицы/диалоги/табы, U3 формы и Radix-select. Полный план, миграционная карта и тест-влияние — `docs/shadcn-migration.md`.
+
+### Свои React-компоненты (кодовый редактор) — проект
+
+Отдельный этап после M2–M3 (согласован с пользователем при планировании M2-слайса 3 «Формы»). Назначение — визуальное авторство переиспользуемых компонентов сайта с реальными TS-типами и умным вводом.
+
+Согласованные решения:
+- **Хранение**: новая сущность «Компоненты» у сайта (таблица `components`: id, name, source `.tsx`, compiled dist) + **инстанс в дереве страницы** через definitionId (registry-модель). Реестр builtin + собственные из раздела «Компоненты».
+- **`/`-меню (slash-commands)**: каталог «инфра-сниппетов» = **связки** (bindings контента/роута/query/формы) + **стандартный набор ui-runtime** (использовать ui-runtime как библиотеку подсказок: builtin-компоненты, операции, токены, i18n). Вставка с подсветкой плейсхолдеров и Tab-переходами.
+- **Движок редактирования**: открытый вопрос на этап реализации. Согласованно с M2-слайсом 5 — rich-text/структурное ядро строим на базе Tiptap (`@tiptap/*`, slash-меню, узлы-плейсхолдеры); кодовую подложку (полная TS-диагностика: Monaco vs CodeMirror 6) фиксируем при старте этапа.
+- M2-слайс 3 «Формы» при этом выполнен в минимальном варианте (definition = JSON со схемой-валидацией, не код).
 
 ### M4 — Полировка
 
