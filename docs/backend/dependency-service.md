@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; allowlist scopes (фаза 2, слайс 6) — реализованы; кэш-лимиты/эвикция (фаза 2, слайсы 7–7b) — реализованы; осталось: фаза 3 (cmd/dependency-build)**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; allowlist scopes (фаза 2, слайс 6) — реализованы; кэш-лимиты/эвикция (фаза 2, слайсы 7–7b) — реализованы; фаза 3 слайс 8a (cmd/dependency-build generate/verify, react-семья) — реализован; осталось: фаза 3 слайсы 8b–8d (ui-runtime, ликвидация shell-обёрток, SBOM)**.
 
 ## 1. Цель и принципы
 
@@ -227,6 +227,12 @@ storage (новые tables `005_dependencies.sql`):
   тот же fetcher/resolver/cache, резолвит фиксированную таблицу
   `react@18.3.1` (+ её транзитивы), `react-dom`, `react/jsx-runtime`, `@liapoldus/ui-runtime`
   (из `ui-runtime/src`, вход `index.ts`), бандлит → `internal/infra/build/shared/embed/<key>/<ver>.js`.
+- Слайс 8a (`generate`/`verify`, react-семья): автономный BFS-резолвер + fetch/unpack тарболлов в
+  `node_modules` + esbuild-как-Go-библиотека. `react` бандлится самодостаточно, `react-dom`/`jsx-runtime`
+  держат `react` external (в рантайме берут из import-map). Подтверждено e2e против реального
+  `registry.npmjs.org`: сгенерённые бандлы **побайтово идентичны** закоммиченным (тот же esbuild-минификатор).
+  `verify` — CI-гейт: пересобирает и сверяет с `shared.go` Artifacts; артефакты вне области генератора
+  (ui-runtime до слайса 8b) пропускаются.
 - Результат всё так же коммитится в репо (реального node не нужно). `shared.go` таблица Artifacts
   остаётся, сверка — unit-тестом (задекларированное = сгенерённое).
 - Раскладка shared-артефактов в `build/_shared/...` при `Install` — без изменений.
@@ -308,6 +314,10 @@ effective-лимита, только `.tgz`-блобы, метаданные с�
 
 **Фаза 3:** `cmd/dependency-build` (замена `scripts/build-shared`, npm больше нигде не упоминается),
 ликвидация shell-обёрток, SBOM/audit-экспорт.
+- ✅ Слайс 8a — `generate`/`verify`, react-семья (react/react-dom/jsx-runtime) из registry, zero-node.
+- [ ] Слайс 8b — `@liapoldus/ui-runtime` через `builder.Options` (Go esbuild).
+- [ ] Слайс 8c — ликвидация shell-обёрток CI.
+- [ ] Слайс 8d — SBOM/audit-экспорт.
 
 ## 12. Открытые ограничения (фиксируем сейчас, решим в фазах)
 

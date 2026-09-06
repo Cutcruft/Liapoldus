@@ -187,7 +187,7 @@ func (c *Client) fetchPackument(ctx context.Context, name string) (*packument, e
 				lastErr = fmt.Errorf("npm registry %s: status %d", name, resp.StatusCode)
 				resp.Body.Close()
 			case resp.StatusCode == http.StatusOK:
-				body, readErr := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+				body, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 				resp.Body.Close()
 				if readErr != nil {
 					return nil, fmt.Errorf("npm registry %s: read packument: %w", name, readErr)

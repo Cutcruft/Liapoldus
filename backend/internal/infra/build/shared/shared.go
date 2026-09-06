@@ -9,7 +9,7 @@ import (
 )
 
 //go:embed embed
-var files embed.FS
+var Files embed.FS
 
 // Artifact pins one shared runtime library to the version bundled into the
 // server binary. Key is the bare import specifier (import-map key); the ESM
@@ -36,7 +36,7 @@ func embedRel(a Artifact) string {
 }
 
 func artifactData(a Artifact) ([]byte, error) {
-	return fs.ReadFile(files, embedRel(a))
+	return fs.ReadFile(Files, embedRel(a))
 }
 
 // PublicRel is the artifact-root-relative path served to browsers
