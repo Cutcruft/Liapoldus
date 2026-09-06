@@ -34,6 +34,7 @@ export async function setup(): Promise<void> {
       LIAPOLDUS_CLIENT_ADDR: client.host,
       LIAPOLDUS_ASSET_DIR: './data/e2e-assets',
       LIAPOLDUS_GIT_DIR: './data/e2e-git',
+      LIAPOLDUS_BUILD_DIR: './data/e2e-build',
       LIAPOLDUS_ADMIN_TOKEN: 'e2e-admin-token',
       LIAPOLDUS_CLIENT_DEFAULT_SLUG: '',
       LIAPOLDUS_DEFAULT_LOCALE: 'ru',

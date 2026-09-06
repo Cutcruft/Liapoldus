@@ -85,6 +85,7 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 		Forms:      services.Forms,
 		Snapshots:  services.Snapshots,
 		Components: services.Components,
+		Builds:     services.Builds,
 		Logger:     logger,
 		AdminToken: cfg.AdminToken,
 	})
@@ -98,6 +99,7 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 		DefaultSlug:             cfg.ClientDefaultSlug,
 		DefaultRedirectStatus:   cfg.RedirectDefaultStatus,
 		AssetCacheMaxAgeSeconds: cfg.AssetCacheMaxAgeSeconds,
+		BuildDir:                cfg.BuildDir,
 	})
 
 	adminServer := &http.Server{Addr: cfg.AdminAddr, Handler: adminHandler, ReadHeaderTimeout: cfg.ReadHeaderTimeout}

@@ -2,6 +2,7 @@ package application
 
 import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
@@ -12,6 +13,9 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/artifactstore"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/builder"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/materializer"
 	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 )
 
@@ -27,6 +31,7 @@ type Services struct {
 	Routes     *route.Service
 	Forms      *form.Service
 	Components *component.Service
+	Builds     *buildapp.Service
 }
 
 // New builds every aggregate service from the given storage, blob store and
@@ -39,6 +44,13 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 	}
 	gitRepo := gitrepo.NewRepo(cfg.LocalGitDir)
 	comps := component.NewService(storage, gitapp.NewService(gitRepo, storage))
+	artifacts := artifactstore.New(cfg.BuildDir)
+	builds := buildapp.NewService(
+		storage, storage, storage,
+		materializer.New(storage, storage, storage),
+		builder.New(),
+		artifacts,
+	)
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
@@ -48,6 +60,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		}),
 		Components: comps,
 		Snapshots:  snapshot.NewService(storage, storage, storage),
+		Builds:     builds,
 		Contents:   content.NewService(storage),
 		Assets: asset.NewService(storage, blobs, storage, asset.Settings{
 			MasterVariant: cfg.MasterVariantName,

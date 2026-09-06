@@ -6,6 +6,7 @@ import (
 
 	httpapi "github.com/liapoldus/liapoldus/backend/internal/api/http"
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
+	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
@@ -24,6 +25,7 @@ type App struct {
 	Forms      *form.Service
 	Snapshots  *snapshot.Service
 	Components *component.Service
+	Builds     *buildapp.Service
 	Logger     *slog.Logger
 	AdminToken string
 }
@@ -39,6 +41,7 @@ func NewRouter(app App) http.Handler {
 	formHandler := NewFormHandler(app.Forms)
 	snapshotHandler := NewSnapshotHandler(app.Snapshots)
 	componentHandler := NewComponentHandler(app.Components)
+	buildHandler := NewBuildHandler(app.Builds)
 
 	// Health stays public (pre-auth).
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +118,9 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/versions", componentHandler.Versions)
 	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/versions/{sha}", componentHandler.CheckoutVersion)
 	protected.HandleFunc("POST /api/sites/{siteID}/components/{componentID}/rollback", componentHandler.Rollback)
+
+	protected.HandleFunc("POST /api/sites/{siteID}/builds", buildHandler.Create)
+	protected.HandleFunc("GET /api/builds/{buildID}", buildHandler.Get)
 
 	mux.Handle("/", httpapi.BearerAuth(app.AdminToken, httpapi.WithCORS(protected)))
 

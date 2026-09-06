@@ -55,6 +55,20 @@ func (mr *MockStorageMockRecorder) CreateAsset(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAsset", reflect.TypeOf((*MockStorage)(nil).CreateAsset), arg0, arg1)
 }
 
+// CreateBuild mocks base method.
+func (m *MockStorage) CreateBuild(arg0 context.Context, arg1 domain.Build) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateBuild", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateBuild indicates an expected call of CreateBuild.
+func (mr *MockStorageMockRecorder) CreateBuild(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBuild", reflect.TypeOf((*MockStorage)(nil).CreateBuild), arg0, arg1)
+}
+
 // CreateContent mocks base method.
 func (m *MockStorage) CreateContent(arg0 context.Context, arg1 domain.Content) error {
 	m.ctrl.T.Helper()
@@ -151,6 +165,20 @@ func (m *MockStorage) CreateSubmission(arg0 context.Context, arg1 domain.Submiss
 func (mr *MockStorageMockRecorder) CreateSubmission(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSubmission", reflect.TypeOf((*MockStorage)(nil).CreateSubmission), arg0, arg1)
+}
+
+// Delete mocks base method.
+func (m *MockStorage) Delete(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockStorageMockRecorder) Delete(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockStorage)(nil).Delete), arg0, arg1, arg2)
 }
 
 // DeleteAsset mocks base method.
@@ -251,6 +279,21 @@ func (mr *MockStorageMockRecorder) DeleteSnapshot(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSnapshot", reflect.TypeOf((*MockStorage)(nil).DeleteSnapshot), arg0, arg1)
 }
 
+// Get mocks base method.
+func (m *MockStorage) Get(arg0 context.Context, arg1, arg2 string) (*domain.ComponentDefinition, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.ComponentDefinition)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockStorageMockRecorder) Get(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockStorage)(nil).Get), arg0, arg1, arg2)
+}
+
 // GetAsset mocks base method.
 func (m *MockStorage) GetAsset(arg0 context.Context, arg1 string) (domain.Asset, error) {
 	m.ctrl.T.Helper()
@@ -264,6 +307,36 @@ func (m *MockStorage) GetAsset(arg0 context.Context, arg1 string) (domain.Asset,
 func (mr *MockStorageMockRecorder) GetAsset(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAsset", reflect.TypeOf((*MockStorage)(nil).GetAsset), arg0, arg1)
+}
+
+// GetBuild mocks base method.
+func (m *MockStorage) GetBuild(arg0 context.Context, arg1 string) (domain.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBuild", arg0, arg1)
+	ret0, _ := ret[0].(domain.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBuild indicates an expected call of GetBuild.
+func (mr *MockStorageMockRecorder) GetBuild(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuild", reflect.TypeOf((*MockStorage)(nil).GetBuild), arg0, arg1)
+}
+
+// GetBuildBySnapshot mocks base method.
+func (m *MockStorage) GetBuildBySnapshot(arg0 context.Context, arg1, arg2, arg3 string) (domain.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBuildBySnapshot", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(domain.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBuildBySnapshot indicates an expected call of GetBuildBySnapshot.
+func (mr *MockStorageMockRecorder) GetBuildBySnapshot(arg0, arg1, arg2, arg3 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuildBySnapshot", reflect.TypeOf((*MockStorage)(nil).GetBuildBySnapshot), arg0, arg1, arg2, arg3)
 }
 
 // GetContent mocks base method.
@@ -401,6 +474,21 @@ func (mr *MockStorageMockRecorder) GetSnapshot(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSnapshot", reflect.TypeOf((*MockStorage)(nil).GetSnapshot), arg0, arg1)
 }
 
+// List mocks base method.
+func (m *MockStorage) List(arg0 context.Context, arg1 string) ([]domain.ComponentDefinition, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", arg0, arg1)
+	ret0, _ := ret[0].([]domain.ComponentDefinition)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockStorageMockRecorder) List(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockStorage)(nil).List), arg0, arg1)
+}
+
 // ListAssetsBySite mocks base method.
 func (m *MockStorage) ListAssetsBySite(arg0 context.Context, arg1 string) ([]domain.Asset, error) {
 	m.ctrl.T.Helper()
@@ -414,6 +502,21 @@ func (m *MockStorage) ListAssetsBySite(arg0 context.Context, arg1 string) ([]dom
 func (mr *MockStorageMockRecorder) ListAssetsBySite(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAssetsBySite", reflect.TypeOf((*MockStorage)(nil).ListAssetsBySite), arg0, arg1)
+}
+
+// ListBuildsBySite mocks base method.
+func (m *MockStorage) ListBuildsBySite(arg0 context.Context, arg1 string) ([]domain.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListBuildsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListBuildsBySite indicates an expected call of ListBuildsBySite.
+func (mr *MockStorageMockRecorder) ListBuildsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBuildsBySite", reflect.TypeOf((*MockStorage)(nil).ListBuildsBySite), arg0, arg1)
 }
 
 // ListContentsBySite mocks base method.
@@ -534,6 +637,34 @@ func (m *MockStorage) ListSubmissionsByForm(arg0 context.Context, arg1, arg2 str
 func (mr *MockStorageMockRecorder) ListSubmissionsByForm(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSubmissionsByForm", reflect.TypeOf((*MockStorage)(nil).ListSubmissionsByForm), arg0, arg1, arg2)
+}
+
+// Save mocks base method.
+func (m *MockStorage) Save(arg0 context.Context, arg1 *domain.ComponentDefinition) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Save", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Save indicates an expected call of Save.
+func (mr *MockStorageMockRecorder) Save(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockStorage)(nil).Save), arg0, arg1)
+}
+
+// UpdateBuild mocks base method.
+func (m *MockStorage) UpdateBuild(arg0 context.Context, arg1 domain.Build) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateBuild", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateBuild indicates an expected call of UpdateBuild.
+func (mr *MockStorageMockRecorder) UpdateBuild(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBuild", reflect.TypeOf((*MockStorage)(nil).UpdateBuild), arg0, arg1)
 }
 
 // UpdateContent mocks base method.
@@ -1337,4 +1468,183 @@ func (m *MockFormRepository) UpdateForm(arg0 context.Context, arg1 domain.Form) 
 func (mr *MockFormRepositoryMockRecorder) UpdateForm(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateForm", reflect.TypeOf((*MockFormRepository)(nil).UpdateForm), arg0, arg1)
+}
+
+// MockComponentDefinitionRepository is a mock of ComponentDefinitionRepository interface.
+type MockComponentDefinitionRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockComponentDefinitionRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockComponentDefinitionRepositoryMockRecorder is the mock recorder for MockComponentDefinitionRepository.
+type MockComponentDefinitionRepositoryMockRecorder struct {
+	mock *MockComponentDefinitionRepository
+}
+
+// NewMockComponentDefinitionRepository creates a new mock instance.
+func NewMockComponentDefinitionRepository(ctrl *gomock.Controller) *MockComponentDefinitionRepository {
+	mock := &MockComponentDefinitionRepository{ctrl: ctrl}
+	mock.recorder = &MockComponentDefinitionRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockComponentDefinitionRepository) EXPECT() *MockComponentDefinitionRepositoryMockRecorder {
+	return m.recorder
+}
+
+// Delete mocks base method.
+func (m *MockComponentDefinitionRepository) Delete(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockComponentDefinitionRepositoryMockRecorder) Delete(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockComponentDefinitionRepository)(nil).Delete), arg0, arg1, arg2)
+}
+
+// Get mocks base method.
+func (m *MockComponentDefinitionRepository) Get(arg0 context.Context, arg1, arg2 string) (*domain.ComponentDefinition, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*domain.ComponentDefinition)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockComponentDefinitionRepositoryMockRecorder) Get(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockComponentDefinitionRepository)(nil).Get), arg0, arg1, arg2)
+}
+
+// List mocks base method.
+func (m *MockComponentDefinitionRepository) List(arg0 context.Context, arg1 string) ([]domain.ComponentDefinition, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", arg0, arg1)
+	ret0, _ := ret[0].([]domain.ComponentDefinition)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockComponentDefinitionRepositoryMockRecorder) List(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockComponentDefinitionRepository)(nil).List), arg0, arg1)
+}
+
+// Save mocks base method.
+func (m *MockComponentDefinitionRepository) Save(arg0 context.Context, arg1 *domain.ComponentDefinition) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Save", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Save indicates an expected call of Save.
+func (mr *MockComponentDefinitionRepositoryMockRecorder) Save(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockComponentDefinitionRepository)(nil).Save), arg0, arg1)
+}
+
+// MockBuildRepository is a mock of BuildRepository interface.
+type MockBuildRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockBuildRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockBuildRepositoryMockRecorder is the mock recorder for MockBuildRepository.
+type MockBuildRepositoryMockRecorder struct {
+	mock *MockBuildRepository
+}
+
+// NewMockBuildRepository creates a new mock instance.
+func NewMockBuildRepository(ctrl *gomock.Controller) *MockBuildRepository {
+	mock := &MockBuildRepository{ctrl: ctrl}
+	mock.recorder = &MockBuildRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBuildRepository) EXPECT() *MockBuildRepositoryMockRecorder {
+	return m.recorder
+}
+
+// CreateBuild mocks base method.
+func (m *MockBuildRepository) CreateBuild(arg0 context.Context, arg1 domain.Build) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateBuild", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateBuild indicates an expected call of CreateBuild.
+func (mr *MockBuildRepositoryMockRecorder) CreateBuild(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBuild", reflect.TypeOf((*MockBuildRepository)(nil).CreateBuild), arg0, arg1)
+}
+
+// GetBuild mocks base method.
+func (m *MockBuildRepository) GetBuild(arg0 context.Context, arg1 string) (domain.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBuild", arg0, arg1)
+	ret0, _ := ret[0].(domain.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBuild indicates an expected call of GetBuild.
+func (mr *MockBuildRepositoryMockRecorder) GetBuild(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuild", reflect.TypeOf((*MockBuildRepository)(nil).GetBuild), arg0, arg1)
+}
+
+// GetBuildBySnapshot mocks base method.
+func (m *MockBuildRepository) GetBuildBySnapshot(arg0 context.Context, arg1, arg2, arg3 string) (domain.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBuildBySnapshot", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(domain.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBuildBySnapshot indicates an expected call of GetBuildBySnapshot.
+func (mr *MockBuildRepositoryMockRecorder) GetBuildBySnapshot(arg0, arg1, arg2, arg3 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuildBySnapshot", reflect.TypeOf((*MockBuildRepository)(nil).GetBuildBySnapshot), arg0, arg1, arg2, arg3)
+}
+
+// ListBuildsBySite mocks base method.
+func (m *MockBuildRepository) ListBuildsBySite(arg0 context.Context, arg1 string) ([]domain.Build, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListBuildsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Build)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListBuildsBySite indicates an expected call of ListBuildsBySite.
+func (mr *MockBuildRepositoryMockRecorder) ListBuildsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBuildsBySite", reflect.TypeOf((*MockBuildRepository)(nil).ListBuildsBySite), arg0, arg1)
+}
+
+// UpdateBuild mocks base method.
+func (m *MockBuildRepository) UpdateBuild(arg0 context.Context, arg1 domain.Build) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateBuild", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateBuild indicates an expected call of UpdateBuild.
+func (mr *MockBuildRepositoryMockRecorder) UpdateBuild(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBuild", reflect.TypeOf((*MockBuildRepository)(nil).UpdateBuild), arg0, arg1)
 }

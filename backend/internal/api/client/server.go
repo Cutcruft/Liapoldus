@@ -35,6 +35,10 @@ type App struct {
 	// AssetCacheMaxAgeSeconds sets the Cache-Control max-age for asset file
 	// responses (LIAPOLDUS_ASSET_CACHE_MAX_AGE_SECONDS).
 	AssetCacheMaxAgeSeconds int
+
+	// BuildDir is the on-disk build artifact root (LIAPOLDUS_BUILD_DIR),
+	// served publicly at /build/ (R3).
+	BuildDir string
 }
 
 func (a *App) resolveSite(r *http.Request) (domain.Site, error) {
@@ -81,6 +85,13 @@ func NewRouter(a *App) http.Handler {
 
 	mux.HandleFunc("GET /runtime/contract", contract.Contract)
 	mux.HandleFunc("GET /runtime/routes", contract.Routes)
+
+	// Build artifacts are immutable static files (one directory per released
+	// snapshot); serve them straight from disk. The pattern is more specific
+	// than "/", so it wins over the edge handler's host-based resolution.
+	if a.BuildDir != "" {
+		mux.Handle("GET /build/", http.StripPrefix("/build/", http.FileServer(http.Dir(a.BuildDir))))
+	}
 
 	edge := &EdgeHandler{app: a}
 	mux.HandleFunc("/", edge.Serve)

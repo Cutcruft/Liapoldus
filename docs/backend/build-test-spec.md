@@ -57,7 +57,7 @@
 - Манифест валиден по структуре (парсится, все поля на месте; `sha` совпадает с `CurrentSHA`).
 - entry.tsx инвариант: содержимое содержит `import ... from './definitions/<defId>'` и вызов регистрации для каждого defId (проверяется substring'ами на сгенерированном файле).
 
-Файлы: `internal/build/materializer` (infra), интерфейс в application; тесты в `tests/unit` (реальная запись в t.TempDir, defs на `storage.Memory`).
+Файлы: `internal/infra/build/materializer` (infra), интерфейс в application; тесты в `tests/unit` (реальная запись в t.TempDir, defs на `storage.Memory`).
 
 ## §3. `esbuild_builder_test.go` — реальная сборка (качество dist)
 
@@ -68,7 +68,7 @@
 - Failed-source тест: синтаксическая ошибка в `definitions/x.tsx` → ошибка со `Text` (сообщение esbuild) и полным `Log`; `dist` не создан.
 - Incremental smoke (в отдельном тесте, по договорённости не привязан к CI-флоу/dev): `esbuild.Build` с `Incremental: true`, `rebuild` после правки файла без пересоздания workspace.
 
-Файлы: `internal/build/builder` — infra; тесты в `tests/integration` (real esbuild).
+Файлы: `internal/infra/build/builder` — infra; тесты в `tests/integration` (real esbuild).
 
 ## §4. `artifact_store_test.go` — артефакты на диске, no-op, выдача статики
 
@@ -80,7 +80,7 @@
 - Ошибки: отсутствующий снапшот путей → `ErrNotFound`; выход за пределы корня (path traversal) → `ErrInvalidRequest`.
 - shared-бандлы: при первом «успешном» publish копируются в `build/_shared/{name}/{version}.js` (реакт/реакт-дом/ui-runtime, источники — см. «Примечания», тест — на файлах-стабах из t.TempDir).
 
-Файлы: `internal/build/artifactstore` — infra; тесты в `tests/unit` (t.TempDir).
+Файлы: `internal/infra/build/artifactstore` — infra; тесты в `tests/unit` (t.TempDir).
 
 ## §5. `postgres_build_test.go` — очередь Build в Postgres (интеграция)
 
@@ -103,8 +103,8 @@ vitest (`tests/e2e/build.test.ts`, шаблон `api.test.ts` с Bearer-auth): �
 
 1. domain: `Build`, `BuildStatus`, `Environment`; схема `003_builds.sql`; `storage.BuildStore` (memory+postgres). Тесты `storage` + §5.
 2. `internal/application/build.Service` + интерфейсы `WorkspaceBuilder`/`BundleRunner` (§1 unit).
-3. `internal/build/materializer` (§2 unit) и прогон через §1-моки в service.
-4. `internal/build/builder` (real esbuild) + `internal/build/artifactstore` (§3, §4).
+3. `internal/infra/build/materializer` (§2 unit) и прогон через §1-моки в service.
+4. `internal/infra/build/builder` (real esbuild) + `internal/infra/build/artifactstore` (§3, §4).
 5. admin API: `CreateBuild`/`GetBuild` (§6 e2e).
 6. Обновить `docs/feature-status.md` и закрыть пункты Этапа 3 в `TODO.md`.
 7. Dev-пересборщик (`fsnotify`+`Incremental`+WS) — отдельный заход после §3 smoke (решение о спеке/зачёте уточняется).

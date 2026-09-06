@@ -15,7 +15,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -917,4 +917,113 @@ func scanDefinition(row rowScanner) (*domain.ComponentDefinition, error) {
 		return nil, fmt.Errorf("unmarshal definition metadata: %w", err)
 	}
 	return &def, nil
+}
+
+// --- BuildRepository --------------------------------------------------------
+
+var _ domain.BuildRepository = (*Postgres)(nil)
+
+func (p *Postgres) CreateBuild(ctx context.Context, build domain.Build) error {
+	logJSON, err := json.Marshal(build.Log)
+	if err != nil {
+		return fmt.Errorf("marshal build log: %w", err)
+	}
+	_, err = p.pool.Exec(ctx, `
+		INSERT INTO builds (id, site_id, snapshot_id, environment, status, log, artifact_dir, created_at, started_at, finished_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (site_id, environment, snapshot_id, status) DO NOTHING
+	`, build.ID, build.SiteID, build.SnapshotID, build.Environment, string(build.Status), logJSON, build.ArtifactDir, build.CreatedAt, build.StartedAt, build.FinishedAt)
+	if err != nil {
+		if isForeignKeyViolation(err) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("create build: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) GetBuild(ctx context.Context, id string) (domain.Build, error) {
+	build, err := scanBuild(p.pool.QueryRow(ctx, `
+		SELECT id, site_id, snapshot_id, environment, status, log, artifact_dir, created_at, started_at, finished_at
+		FROM builds WHERE id = $1
+	`, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Build{}, domain.ErrNotFound
+		}
+		return domain.Build{}, fmt.Errorf("get build: %w", err)
+	}
+	return build, nil
+}
+
+func (p *Postgres) ListBuildsBySite(ctx context.Context, siteID string) ([]domain.Build, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT id, site_id, snapshot_id, environment, status, log, artifact_dir, created_at, started_at, finished_at
+		FROM builds WHERE site_id = $1 ORDER BY created_at, id
+	`, siteID)
+	if err != nil {
+		return nil, fmt.Errorf("list builds: %w", err)
+	}
+	defer rows.Close()
+	result := make([]domain.Build, 0)
+	for rows.Next() {
+		build, err := scanBuild(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan build: %w", err)
+		}
+		result = append(result, build)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate builds: %w", err)
+	}
+	return result, nil
+}
+
+func (p *Postgres) GetBuildBySnapshot(ctx context.Context, siteID, environment, snapshotID string) (domain.Build, error) {
+	build, err := scanBuild(p.pool.QueryRow(ctx, `
+		SELECT id, site_id, snapshot_id, environment, status, log, artifact_dir, created_at, started_at, finished_at
+		FROM builds WHERE site_id = $1 AND environment = $2 AND snapshot_id = $3
+		ORDER BY created_at DESC, id DESC LIMIT 1
+	`, siteID, environment, snapshotID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Build{}, domain.ErrNotFound
+		}
+		return domain.Build{}, fmt.Errorf("get build by snapshot: %w", err)
+	}
+	return build, nil
+}
+
+func (p *Postgres) UpdateBuild(ctx context.Context, build domain.Build) error {
+	logJSON, err := json.Marshal(build.Log)
+	if err != nil {
+		return fmt.Errorf("marshal build log: %w", err)
+	}
+	result, err := p.pool.Exec(ctx, `
+		UPDATE builds SET status = $1, log = $2, artifact_dir = $3, started_at = $4, finished_at = $5
+		WHERE id = $6
+	`, string(build.Status), logJSON, build.ArtifactDir, build.StartedAt, build.FinishedAt, build.ID)
+	if err != nil {
+		return fmt.Errorf("update build: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func scanBuild(row rowScanner) (domain.Build, error) {
+	var build domain.Build
+	var statusRaw string
+	var logJSON []byte
+	if err := row.Scan(&build.ID, &build.SiteID, &build.SnapshotID, &build.Environment, &statusRaw, &logJSON, &build.ArtifactDir, &build.CreatedAt, &build.StartedAt, &build.FinishedAt); err != nil {
+		return domain.Build{}, err
+	}
+	build.Status = domain.BuildStatus(statusRaw)
+	if len(logJSON) > 0 {
+		if err := json.Unmarshal(logJSON, &build.Log); err != nil {
+			return domain.Build{}, fmt.Errorf("unmarshal build log: %w", err)
+		}
+	}
+	return build, nil
 }

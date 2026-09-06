@@ -21,6 +21,7 @@ type Memory struct {
 	forms       map[string]domain.Form
 	submissions map[string][]domain.Submission
 	defs        map[string]*domain.ComponentDefinition
+	builds      map[string]domain.Build
 }
 
 var _ domain.Storage = (*Memory)(nil)
@@ -37,6 +38,7 @@ func NewMemory() *Memory {
 		forms:       make(map[string]domain.Form),
 		submissions: make(map[string][]domain.Submission),
 		defs:        make(map[string]*domain.ComponentDefinition),
+		builds:      make(map[string]domain.Build),
 	}
 }
 
@@ -110,6 +112,11 @@ func (m *Memory) DeleteSite(_ context.Context, id string) error {
 	for k, snapshot := range m.snapshots {
 		if snapshot.SiteID == id {
 			delete(m.snapshots, k)
+		}
+	}
+	for k, build := range m.builds {
+		if build.SiteID == id {
+			delete(m.builds, k)
 		}
 	}
 	for k, content := range m.contents {
@@ -543,6 +550,65 @@ func (m *Memory) Delete(_ context.Context, siteID, id string) error {
 		return domain.ErrNotFound
 	}
 	delete(m.defs, m.defKey(siteID, id))
+	return nil
+}
+
+func (m *Memory) CreateBuild(_ context.Context, build domain.Build) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.builds[build.ID] = clone(build)
+	return nil
+}
+
+func (m *Memory) GetBuild(_ context.Context, id string) (domain.Build, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	build, ok := m.builds[id]
+	if !ok {
+		return domain.Build{}, domain.ErrNotFound
+	}
+	return clone(build), nil
+}
+
+func (m *Memory) ListBuildsBySite(_ context.Context, siteID string) ([]domain.Build, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]domain.Build, 0)
+	for _, build := range m.builds {
+		if build.SiteID == siteID {
+			result = append(result, clone(build))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].CreatedAt.Before(result[j].CreatedAt) })
+	return result, nil
+}
+
+func (m *Memory) GetBuildBySnapshot(_ context.Context, siteID, environment, snapshotID string) (domain.Build, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var latest *domain.Build
+	for _, build := range m.builds {
+		if build.SiteID != siteID || build.Environment != environment || build.SnapshotID != snapshotID {
+			continue
+		}
+		if latest == nil || build.CreatedAt.After(latest.CreatedAt) {
+			build := clone(build)
+			latest = &build
+		}
+	}
+	if latest == nil {
+		return domain.Build{}, domain.ErrNotFound
+	}
+	return *latest, nil
+}
+
+func (m *Memory) UpdateBuild(_ context.Context, build domain.Build) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.builds[build.ID]; !ok {
+		return domain.ErrNotFound
+	}
+	m.builds[build.ID] = clone(build)
 	return nil
 }
 

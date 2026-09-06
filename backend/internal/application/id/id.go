@@ -18,6 +18,7 @@ const (
 	Route      = "route"
 	Form       = "form"
 	Submission = "submission"
+	Build      = "build"
 )
 
 func New(prefix string) (string, error) {

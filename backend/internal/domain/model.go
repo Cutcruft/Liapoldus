@@ -12,6 +12,7 @@ var (
 	ErrRepoNotInitialized = errors.New("repository not initialized")
 	ErrSchemaInvalid      = errors.New("invalid JSON schema")
 	ErrVersionNotFound    = errors.New("component version not found")
+	ErrBuildFailed        = errors.New("build failed")
 )
 
 type Site struct {
@@ -107,4 +108,37 @@ type Snapshot struct {
 	Name      string         `json:"name"`
 	Pages     []SnapshotPage `json:"pages"`
 	CreatedAt time.Time      `json:"createdAt"`
+}
+
+// BuildStatus describes the lifecycle of a snapshot compilation. Transitions
+// are strictly queued → building → ready | failed.
+type BuildStatus string
+
+const (
+	BuildStatusQueued   BuildStatus = "queued"
+	BuildStatusBuilding BuildStatus = "building"
+	BuildStatusReady    BuildStatus = "ready"
+	BuildStatusFailed   BuildStatus = "failed"
+)
+
+// Environments are fixed strings on a Build (Этап 3); an Environment entity
+// with deploy configuration arrives in a later stage (README §25).
+const (
+	EnvironmentDevelopment = "development"
+	EnvironmentProduction  = "production"
+)
+
+// Build is the result of compiling a Site Snapshot for an Environment with the
+// esbuild-based bundler. The ArtifactDir points at the published static output.
+type Build struct {
+	ID          string      `json:"id"`
+	SiteID      string      `json:"siteId"`
+	SnapshotID  string      `json:"snapshotId"`
+	Environment string      `json:"environment"`
+	Status      BuildStatus `json:"status"`
+	Log         []string    `json:"log"`
+	ArtifactDir string      `json:"artifactDir"`
+	CreatedAt   time.Time   `json:"createdAt"`
+	StartedAt   *time.Time  `json:"startedAt,omitempty"`
+	FinishedAt  *time.Time  `json:"finishedAt,omitempty"`
 }

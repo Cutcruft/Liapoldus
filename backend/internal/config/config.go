@@ -23,6 +23,7 @@ type Config struct {
 	AdminToken              string
 	AssetDir                string
 	LocalGitDir             string
+	BuildDir                string
 	ClientDefaultSlug       string
 	Storage                 StorageDriver
 	DatabaseURL             string
@@ -55,6 +56,10 @@ func Load() (Config, error) {
 	adminToken := os.Getenv("LIAPOLDUS_ADMIN_TOKEN")
 	assetDir := os.Getenv("LIAPOLDUS_ASSET_DIR")
 	localGitDir := os.Getenv("LIAPOLDUS_GIT_DIR")
+	buildDir := strings.TrimSpace(os.Getenv("LIAPOLDUS_BUILD_DIR"))
+	if buildDir == "" {
+		buildDir = "./build"
+	}
 	clientDefaultSlug := os.Getenv("LIAPOLDUS_CLIENT_DEFAULT_SLUG")
 
 	storage := StorageDriver(strings.ToLower(strings.TrimSpace(os.Getenv("LIAPOLDUS_STORAGE"))))
@@ -175,6 +180,7 @@ func Load() (Config, error) {
 		AdminToken:              strings.TrimSpace(adminToken),
 		AssetDir:                strings.TrimSpace(assetDir),
 		LocalGitDir:             strings.TrimSpace(localGitDir),
+		BuildDir:                buildDir,
 		ClientDefaultSlug:       strings.TrimSpace(clientDefaultSlug),
 		Storage:                 storage,
 		DatabaseURL:             strings.TrimSpace(databaseURL),

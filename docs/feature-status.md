@@ -24,7 +24,8 @@
 | Forms | Реализовано | Определение, серверная валидация (required/minLength/email), сабмиты |
 | Auth (admin) | Реализовано | Bearer token через `LIAPOLDUS_ADMIN_TOKEN` (пустой = открыто) |
 | Runtime health | Готово | `GET /healthz` на admin и client |
-| Persistence | Реализовано | PostgreSQL adapter (миграции `001`, `002`) и in-memory adapter |
+| Persistence | Реализовано | PostgreSQL adapter (миграции `001`–`004`) и in-memory adapter |
+| Build (synchronous, Этот 3) | Реализовано | `POST /api/sites/{id}/builds` {snapshotId, environment} → синхронная сборка (queued→ready/failed), no-op повторной публикации; материализация (workspace: `src/entry.tsx` + `src/definitions/*.tsx` + `manifest.json`), esbuild как библиотека Go, артефакты `build/<site>/<env>/<snapshot>/`; статика отдаётся публично на `/build/...` |
 
 ## Пока не реализовано
 
@@ -37,7 +38,7 @@
 - Plugin management и декларации зависимостей (fetch + lock с CDN/registry);
 - версии всех объектов кроме Page;
 - полноценный Snapshot со всеми типами объектов;
-- build worker и static artifacts (esbuild внутри Go-бинарника);
+- build worker, incremental-пересборка (fsnotify/`Incremental`/WS) и shared-бандлы (`build/_shared`) с fetch+lock;
 - Development/Production environments (client работает с текущими данными напрямую);
 - runtime publication и rollback;
 - Redis/cache policies;

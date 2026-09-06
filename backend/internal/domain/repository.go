@@ -15,6 +15,7 @@ type Storage interface {
 	RouteRepository
 	FormRepository
 	ComponentDefinitionRepository
+	BuildRepository
 }
 
 type SiteRepository interface {
@@ -82,4 +83,15 @@ type ComponentDefinitionRepository interface {
 	Get(context.Context, string, string) (*ComponentDefinition, error)
 	List(context.Context, string) ([]ComponentDefinition, error)
 	Delete(context.Context, string, string) error
+}
+
+type BuildRepository interface {
+	CreateBuild(context.Context, Build) error
+	GetBuild(context.Context, string) (Build, error)
+	ListBuildsBySite(context.Context, string) ([]Build, error)
+	// GetBuildBySnapshot returns the most recent Build for a (site, environment,
+	// snapshot) triple, or ErrNotFound when none exists. Used for idempotent
+	// re-publication of a snapshot.
+	GetBuildBySnapshot(context.Context, string, string, string) (Build, error)
+	UpdateBuild(context.Context, Build) error
 }
