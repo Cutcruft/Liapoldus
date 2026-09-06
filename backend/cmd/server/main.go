@@ -15,6 +15,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/rebuilder"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/db"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
@@ -100,6 +101,7 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 		DefaultRedirectStatus:   cfg.RedirectDefaultStatus,
 		AssetCacheMaxAgeSeconds: cfg.AssetCacheMaxAgeSeconds,
 		BuildDir:                cfg.BuildDir,
+		DevHub:                  rebuilder.NewHub(),
 	})
 
 	adminServer := &http.Server{Addr: cfg.AdminAddr, Handler: adminHandler, ReadHeaderTimeout: cfg.ReadHeaderTimeout}

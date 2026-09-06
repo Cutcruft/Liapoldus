@@ -39,6 +39,10 @@ type App struct {
 	// BuildDir is the on-disk build artifact root (LIAPOLDUS_BUILD_DIR),
 	// served publicly at /build/ (R3).
 	BuildDir string
+
+	// DevHub relays development rebuild events to /dev/build/ws subscribers
+	// (nil disables the channel).
+	DevHub DevEventSource
 }
 
 func (a *App) resolveSite(r *http.Request) (domain.Site, error) {
@@ -91,6 +95,14 @@ func NewRouter(a *App) http.Handler {
 	// than "/", so it wins over the edge handler's host-based resolution.
 	if a.BuildDir != "" {
 		mux.Handle("GET /build/", http.StripPrefix("/build/", http.FileServer(http.Dir(a.BuildDir))))
+	}
+
+	// Dev rebuild pushes: the browser subscribes here to learn when the
+	// development bundle for a site was rebuilt (WS-push side of the dev
+	// rebuilder). Mounted regardless of BuildDir so the channel can serve a
+	// separately located artifact store.
+	if a.DevHub != nil {
+		mux.Handle("GET /dev/build/ws", http.HandlerFunc(NewDevHandler(a.DevHub, a.Logger).Serve))
 	}
 
 	edge := &EdgeHandler{app: a}

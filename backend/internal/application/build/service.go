@@ -56,6 +56,28 @@ type BundleResult struct {
 	DistDir string
 }
 
+// DevRebuildEvent is pushed after every finished (re)build of a development
+// workspace. Status is one of the domain BuildStatus "ready" / "failed"
+// values; Runtime clients refresh the bundle at ArtifactDir on status ready.
+type DevRebuildEvent struct {
+	SiteID      string    `json:"siteId"`
+	Environment string    `json:"environment"`
+	SnapshotID  string    `json:"snapshotId"`
+	ArtifactDir string    `json:"artifactDir,omitempty"`
+	Status      string    `json:"status"`
+	Error       string    `json:"error,omitempty"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// DevEventHub is the broadcast channel between the dev rebuilder and live
+// runtime clients (WS on the client server). Subscribe returns the event
+// stream and an unsubscribe function; Current serves a late join relay.
+type DevEventHub interface {
+	Publish(DevRebuildEvent)
+	Subscribe() (<-chan DevRebuildEvent, func())
+	Current(siteID string) (DevRebuildEvent, bool)
+}
+
 // WorkspaceBuilder materializes a snapshot into an esbuild-able workspace.
 type WorkspaceBuilder interface {
 	Materialize(context.Context, WorkspaceRequest) (Workspace, error)

@@ -107,9 +107,22 @@ vitest (`tests/e2e/build.test.ts`, шаблон `api.test.ts` с Bearer-auth): �
 4. `internal/infra/build/builder` (real esbuild) + `internal/infra/build/artifactstore` (§3, §4).
 5. admin API: `CreateBuild`/`GetBuild` (§6 e2e).
 6. Обновить `docs/feature-status.md` и закрыть пункты Этапа 3 в `TODO.md`.
-7. Dev-пересборщик (`fsnotify`+`Incremental`+WS) — отдельный заход после §3 smoke (решение о спеке/зачёте уточняется).
+7. Dev-пересборщик (`fsnotify`+`Incremental`+WS) — §7 ниже.
 
 Каждый шаг зелёный независимо.
+
+## §7 Dev-пересборщик (fsnotify + Incremental + WS)
+
+Реализовано (компонент + WS-канал; привязка к boot-рантайму — Этап 5).
+
+- `internal/infra/build/rebuilder.Rebuilder`: один dev-workspace на сайт; `Start(ctx)` материализует workspace (или читает `manifest.json`), открывает **esbuild `Context`** (`Incremental`, те же `Options`, что у одноразовой сборки), смотрит `src/*.tsx` через `fsnotify` (дебаунс), на изменение → `Rebuild` → `Publish` в артефакты → бродкаст.
+- `rebuilder.Hub`: fan-out `DevRebuildEvent` подписчикам (неблокирующая доставка, drop при медленном получателе) + «последнее событие по сайту» для relay при подключении.
+- Контракт `build.DevRebuildEvent` (`siteId`, `environment`, `snapshotId`, `artifactDir`, `status` ready/failed, `error`, `updatedAt`) — в `internal/application/build` (порт `DevEventHub`).
+- Важно: **failed-пересборка не заменяет последний удачный артефакт** — браузер продолжает показывать рабочий бандл, следующая успешная пересборка публикуется поверх.
+- WS-канал: `GET /dev/build/ws` на client-сервере (`internal/api/client/dev.go`); опциональный `?siteId=` фильтр; при подключении первым сообщением отдаётся `Current(siteID)` (релей). Монтируется при непустом `App.DevHub`; в `main.go` хаб создаётся всегда.
+- Решённое решение: контракт WS-канала отвязан от boot (Этап 5) — канал публикует сырые события `DevRebuildEvent`, а не «новую декларацию»; преобразование в hot-reload рантайма остаётся за Этапом 5. `InsecureSkipVerify` на Accept — dev-only (без сессии/авторизации).
+
+Тесты: unit `hub` (broadcast/unsubscribe/current/slow-receiver), integration `rebuilder` (real fsnotify + esbuild context + артефакты: правка определения → новый бандл + событие; синтаксическая ошибка → failed), integration WS (`httptest` + `coder/websocket`: стрим, relay при подключении, фильтр по `siteId`).
 
 ## Решённые решения (подтверждены пользователем)
 

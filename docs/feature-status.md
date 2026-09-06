@@ -26,6 +26,7 @@
 | Runtime health | Готово | `GET /healthz` на admin и client |
 | Persistence | Реализовано | PostgreSQL adapter (миграции `001`–`004`) и in-memory adapter |
 | Build (synchronous, Этот 3) | Реализовано | `POST /api/sites/{id}/builds` {snapshotId, environment} → синхронная сборка (queued→ready/failed), no-op повторной публикации; материализация (workspace: `src/entry.tsx` + `src/definitions/*.tsx` + `manifest.json`), esbuild как библиотека Go, артефакты `build/<site>/<env>/<snapshot>/`; статика отдаётся публично на `/build/...` |
+| Dev-пересборщик (Этап 3 §7) | Реализовано | `internal/infra/build/rebuilder`: fsnotify → esbuild `Context` (Incremental) → publish + бродкаст `DevRebuildEvent`; `Hub` с relay `Current`; WS-канал `GET /dev/build/ws` (фильтр `?siteId=`, failed не заменяет последний удачный артефакт); привязка к boot-рантайму — Этап 5 |
 
 ## Пока не реализовано
 
@@ -38,7 +39,7 @@
 - Plugin management и декларации зависимостей (fetch + lock с CDN/registry);
 - версии всех объектов кроме Page;
 - полноценный Snapshot со всеми типами объектов;
-- build worker, incremental-пересборка (fsnotify/`Incremental`/WS) и shared-бандлы (`build/_shared`) с fetch+lock;
+- shared-бандлы (`build/_shared`) с fetch+lock (R9);
 - Development/Production environments (client работает с текущими данными напрямую);
 - runtime publication и rollback;
 - Redis/cache policies;
