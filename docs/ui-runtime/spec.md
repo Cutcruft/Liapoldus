@@ -642,8 +642,46 @@ class ComponentRegistry {
 - `ComponentDefinition` — React-компонент (исходники `.tsx`), который знает только как рендерить; `metadata/schema` — отдельные дескрипторы, в рантайм не зашиты.
 - `PageRenderer` по `instanceId → definitionId` забирает компонент из реестра и передаёт `props` + резолвенные binding-значения; `componentMapFromRegistry()` строит карту компонентов из реестра.
 - неизвестный `definitionId` → `ComponentNotFoundError` (рендер placeholder, не падение всего дерева).
-- **Mount** (`src/react/mount.tsx`): `mount(siteId, environment, opts)` — `boot()` + `RuntimeProvider` + `PageRenderer` поверх карты реестра; `baseUrl` по умолчанию `location.origin`. Shell (`dist/index.html`, пакет `internal/infra/build/shell`): import-map (shared → `/build/_shared/…`, dep-бандлы → `./_deps/…`), `<link>` для dep-стилей, `#root` + `entry.js`.
+- **Mount** (`src/react/mount.tsx`): `mount(siteId, environment, opts)` — `boot()` + `RuntimeProvider` + догрузчик код-сплит чанков + `PageRenderer`; `baseUrl` по умолчанию `location.origin`. Shell (`dist/index.html`, пакет `internal/infra/build/shell`): import-map (shared → `/build/_shared/…`, dep-бандлы → `./_deps/…`), `<link>` для dep-стилей, `#root` + `entry.js`, `<link rel="modulepreload">` на чанк домашней страницы.
 - **Refresh**: `TreeController.refresh()` пересчитывает bindings против актуального контекста без смены декларации; mount подписывается на срезы `route/content/operationResults/forms` — синк данных (poll/WS) на живой сборке пересобирает дерево без полной пересборки страницы.
+
+---
+
+## 16. Постраничная доставка (код-сплиттинг)
+
+Build-time (backend): материал `src/entry.tsx <→ src/pages/<pageId>.tsx`, esbuild
+с `Splitting: true` и `outbase=src` выдаёт `dist/entry.js` + `dist/pages/<pageId>.js`;
+`dist/manifest.json` (`pages[]` с `pageId/chunk/definitions`, `homePage`); shell
+тэгает стартовый чанк `modulepreload`.
+
+Runtime (`src/core/pages.ts`, `src/react/mount.tsx`):
+
+```ts
+registerPage(pageId: string, tree: TreeDeclaration): void;   // вызывает чанк
+getPageTree(pageId): TreeDeclaration | undefined;             // статический реестр
+class PageLoader {                                            // manifest → dynamic import, кэш
+  buildRoot: string | null;                                   // null → роздача отключена
+  manifest(): Promise<BuildManifest | null>;                  // ${buildRoot}/manifest.json
+  load(pageId): Promise<boolean>;                             // import чанка (кэш по pageId)
+  ensureHome(): Promise<boolean>;                             // стартовый чанк (preload)
+}
+resolveBuildBase(origin, siteId, env, versionId, explicit?): string | null;
+```
+
+- чанк статически импортирует свои определения (регистрирует их в
+  `ComponentRegistry`) и вызывает `registerPage(pageId, tree)` — поэтому плагинам
+  не нужен access к рантайму: регистрацию делает сам бандл;
+- `mount()`: boot → контракт (дескрипторы/роуты/тема + **boot-дерево домашней
+  страницы** как подсказка мгновенного первого пейнта) → `PageLoader.ensureHome()`
+  (preload делает import почти мгновенным) → первый рендер с компонентами сайта;
+- навигация на renderPage-роут: `pageIdOf(route)` → если дерева страницы нет в
+  реестре — `loader.load(pageId)`, после загрузки `tree.load(дерево)`. Старый
+  контент остаётся на экране (без белых кадров); placeholder только пока нет
+  ни одного дерева;
+- корень раздачи: явный `buildBaseUrl` → вывод из URL страницы
+  (`/build/{site}/{env}/{version}/…`) → `${baseUrl}/build/{site}/{env}/{versionId|latest}`.
+  В dev-цикле (#11) живые деревья по-прежнему приходят по `/runtime/dev` WS —
+  чанки страниц не обязательны для сохранения состояния редактора.
 
 ---
 
