@@ -241,7 +241,7 @@ func generateEntry(siteID, environment string, definitionIds []string) string {
 	}
 	builder.WriteString("\n")
 	for _, id := range definitionIds {
-		fmt.Fprintf(&builder, "ComponentRegistry.register(%q, %s);\n", id, definitionName(id))
+		fmt.Fprintf(&builder, "ComponentRegistry.registerDefinition(%q, %s);\n", id, definitionName(id))
 	}
 	fmt.Fprintf(&builder, "\nvoid boot(%q, %q);\n", siteID, environment)
 	return builder.String()

@@ -15,6 +15,8 @@ export type { SchedulerEnv } from './core/poll-scheduler';
 export { Router } from './core/router';
 export type { RouterEnv, RouterEventMap } from './core/router';
 export { RuntimeRegistry } from './core/registry';
+export { ComponentRegistry } from './core/component-registry';
+export type { ComponentDefinition } from './core/component-registry';
 export { SyncEngine } from './core/sync';
 export type { Channel, SubscriptionMeta, SyncOptions } from './core/sync';
 export { TreeController } from './core/tree';

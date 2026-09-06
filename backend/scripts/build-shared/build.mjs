@@ -128,7 +128,7 @@ export { Fragment, jsx, jsxs };
     ['react', resolve(outRoot, 'react', `${REACT_VERSION}.js`), ['createElement']],
     ['react-dom', resolve(outRoot, 'react-dom', `${REACT_VERSION}.js`), ['createRoot']],
     ['react/jsx-runtime', resolve(outRoot, 'react', 'jsx-runtime', `${REACT_VERSION}.js`), ['jsx']],
-    ['@liapoldus/ui-runtime', resolve(outRoot, '@liapoldus', 'ui-runtime', `${UI_RUNTIME_VERSION}.js`), ['boot', 'RuntimeRegistry']],
+    ['@liapoldus/ui-runtime', resolve(outRoot, '@liapoldus', 'ui-runtime', `${UI_RUNTIME_VERSION}.js`), ['boot', 'RuntimeRegistry', 'ComponentRegistry']],
   ]) {
     const source = await readFile(file, 'utf8')
     try {

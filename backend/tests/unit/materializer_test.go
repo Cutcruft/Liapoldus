@@ -111,7 +111,10 @@ func TestMaterializeCreatesWorkspace(t *testing.T) {
 		!strings.Contains(content, `import def_hero from "./definitions/hero";`) {
 		t.Fatalf("entry must import all definitions: %s", content)
 	}
-	for _, reg := range []string{`ComponentRegistry.register("container", def_container);`, `ComponentRegistry.register("text", def_text);`} {
+	for _, reg := range []string{
+		`ComponentRegistry.registerDefinition("container", def_container);`,
+		`ComponentRegistry.registerDefinition("text", def_text);`,
+	} {
 		if !strings.Contains(content, reg) {
 			t.Fatalf("entry missing %q: %s", reg, content)
 		}
