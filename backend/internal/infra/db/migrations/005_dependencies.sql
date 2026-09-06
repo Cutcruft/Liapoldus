@@ -1,6 +1,7 @@
 -- Round 5: dependency service (Этап 4b). Site-declared npm dependencies
 -- (top-level specs) plus the frozen lock stored on each snapshot, and the
--- immutable cache of registry package metadata / extracted blob indexes.
+-- immutable cache of registry package metadata. Raw tarball blobs live on
+-- disk under <data>/deps (internal/infra/deps/store), not in the database.
 
 ALTER TABLE snapshots ADD COLUMN IF NOT EXISTS deps_lock JSONB NOT NULL DEFAULT '{"deps":[]}'::jsonb;
 
@@ -22,11 +23,4 @@ CREATE TABLE IF NOT EXISTS dep_packages (
     dependencies JSONB NOT NULL DEFAULT '{}'::jsonb,
     fetched_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (name, version)
-);
-
--- Content-addressed disk store index (blobs live under <data>/deps/<sha256[0:2]>).
-CREATE TABLE IF NOT EXISTS dep_blobs (
-    sha256 TEXT PRIMARY KEY,
-    size BIGINT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL
 );

@@ -24,6 +24,7 @@ type Config struct {
 	AssetDir                string
 	LocalGitDir             string
 	BuildDir                string
+	DepsDir                 string
 	ClientDefaultSlug       string
 	Storage                 StorageDriver
 	DatabaseURL             string
@@ -60,6 +61,10 @@ func Load() (Config, error) {
 	buildDir := strings.TrimSpace(os.Getenv("LIAPOLDUS_BUILD_DIR"))
 	if buildDir == "" {
 		buildDir = "./build"
+	}
+	depsDir := strings.TrimSpace(os.Getenv("LIAPOLDUS_DEPS_DIR"))
+	if depsDir == "" {
+		depsDir = "./deps"
 	}
 	clientDefaultSlug := os.Getenv("LIAPOLDUS_CLIENT_DEFAULT_SLUG")
 
@@ -189,6 +194,7 @@ func Load() (Config, error) {
 		AssetDir:                strings.TrimSpace(assetDir),
 		LocalGitDir:             strings.TrimSpace(localGitDir),
 		BuildDir:                buildDir,
+		DepsDir:                 depsDir,
 		ClientDefaultSlug:       strings.TrimSpace(clientDefaultSlug),
 		Storage:                 storage,
 		DatabaseURL:             strings.TrimSpace(databaseURL),

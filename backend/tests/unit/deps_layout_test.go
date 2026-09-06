@@ -1,0 +1,360 @@
+package unit
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/sha512"
+	"encoding/base64"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/liapoldus/liapoldus/backend/internal/application/build"
+	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/layout"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/store"
+)
+
+type fakeFetcher struct {
+	data  map[string][]byte
+	calls []string
+}
+
+func (f *fakeFetcher) Tarball(_ context.Context, name, version, tarballURL, integrity string) ([]byte, error) {
+	f.calls = append(f.calls, name+"@"+version)
+	data, ok := f.data[name]
+	if !ok {
+		return nil, domain.ErrPackageNotFound
+	}
+	return data, nil
+}
+
+// pkgRepoStub is the immutable dep_packages cache stand-in: every tarball in
+// scope publishes a non-empty sha512 integrity + a tarball URL, matching how
+// the registry side records them.
+type pkgRepoStub struct{ pkgs map[string]domain.DepPackage }
+
+func (s pkgRepoStub) GetDepPackage(_ context.Context, name, version string) (domain.DepPackage, error) {
+	pkg, ok := s.pkgs[name+"@"+version]
+	if !ok {
+		return domain.DepPackage{}, domain.ErrNotFound
+	}
+	return pkg, nil
+}
+
+func (pkgRepoStub) CreateDepPackage(context.Context, domain.DepPackage) error { return nil }
+
+// layoutHarness wires a layout over a temp-dir blob store, a fake fetcher (for
+// the given tarballs), and a fake dep_packages cache (integrity + tarball URL
+// derived from the same tarballs). Returns the layout, fetcher and the
+// workspace root the layout materializes into.
+func layoutHarness(t *testing.T, tarballs map[string][]byte, sri map[string]string) (*layout.Layout, *fakeFetcher, string) {
+	t.Helper()
+	fetcher := &fakeFetcher{data: tarballs}
+	blobs := store.New(t.TempDir())
+	pkgs := make(map[string]domain.DepPackage, len(tarballs))
+	for name := range tarballs {
+		pkgs[name+"@"+"1.0.0"] = domain.DepPackage{
+			Name: name, Version: "1.0.0", Integrity: sri[name],
+			TarballURL: "https://registry.test/" + name + "/-/" + name + "-1.0.0.tgz",
+		}
+	}
+	lay := layout.New(layout.LayoutOptions{
+		Packages: pkgRepoStub{pkgs: pkgs},
+		Store:    blobs,
+		Fetch:    fetcher,
+	})
+	return lay, fetcher, blobs.Root()
+}
+
+// tarball builds an npm-style gzipped tarball with a "package/" root from a
+// map of relative file paths to contents, and returns its sha512 SRI.
+func tarball(t *testing.T, files map[string]string) ([]byte, string) {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for rel, content := range files {
+		if err := tw.WriteHeader(&tar.Header{
+			Name: "package/" + rel, Mode: 0o644, Size: int64(len(content)),
+			Typeflag: tar.TypeReg,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha512.Sum512(buf.Bytes())
+	return buf.Bytes(), "sha512-" + base64.StdEncoding.EncodeToString(sum[:])
+}
+
+func TestLayoutEmptyLockIsNoOp(t *testing.T) {
+	lay, _, _ := layoutHarness(t, nil, nil)
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: t.TempDir(), TopLevel: []string{"agent"},
+	})
+	if err != nil {
+		t.Fatalf("empty lock: %v", err)
+	}
+	if len(result.Deps) != 0 || len(result.Externals) != 0 {
+		t.Fatalf("empty lock must be a no-op, got %#v", result)
+	}
+}
+
+func TestLayoutMaterializesAndBundlesTopLevel(t *testing.T) {
+	helperData, helperSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export function doubling(x) { const marker = \"helper-double\"; return x * 2 + marker.length * 0; }\n",
+	})
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js","dependencies":{"helper":"^1.0.0"}}`,
+		"index.js": `import { doubling } from "helper";
+import { createElement } from "react";
+export const tag = "agent-title";
+export default function title(props) { return createElement("h1", null, doubling(props.n)); }
+`,
+	})
+	// "helper" is transitive but the harness only keys 1.0.0 per package; both
+	// versions resolve from the same map, which is exactly the flat-lock case.
+	lay, fetcher, root := layoutHarness(t,
+		map[string][]byte{"agent": agentData, "helper": helperData},
+		map[string]string{"agent": agentSRI, "helper": helperSRI},
+	)
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+			{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+		}},
+		TopLevel: []string{"agent"},
+	})
+	if err != nil {
+		t.Fatalf("materialize deps: %v", err)
+	}
+
+	ref, ok := result.Deps["agent"]
+	if !ok {
+		t.Fatalf("missing import-map entry for agent: %#v", result.Deps)
+	}
+	if ref.Version != "1.0.0" || ref.Integrity != agentSRI {
+		t.Fatalf("dep ref = %#v", ref)
+	}
+	if ref.PublicArtifact != "dist/_deps/agent@1.0.0.js" {
+		t.Fatalf("public artifact = %q", ref.PublicArtifact)
+	}
+	if len(result.Externals) != 1 || result.Externals[0] != "agent" {
+		t.Fatalf("externals = %#v", result.Externals)
+	}
+
+	for _, rel := range []string{"node_modules/agent/package.json", "node_modules/helper/index.js"} {
+		if _, err := os.Stat(filepath.Join(root, rel)); err != nil {
+			t.Fatalf("layout missing %s: %v", rel, err)
+		}
+	}
+
+	bundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read _deps bundle: %v", err)
+	}
+	if !strings.Contains(string(bundle), "helper-double") {
+		t.Fatalf("transitive helper must be inlined into the agent bundle:\n%s", bundle)
+	}
+	if !strings.Contains(string(bundle), `from "react"`) {
+		t.Fatalf("react must stay external in the agent bundle:\n%s", bundle)
+	}
+	if len(fetcher.calls) != 2 {
+		t.Fatalf("expected 2 fetches (agent, helper), got %#v", fetcher.calls)
+	}
+}
+
+func TestLayoutScopedPackageArtifactName(t *testing.T) {
+	coreData, coreSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"@liapoldus/core","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export const version = \"1\";\nexport default 1;\n",
+	})
+	lay, _, root := layoutHarness(t,
+		map[string][]byte{"@liapoldus/core": coreData},
+		map[string]string{"@liapoldus/core": coreSRI},
+	)
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "@liapoldus/core", Spec: "^1.0.0", Version: "1.0.0", Integrity: coreSRI},
+		}},
+		TopLevel: []string{"@liapoldus/core"},
+	})
+	if err != nil {
+		t.Fatalf("materialize scoped dep: %v", err)
+	}
+	ref := result.Deps["@liapoldus/core"]
+	if ref.PublicArtifact != "dist/_deps/@liapoldus%2Fcore@1.0.0.js" {
+		t.Fatalf("scoped artifact name = %q", ref.PublicArtifact)
+	}
+	for _, rel := range []string{
+		"node_modules/@liapoldus/core/index.js",
+		"dist/_deps/@liapoldus%2Fcore@1.0.0.js",
+	} {
+		if _, statErr := os.Stat(filepath.Join(root, rel)); statErr != nil {
+			t.Fatalf("scoped layout missing %s: %v", rel, statErr)
+		}
+	}
+}
+
+func TestLayoutBundledDepImportingNodeBuiltinFails(t *testing.T) {
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "import fs from \"fs\";\nexport default fs.readFileSync;\n",
+	})
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"agent"},
+	})
+	var depErr *build.DepBuildError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected *build.DepBuildError, got %T: %v", err, err)
+	}
+	if depErr.Pkg != "agent" || depErr.Missing != "fs" {
+		t.Fatalf("dep error = %#v", depErr)
+	}
+	if depErr.Hint == "" {
+		t.Fatalf("expected a hint for the fs builtin")
+	}
+}
+
+func TestLayoutFetchErrorPropagates(t *testing.T) {
+	_, missSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+	})
+	lay, _, root := layoutHarness(t, map[string][]byte{}, map[string]string{})
+	// The locked package is not in the fake registry: fetch fails and the
+	// error must surface as-is (the registry layer owns error semantics).
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: missSRI},
+		}},
+		TopLevel: []string{"agent"},
+	})
+	if err == nil {
+		t.Fatal("expected fetch failure to propagate")
+	}
+}
+
+func TestLayoutMissingIntegrityFailsClosed(t *testing.T) {
+	lay, _, root := layoutHarness(t, nil, nil)
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0"},
+		}},
+		TopLevel: []string{"agent"},
+	})
+	var depErr *build.DepBuildError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected *build.DepBuildError for missing integrity, got %T: %v", err, err)
+	}
+}
+
+func TestLayoutTopLevelNotInLockFails(t *testing.T) {
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+	})
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"ghost"},
+	})
+	var depErr *build.DepBuildError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected *build.DepBuildError for missing top-level, got %T: %v", err, err)
+	}
+	if depErr.Pkg != "ghost" {
+		t.Fatalf("Pkg = %q", depErr.Pkg)
+	}
+}
+
+func TestLayoutMetadataIntegrityMismatchFails(t *testing.T) {
+	helperData, helperSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+	})
+	blobs := store.New(t.TempDir())
+	lay := layout.New(layout.LayoutOptions{
+		Packages: pkgRepoStub{pkgs: map[string]domain.DepPackage{
+			"helper@1.0.0": {
+				Name: "helper", Version: "1.0.0",
+				Integrity:  "sha512-mismatched-cache-entry",
+				TarballURL: "https://registry.test/helper/-/helper-1.0.0.tgz",
+			},
+		}},
+		Store: blobs,
+		Fetch: &fakeFetcher{data: map[string][]byte{"helper": helperData}},
+	})
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: blobs.Root(),
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+		}},
+		TopLevel: []string{"helper"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("expected integrity mismatch error, got %v", err)
+	}
+}
+
+func TestLayoutDiskCacheSkipsFetchAndMetadata(t *testing.T) {
+	helperData, helperSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export const n = 1;\nexport default 1;\n",
+	})
+
+	// Seed the disk cache with the verified blob directly.
+	blobs := store.New(t.TempDir())
+	if err := blobs.Save("helper", "1.0.0", helperData); err != nil {
+		t.Fatal(err)
+	}
+	// With the blob cached, the layout must never touch registry metadata (nil
+	// repo) nor fetch (counting fetcher stays empty).
+	fetcher := &fakeFetcher{data: map[string][]byte{}}
+	lay := layout.New(layout.LayoutOptions{Packages: nil, Store: blobs, Fetch: fetcher})
+
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: blobs.Root(),
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+		}},
+		TopLevel: []string{"helper"},
+	})
+	if err != nil {
+		t.Fatalf("materialize from disk cache: %v", err)
+	}
+	if ref := result.Deps["helper"]; ref.PublicArtifact != "dist/_deps/helper@1.0.0.js" {
+		t.Fatalf("dep ref = %#v", ref)
+	}
+	if len(fetcher.calls) != 0 {
+		t.Fatalf("disk cache must skip the registry, got %#v", fetcher.calls)
+	}
+	if _, statErr := os.Stat(filepath.Join(blobs.Root(), "node_modules", "helper", "index.js")); statErr != nil {
+		t.Fatalf("layout from cache missing node_modules: %v", statErr)
+	}
+}

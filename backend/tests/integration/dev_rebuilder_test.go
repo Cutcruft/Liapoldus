@@ -30,7 +30,7 @@ func TestDevRebuilderRebuildsOnSourceChange(t *testing.T) {
 
 	hub := rebuilder.NewHub()
 	artifacts := artifactstore.New(filepath.Join(t.TempDir(), "build"))
-	rb := rebuilder.New(materializer.New(mem, mem, mem, nil), artifacts, hub, rebuilder.Options{
+	rb := rebuilder.New(materializer.New(mem, mem, mem, mem, nil, nil), artifacts, hub, rebuilder.Options{
 		Request: build.WorkspaceRequest{
 			SiteID: site.ID, SnapshotID: "snapshot_e2e",
 			Environment: domain.EnvironmentDevelopment, Dir: dir,

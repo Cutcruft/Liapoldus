@@ -114,11 +114,10 @@ func copyTree(src, dst string) error {
 		}
 		target := filepath.Join(dst, filepath.FromSlash(path))
 		if d.IsDir() {
-			dstDir := filepath.Join(dst, filepath.FromSlash(path))
 			if path == "." {
 				return os.MkdirAll(dst, 0o755)
 			}
-			return os.MkdirAll(filepath.Dir(dstDir), 0o755)
+			return os.MkdirAll(target, 0o755)
 		}
 		if path == "." {
 			return nil

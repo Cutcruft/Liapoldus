@@ -2,6 +2,8 @@ package unit
 
 import (
 	"context"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -304,5 +306,56 @@ func TestRegistryRejectsInvalidNameAndSpec(t *testing.T) {
 	}
 	if _, err := client.Resolve(ctx, "lodash", "latest"); !errors.Is(err, domain.ErrInvalidDepSpec) {
 		t.Errorf("invalid spec error = %v, want ErrInvalidDepSpec", err)
+	}
+}
+
+func TestRegistryFetchDownloadsAndVerifiesIntegrity(t *testing.T) {
+	// A real sha512-<base64> digest over the exact body.
+	body := []byte("this is the real tarball content")
+	sum := sha512.Sum512(body)
+	digest := "sha512-" + base64.StdEncoding.EncodeToString(sum[:])
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(body)
+	}))
+	defer server.Close()
+
+	client := registry.New("https://r.example")
+	got, err := client.Fetch(context.Background(), registry.ResolvedVersion{
+		Name: "lodash", Version: "4.17.21", TarballURL: server.URL, Integrity: digest,
+	})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if string(got) != string(body) {
+		t.Fatalf("fetch = %q, want %q", got, body)
+	}
+}
+
+func TestRegistryFetchFailsOnIntegrityMismatch(t *testing.T) {
+	body := []byte("tampered or corrupted tarball")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(body)
+	}))
+	defer server.Close()
+
+	// Wrong digest: base64 "AAAAAAAA..." does not match the body.
+	client := registry.New("https://r.example")
+	_, err := client.Fetch(context.Background(), registry.ResolvedVersion{
+		Name: "lodash", Version: "4.17.21", TarballURL: server.URL,
+		Integrity: "sha512-" + base64.StdEncoding.EncodeToString(make([]byte, 64)),
+	})
+	if err == nil {
+		t.Fatal("expected integrity mismatch error")
+	}
+	if !strings.Contains(err.Error(), "integrity mismatch") {
+		t.Fatalf("error = %v, want integrity mismatch", err)
+	}
+}
+
+func TestRegistryFetchMissingTarballURLErrors(t *testing.T) {
+	client := registry.New("https://r.example")
+	if _, err := client.Fetch(context.Background(), registry.ResolvedVersion{Name: "lodash", Version: "1.0.0"}); err == nil {
+		t.Fatal("expected error for missing tarball URL")
 	}
 }

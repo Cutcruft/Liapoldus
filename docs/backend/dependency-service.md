@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — domain/storage/registry/deps.Service/admin API/unit+integration-тесты готовы; шаги 3 (диск-blobs) и 4 (материализация+бандлинг) и e2e — в работе**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; осталось: полный subpath/вложенный layout (фаза 2)**.
 
 ## 1. Цель и принципы
 
@@ -64,8 +64,7 @@ domain:
 storage (новые tables `005_dependencies.sql`):
   dependencies(site_id, name, spec, resolved_version, integrity, updated_at)   // вершинные
   dep_packages(name, version, integrity, tarball_url, dependencies JSON)       // кэш метаданных
-  dep_blobs(sha256, size)                                                       // индексы файлов
-  blobs на диске: <data>/deps/<sha256[0:2]>/<sha256>  (диск-стор, по образцу artifactstore)
+  blobs на диске: <data>/deps/<name>/<version>.tgz  (диск-стор internal/infra/deps/store; таблицы индексов нет)
 ```
 
 - Версии **immutable** → записи кэша никто не переписывает; `dep_packages` и `dep_blobs` растут
@@ -160,17 +159,23 @@ storage (новые tables `005_dependencies.sql`):
 1. ✅ `domain` + `storage` (tables 005, memory+postgres), `deps.Service` (CRUD вершинных deps,
    резолв + flat-graph + кэш + integrity).
 2. ✅ Registry-фетчер `internal/infra/deps/registry` (packument abbr, scoped `%2F`, semver через
-   Masterminds/semver, backoff, 404/unresolvable маппинг; tarball-фетч — в шаге 4 вместе с integrity-проверкой).
-3. ⏳ Диск-стор blobs `internal/infra/deps/store` (по образцу artifactstore).
-4. ⏳ Интеграция публикации: materializer (node_modules-layout из кэша → esbuild
-   per-dep бандлы в `_deps/`, `manifest.deps` + externals, `DepBuildError` для несовместимых).
+   Masterminds/semver, backoff, 404/unresolvable маппинг).
+3. ✅ Диск-стор tarball-блобов `internal/infra/deps/store` (`<data>/deps/<name>/<version>.tgz`,
+   write-and-rename, идемпотентный `Save`; `registry.Client.Fetch` верифицирует sha512-integrity).
+4. ✅ Интеграция публикации: materializer (node_modules-layout из кэша + esbuild per-dep бандлы в
+   `dist/_deps/<name>@<version>.js` (scoped → `%2F`)), `manifest.deps` (публичный артефакт `dist/_deps/...`,
+   отдаётся существующим FileServer `/build/<site>/<env>/<snapshot>/dist/...`), `manifest.externals`
+   = `SharedExternals` + вершинные deps + transitives-инлайнинг; `DepBuildError`
+   `{pkg, version, missing, hint}` для несовместимых (браузерные builtins `fs` и пр.).
    Lock в снапшот уже готов: `snapshot.Service` получает variadic `LockResolver` = `deps.Service.ResolveLock`.
 5. ✅ Admin API deps CRUD (`GET/POST /api/sites/{id}/dependencies`, `DELETE .../{name}` с scoped `%2F`);
    ошибки 400/404/422 (`ErrInvalidDepSpec`/`ErrPackageNotFound`/`ErrUnresolvableSpec`+`ErrVersionConflict`).
 6. ✅ Тесты unit (валидация, best-effort probe, flat-граф, reuse/конфликт, кэш no-op, packument-резолв с
-   httptest-фейком, admin + lock в снапшот, 422 при нерезолвящемся графе) и integration
-   (локальный registry-сервер + memory/postgres). Осталось: e2e (реальный esbuild) в шаге 4.
-7. Документация обновляется вместе с кодом; коммиты по шагам, отдельно после каждой фазы.
+   httptest-фейком, admin + lock в снапшот, 422 при нерезолвящемся графе; layout: bundle/DepBuildError/
+   scoped/integrity/диск-кэш) и integration (локальный registry-сервер + memory/postgres).
+7. ✅ e2e: локальный httptest-registry (реальный sha512) + реальный esbuild: полный цикл
+   build → `_deps`-бандл с инлайном transitive + `from "react"` external, site-бандл держит
+   `from "agent"` external, `manifest.json` deps/externals; падение на node-builtin импорте.
 
 **Фаза 2:** subpath-покрытие полностью, вложенные версионные layout (конфликты), CSS/ассеты,
 peer-политика (fail по неудовлетворённым peers), allowlist scopes, кэш-лимиты/эвикция.

@@ -65,7 +65,7 @@ func materializeTestWorkspace(t *testing.T, mem *storage.Memory, siteID string, 
 		t.Fatal(err)
 	}
 
-	mat := materializer.New(mem, mem, mem, shared.NewResolver())
+	mat := materializer.New(mem, mem, mem, mem, shared.NewResolver(), nil)
 	ws, err := mat.Materialize(ctx, build.WorkspaceRequest{SiteID: siteID, SnapshotID: snapshot.ID, Environment: domain.EnvironmentDevelopment, Dir: dir})
 	if err != nil {
 		t.Fatalf("materialize: %v", err)

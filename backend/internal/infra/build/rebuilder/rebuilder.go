@@ -60,7 +60,7 @@ func (r *Rebuilder) Start(ctx context.Context) error {
 	defer r.Close()
 
 	outdir := filepath.Join(r.opts.Request.Dir, "dist")
-	buildCtx, ctxErr := api.Context(builder.Options(filepath.Join(r.opts.Request.Dir, "src", "entry.tsx"), outdir))
+	buildCtx, ctxErr := api.Context(builder.Options(filepath.Join(r.opts.Request.Dir, "src", "entry.tsx"), outdir, r.workspace.Manifest.Externals...))
 	if ctxErr != nil {
 		return fmt.Errorf("dev rebuilder: esbuild context: %s", strings.Join(esbuildErrors(ctxErr.Errors), "; "))
 	}

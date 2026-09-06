@@ -18,6 +18,74 @@ type DefinitionRef struct {
 	SHA  string `json:"sha"`
 }
 
+// DepRef points a bare dependency specifier to its frozen, separately bundled
+// artifact (dependency-service spec §11 шаг 4). Site bundles keep dependencies
+// external; the manifest is the import-map source for the runtime shell.
+type DepRef struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	// PublicArtifact is the artifact-relative path of the bundle, e.g.
+	// "dist/_deps/lodash@4.17.21.js" (served at /build/<site>/<env>/<snap>/…).
+	PublicArtifact string `json:"publicArtifact"`
+	// Integrity is the sha512 of the source tarball the bundle was built from
+	// (supply chain, spec §9).
+	Integrity string `json:"integrity"`
+}
+
+// DepBuildError is the phase-1 failure mode for a dependency that cannot be
+// bundled: a package importing node builtins, a missing module, or an esbuild
+// failure. Hint carries actionable guidance for the site author.
+type DepBuildError struct {
+	Pkg     string
+	Version string
+	Missing string
+	Hint    string
+}
+
+func (e *DepBuildError) Error() string {
+	if e.Pkg == "" {
+		return e.Hint
+	}
+	at := e.Pkg
+	if e.Version != "" {
+		at += "@" + e.Version
+	}
+	msg := at
+	if e.Missing != "" {
+		msg += ": cannot resolve " + e.Missing
+	}
+	if e.Hint != "" {
+		msg += " (" + e.Hint + ")"
+	}
+	return msg
+}
+
+// DepLayoutRequest is the materialization target for a snapshot's frozen
+// dependency lock. TopLevel lists the site's declared bare specifiers (the
+// only ones that get their own _deps bundles); every locked package (including
+// transitives) is still laid out into node_modules/.
+type DepLayoutRequest struct {
+	Dir      string
+	Lock     domain.SnapshotLock
+	TopLevel []string
+}
+
+// DepLayout is the outcome of materializing a snapshot lock: the import-map
+// entries for the manifest and the bare external specifiers the site bundle
+// must keep external.
+type DepLayout struct {
+	Deps      map[string]DepRef
+	Externals []string
+}
+
+// DepLayouter fetches, verifies and unpacks every package of a frozen lock
+// into the workspace's node_modules/, bundles the top-level deps into
+// dist/_deps/ and returns the manifest import-map. Implemented by the infra
+// deps materializer (spec §11 шаг 4).
+type DepLayouter interface {
+	MaterializeDeps(context.Context, DepLayoutRequest) (DepLayout, error)
+}
+
 // Manifest is the workspace contract between the materializer and the bundle
 // runner (and later, the runtime). It is written to the workspace as
 // manifest.json.
@@ -32,6 +100,9 @@ type Manifest struct {
 	// specifier → public URL); the boot shell turns it into a
 	// <script type="importmap">.
 	Shared map[string]string `json:"shared,omitempty"`
+	// Deps is the import map for site dependencies (bare specifier → frozen
+	// bundle artifact, published under this snapshot's dist/_deps/).
+	Deps map[string]DepRef `json:"deps,omitempty"`
 }
 
 // SharedExternals are the runtime libraries the site bundle does not include;

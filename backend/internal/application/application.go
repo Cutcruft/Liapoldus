@@ -21,7 +21,9 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/builder"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/materializer"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shared"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/layout"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/registry"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/store"
 	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 )
 
@@ -53,9 +55,16 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 	gitRepo := gitrepo.NewRepo(cfg.LocalGitDir)
 	comps := component.NewService(storage, gitapp.NewService(gitRepo, storage))
 	artifacts := artifactstore.New(cfg.BuildDir)
+	reg := registry.New(cfg.NPMRegistryURL)
+	depsStore := store.New(cfg.DepsDir)
+	depsLayout := layout.New(layout.LayoutOptions{
+		Packages: storage,
+		Store:    depsStore,
+		Fetch:    tarballFetcher{client: reg},
+	})
 	builds := buildapp.NewService(
 		storage, storage, storage,
-		materializer.New(storage, storage, storage, shared.NewResolver()),
+		materializer.New(storage, storage, storage, storage, shared.NewResolver(), depsLayout),
 		builder.New(),
 		artifacts,
 	)
@@ -63,7 +72,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		DefaultStatus: cfg.RedirectDefaultStatus,
 		Allowed:       redirectAllowed,
 	})
-	depsSvc := deps.NewService(storage, storage, registryAdapter{client: registry.New(cfg.NPMRegistryURL)})
+	depsSvc := deps.NewService(storage, storage, registryAdapter{client: reg})
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
@@ -106,4 +115,20 @@ func (a registryAdapter) Resolve(ctx context.Context, name, spec string) (deps.R
 		TarballURL:   resolved.TarballURL,
 		Dependencies: resolved.Dependencies,
 	}, nil
+}
+
+// tarballFetcher bridges the infra registry client onto the layout component's
+// TarballFetcher, passing the tarball URL + integrity from the immutable
+// dep_packages cache (never a re-resolve at build time).
+type tarballFetcher struct {
+	client *registry.Client
+}
+
+func (t tarballFetcher) Tarball(ctx context.Context, name, version, tarballURL, integrity string) ([]byte, error) {
+	return t.client.Fetch(ctx, registry.ResolvedVersion{
+		Name:       name,
+		Version:    version,
+		TarballURL: tarballURL,
+		Integrity:  integrity,
+	})
 }

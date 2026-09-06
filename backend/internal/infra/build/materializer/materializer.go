@@ -15,19 +15,24 @@ import (
 )
 
 // Materializer turns a site snapshot into an esbuild-able workspace:
-// src/entry.tsx + src/definitions/<id>.tsx + manifest.json. Definition
-// sources come from the component registry mirror of the git HEAD (R5), so no
-// git checkout is needed at build time.
+// src/entry.tsx + src/definitions/<id>.tsx + manifest.json (plus, when the
+// snapshot has a frozen dependency lock and a DepLayouter is configured,
+// node_modules/ + dist/_deps/ bundles). Definition sources come from the
+// component registry mirror of the git HEAD (R5), so no git checkout is needed
+// at build time.
 type Materializer struct {
 	snapshots domain.SnapshotRepository
 	pages     domain.PageRepository
 	defs      domain.ComponentDefinitionRepository
+	depsRepo  domain.DependencyRepository
 	shared    build.SharedResolver
+	deps      build.DepLayouter
 }
 
 func New(snapshots domain.SnapshotRepository, pages domain.PageRepository,
-	defs domain.ComponentDefinitionRepository, shared build.SharedResolver) *Materializer {
-	return &Materializer{snapshots: snapshots, pages: pages, defs: defs, shared: shared}
+	defs domain.ComponentDefinitionRepository, depsRepo domain.DependencyRepository,
+	shared build.SharedResolver, deps build.DepLayouter) *Materializer {
+	return &Materializer{snapshots: snapshots, pages: pages, defs: defs, depsRepo: depsRepo, shared: shared, deps: deps}
 }
 
 var _ build.WorkspaceBuilder = (*Materializer)(nil)
@@ -96,6 +101,33 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		manifest.Shared = m.shared.SharedURLs()
 	}
 
+	// Dependency layout: frozen lock of the snapshot → node_modules/ +
+	// dist/_deps/ bundles + the manifest import-map and site-bundle externals.
+	if len(snapshot.DepsLock.Deps) > 0 {
+		if m.deps == nil || m.depsRepo == nil {
+			return fail("deps", fmt.Errorf("%w: snapshot has dependencies but no dependency layout is configured", domain.ErrInvalidRequest))
+		}
+		topLevel, err := m.depsRepo.ListDependenciesBySite(ctx, req.SiteID)
+		if err != nil {
+			return fail("deps", err)
+		}
+		names := make([]string, 0, len(topLevel))
+		for _, dep := range topLevel {
+			names = append(names, dep.Name)
+		}
+		layout, err := m.deps.MaterializeDeps(ctx, build.DepLayoutRequest{
+			Dir:      req.Dir,
+			Lock:     snapshot.DepsLock,
+			TopLevel: names,
+		})
+		if err != nil {
+			return fail("deps", err)
+		}
+		manifest.Deps = layout.Deps
+		manifest.Externals = append(append([]string{}, build.SharedExternals...), layout.Externals...)
+		manifest.Externals = uniqueSorted(manifest.Externals)
+	}
+
 	entry := generateEntry(req.SiteID, req.Environment, definitionIds)
 	if err := os.MkdirAll(filepath.Join(req.Dir, "src"), 0o755); err != nil {
 		return fail("mkdir src", err)
@@ -150,6 +182,20 @@ func pageIDs(snapshot domain.Snapshot) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// uniqueSorted dedupes + sorts a slice in place.
+func uniqueSorted(items []string) []string {
+	seen := make(map[string]bool, len(items))
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if !seen[item] {
+			seen[item] = true
+			out = append(out, item)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // generateEntry builds src/entry.tsx: every definition is statically imported

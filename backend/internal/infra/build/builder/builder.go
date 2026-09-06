@@ -21,8 +21,10 @@ var _ build.BundleRunner = (*Builder)(nil)
 
 // Options is the shared esbuild configuration for site bundles. The dev
 // rebuilder reuses it so the incremental context and the one-shot build never
-// drift apart.
-func Options(entryPoint, outdir string) api.BuildOptions {
+// drift apart. External libraries (react, site deps, ...) come from the
+// materialized manifest so the site bundle keeps them as runtime imports.
+func Options(entryPoint, outdir string, externals ...string) api.BuildOptions {
+	external := append(append([]string{}, build.SharedExternals...), externals...)
 	return api.BuildOptions{
 		EntryPoints:       []string{entryPoint},
 		Outdir:            outdir,
@@ -35,14 +37,14 @@ func Options(entryPoint, outdir string) api.BuildOptions {
 		MinifyIdentifiers: true,
 		MinifySyntax:      true,
 		TreeShaking:       api.TreeShakingTrue,
-		External:          build.SharedExternals,
+		External:          external,
 		LogLevel:          api.LogLevelSilent,
 	}
 }
 
 func (b *Builder) Build(_ context.Context, workspace build.Workspace) (build.BundleResult, error) {
 	outdir := filepath.Join(workspace.Dir, "dist")
-	result := api.Build(Options(filepath.Join(workspace.Dir, "src", "entry.tsx"), outdir))
+	result := api.Build(Options(filepath.Join(workspace.Dir, "src", "entry.tsx"), outdir, workspace.Manifest.Externals...))
 	if len(result.Errors) > 0 {
 		messages := make([]string, 0, len(result.Errors))
 		for _, err := range result.Errors {

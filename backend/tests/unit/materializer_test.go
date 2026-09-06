@@ -56,7 +56,7 @@ func seedMaterializedPage(t *testing.T, mem *storage.Memory, siteID, pageID stri
 func materializerHarness(t *testing.T) (*storage.Memory, *materializer.Materializer) {
 	t.Helper()
 	mem := storage.NewMemory()
-	mat := materializer.New(mem, mem, mem, nil)
+	mat := materializer.New(mem, mem, mem, mem, nil, nil)
 	return mem, mat
 }
 
@@ -152,10 +152,10 @@ func (r resolverStub) SharedURLs() map[string]string { return r.urls }
 func TestMaterializeManifestSharedImportMap(t *testing.T) {
 	ctx := context.Background()
 	mem := storage.NewMemory()
-	mat := materializer.New(mem, mem, mem, resolverStub{urls: map[string]string{
+	mat := materializer.New(mem, mem, mem, mem, resolverStub{urls: map[string]string{
 		"react":                 "/build/_shared/react/18.3.1.js",
 		"@liapoldus/ui-runtime": "/build/_shared/@liapoldus/ui-runtime/0.1.0.js",
-	}})
+	}}, nil)
 	site := seedBuildSite(t, mem)
 	seedDef(t, mem, site.ID, "text", "export default (props) => props.title ?? null;\n", "sha_text")
 	seedDef(t, mem, site.ID, "container", "export default (props) => props.children;\n", "sha_cont")

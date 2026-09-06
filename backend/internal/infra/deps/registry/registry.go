@@ -6,6 +6,8 @@ package registry
 
 import (
 	"context"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -202,4 +204,80 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+// Fetch downloads the tarball for a resolved package and verifies its
+// integrity digest (sha512 base64, per npm's dist.integrity). A mismatch is a
+// hard error: the cache must never serve content that failed supply-chain
+// validation (spec §9). An empty integrity is accepted (some registries omit
+// it), but when present it must match.
+func (c *Client) Fetch(ctx context.Context, resolved ResolvedVersion) ([]byte, error) {
+	url := resolved.TarballURL
+	if url == "" {
+		return nil, fmt.Errorf("npm registry %s@%s: no tarball URL", resolved.Name, resolved.Version)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("npm registry tarball %s@%s: %w", resolved.Name, resolved.Version, err)
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+		resp, err := c.http.Do(req)
+		if err == nil {
+			switch {
+			case resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusRequestTimeout:
+				lastErr = fmt.Errorf("npm registry tarball %s@%s: status %d", resolved.Name, resolved.Version, resp.StatusCode)
+				resp.Body.Close()
+			case resp.StatusCode == http.StatusOK:
+				body, readErr := io.ReadAll(io.LimitReader(resp.Body, 128<<20))
+				resp.Body.Close()
+				if readErr != nil {
+					return nil, fmt.Errorf("npm registry tarball %s@%s: read: %w", resolved.Name, resolved.Version, readErr)
+				}
+				if err := verifyIntegrity(resolved, body); err != nil {
+					return nil, err
+				}
+				return body, nil
+			default:
+				resp.Body.Close()
+				lastErr = fmt.Errorf("npm registry tarball %s@%s: unexpected status %d", resolved.Name, resolved.Version, resp.StatusCode)
+			}
+		} else {
+			lastErr = fmt.Errorf("npm registry tarball %s@%s: %w", resolved.Name, resolved.Version, err)
+		}
+		if attempt < c.maxRetries {
+			if !sleep(ctx, c.backoff<<attempt) {
+				return nil, lastErr
+			}
+		}
+	}
+	return nil, lastErr
+}
+
+// verifyIntegrity checks body against a sha512 base64 digest when one is
+// present; a non-emtpy integrity that does not match is a hard error.
+func verifyIntegrity(resolved ResolvedVersion, body []byte) error {
+	integrity := resolved.Integrity
+	if integrity == "" {
+		return nil
+	}
+	parts := strings.Fields(integrity)
+	for _, part := range parts {
+		// npm digest form: "sha512-<base64>".
+		if !strings.HasPrefix(part, "sha512-") {
+			continue
+		}
+		expected, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(part, "sha512-"))
+		if err != nil {
+			continue
+		}
+		sum := sha512.Sum512(body)
+		if string(sum[:]) != string(expected) {
+			return fmt.Errorf("npm registry tarball %s@%s: integrity mismatch", resolved.Name, resolved.Version)
+		}
+		return nil
+	}
+	// No usable sha512 in the digest string (e.g. sha1-only): nothing to verify.
+	return nil
 }
