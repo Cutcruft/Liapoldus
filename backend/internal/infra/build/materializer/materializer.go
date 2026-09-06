@@ -68,9 +68,31 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		return fail("tree", err)
 	}
 
+	// Resolve the site's declared dependency names up-front: the definitions
+	// loop below scans their sources for bare subpath imports and must only
+	// keep subpaths that belong to a declared top-level package.
+	var declaredDeps []string
+	if len(snapshot.DepsLock.Deps) > 0 {
+		if m.deps == nil || m.depsRepo == nil {
+			return fail("deps", fmt.Errorf("%w: snapshot has dependencies but no dependency layout is configured", domain.ErrInvalidRequest))
+		}
+		declared, err := m.depsRepo.ListDependenciesBySite(ctx, req.SiteID)
+		if err != nil {
+			return fail("deps", err)
+		}
+		for _, dep := range declared {
+			declaredDeps = append(declaredDeps, dep.Name)
+		}
+	}
+	declaredSet := make(map[string]bool, len(declaredDeps))
+	for _, name := range declaredDeps {
+		declaredSet[name] = true
+	}
+
 	// Resolve sources from the registry and write definition files.
 	refs := make(map[string]build.DefinitionRef, len(definitionIds))
 	srcDir := filepath.Join(req.Dir, "src", "definitions")
+	var subpathImports []string
 	for _, id := range definitionIds {
 		def, err := m.defs.Get(ctx, req.SiteID, id)
 		if err != nil {
@@ -87,6 +109,7 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 			return fail("write "+id, err)
 		}
 		refs[id] = build.DefinitionRef{File: fileName, SHA: def.CurrentSHA}
+		subpathImports = append(subpathImports, bareSubpathImports(def.Source, declaredSet)...)
 	}
 
 	manifest := build.Manifest{
@@ -102,23 +125,14 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 	}
 
 	// Dependency layout: frozen lock of the snapshot → node_modules/ +
-	// dist/_deps/ bundles + the manifest import-map and site-bundle externals.
+	// dist/_deps/ bundles (top-level + bare subpaths) + the manifest
+	// import-map and site-bundle externals.
 	if len(snapshot.DepsLock.Deps) > 0 {
-		if m.deps == nil || m.depsRepo == nil {
-			return fail("deps", fmt.Errorf("%w: snapshot has dependencies but no dependency layout is configured", domain.ErrInvalidRequest))
-		}
-		topLevel, err := m.depsRepo.ListDependenciesBySite(ctx, req.SiteID)
-		if err != nil {
-			return fail("deps", err)
-		}
-		names := make([]string, 0, len(topLevel))
-		for _, dep := range topLevel {
-			names = append(names, dep.Name)
-		}
 		layout, err := m.deps.MaterializeDeps(ctx, build.DepLayoutRequest{
 			Dir:      req.Dir,
 			Lock:     snapshot.DepsLock,
-			TopLevel: names,
+			TopLevel: declaredDeps,
+			Subpaths: uniqueSorted(subpathImports),
 		})
 		if err != nil {
 			return fail("deps", err)
@@ -196,6 +210,46 @@ func uniqueSorted(items []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// importSpecifierRe matches module specifiers in static and dynamic import
+// statements ("from 'x'", "from \"x\"", "import 'x'", "import('x')"). The
+// leading [^.\w] guard keeps member call sites like obj.from("x") out.
+var importSpecifierRe = regexp.MustCompile(`(?:^|[^.\w])(?:from|import)(?:\s*\(|\s+)\s*["']([^"']+)["']`)
+
+// bareSubpathImports returns the bare subpath specifiers (e.g. "lodash/map")
+// found in source that belong to a declared top-level dependency. Top-level
+// imports, relative/absolute paths, URLs and node built-ins are handled
+// elsewhere (top-level _deps bundles / the site bundle resolver) and are
+// intentionally left out.
+func bareSubpathImports(source string, declared map[string]bool) []string {
+	var out []string
+	for _, m := range importSpecifierRe.FindAllStringSubmatch(source, -1) {
+		spec := m[1]
+		top, _, isSub := splitTopLevel(spec)
+		if isSub && declared[top] {
+			out = append(out, spec)
+		}
+	}
+	return out
+}
+
+// splitTopLevel splits a bare import specifier into its package name and the
+// remaining subpath (if any): "lodash/map" → ("lodash", "map", true);
+// "@scope/pkg/sub" → ("@scope/pkg", "sub", true).
+func splitTopLevel(spec string) (top, rest string, isSub bool) {
+	if strings.HasPrefix(spec, "@") {
+		parts := strings.Split(spec, "/")
+		if len(parts) < 3 {
+			return spec, "", false
+		}
+		return parts[0] + "/" + parts[1], strings.Join(parts[2:], "/"), true
+	}
+	idx := strings.Index(spec, "/")
+	if idx < 0 {
+		return spec, "", false
+	}
+	return spec[:idx], spec[idx+1:], true
 }
 
 // generateEntry builds src/entry.tsx: every definition is statically imported

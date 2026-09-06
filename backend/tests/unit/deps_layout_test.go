@@ -358,3 +358,166 @@ func TestLayoutDiskCacheSkipsFetchAndMetadata(t *testing.T) {
 		t.Fatalf("layout from cache missing node_modules: %v", statErr)
 	}
 }
+
+// subpathFixture returns an agent tarball whose package entry imports ./lib/util.js
+// (relative, inlined into the main bundle) and whose lib/util.js exposes only a
+// named export — so the subpath artifact exercises the named-only fallback.
+func subpathAgentTarball(t *testing.T) (data []byte, sri string) {
+	t.Helper()
+	return tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js": `import { utilMarker } from "./lib/util.js";
+export const agentName = "agent-live";
+export default function Agent() { return utilMarker; }
+`,
+		"lib/util.js": "export const utilMarker = \"agent-subpath-live\";\n",
+	})
+}
+
+func TestLayoutSubpathBundledAndDebouncedExternals(t *testing.T) {
+	agentData, agentSRI := subpathAgentTarball(t)
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"agent"},
+		Subpaths: []string{"agent/lib/util", "agent/lib/util"}, // duplicated on purpose
+	})
+	if err != nil {
+		t.Fatalf("materialize deps with subpath: %v", err)
+	}
+
+	subRef, ok := result.Deps["agent/lib/util"]
+	if !ok {
+		t.Fatalf("missing import-map entry for agent/lib/util: %#v", result.Deps)
+	}
+	if subRef.Version != "1.0.0" || subRef.Integrity != agentSRI {
+		t.Fatalf("subpath dep ref = %#v", subRef)
+	}
+	if subRef.PublicArtifact != "dist/_deps/agent@1.0.0/lib/util.js" {
+		t.Fatalf("subpath public artifact = %q", subRef.PublicArtifact)
+	}
+	if mainRef, ok := result.Deps["agent"]; !ok || mainRef.PublicArtifact != "dist/_deps/agent@1.0.0.js" {
+		t.Fatalf("main dep ref must survive alongside the subpath: %#v", result.Deps)
+	}
+	if got, want := result.Externals, []string{"agent", "agent/lib/util"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("externals = %#v, want %#v", got, want)
+	}
+
+	bundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "agent@1.0.0", "lib", "util.js"))
+	if err != nil {
+		t.Fatalf("read subpath bundle: %v", err)
+	}
+	if !strings.Contains(string(bundle), "agent-subpath-live") {
+		t.Fatalf("subpath bundle must carry the module exports:\n%s", bundle)
+	}
+}
+
+func TestLayoutScopedSubpathArtifactName(t *testing.T) {
+	coreData, coreSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"@liapoldus/core","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export const version = \"1\";\nexport default 1;\n",
+		"lib/parser.js": `export const parse = (x) => x;
+`,
+	})
+	lay, _, root := layoutHarness(t,
+		map[string][]byte{"@liapoldus/core": coreData},
+		map[string]string{"@liapoldus/core": coreSRI},
+	)
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "@liapoldus/core", Spec: "^1.0.0", Version: "1.0.0", Integrity: coreSRI},
+		}},
+		TopLevel: []string{"@liapoldus/core"},
+		Subpaths: []string{"@liapoldus/core/lib/parser"},
+	})
+	if err != nil {
+		t.Fatalf("materialize scoped subpath: %v", err)
+	}
+	ref := result.Deps["@liapoldus/core/lib/parser"]
+	if ref.PublicArtifact != "dist/_deps/@liapoldus%2Fcore@1.0.0/lib/parser.js" {
+		t.Fatalf("scoped subpath artifact = %q", ref.PublicArtifact)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "dist/_deps", "@liapoldus%2Fcore@1.0.0", "lib", "parser.js")); statErr != nil {
+		t.Fatalf("scoped subpath layout missing artifact: %v", statErr)
+	}
+}
+
+func TestLayoutSubpathOfUndeclaredDepIgnored(t *testing.T) {
+	helperData, helperSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"helper","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+	})
+	agentData, agentSRI := subpathAgentTarball(t)
+	lay, _, root := layoutHarness(t,
+		map[string][]byte{"agent": agentData, "helper": helperData},
+		map[string]string{"agent": agentSRI, "helper": helperSRI},
+	)
+	// agent is locked (transitive) but only helper is declared top-level: the
+	// agent/lib/util subpath must be ignored, not bundled.
+	result, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "helper", Spec: "^1.0.0", Version: "1.0.0", Integrity: helperSRI},
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"helper"},
+		Subpaths: []string{"agent/lib/util"},
+	})
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if _, ok := result.Deps["agent/lib/util"]; ok {
+		t.Fatalf("subpath of an undeclared dep must not be materialized: %#v", result.Deps)
+	}
+	if got, want := result.Externals, []string{"helper"}; len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("externals = %#v, want %#v", got, want)
+	}
+}
+
+func TestLayoutSubpathMissingModuleFails(t *testing.T) {
+	agentData, agentSRI := subpathAgentTarball(t)
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"agent"},
+		Subpaths: []string{"agent/nope"},
+	})
+	var depErr *build.DepBuildError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected *build.DepBuildError for unresolvable subpath, got %T: %v", err, err)
+	}
+	if depErr.Pkg != "agent" || !strings.Contains(depErr.Missing, "agent/nope") {
+		t.Fatalf("dep error = %#v", depErr)
+	}
+}
+
+func TestLayoutSubpathCssRejectedWithHint(t *testing.T) {
+	agentData, agentSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export default 1;\n",
+		"styles.css":   "body { color: red; }\n",
+	})
+	lay, _, root := layoutHarness(t, map[string][]byte{"agent": agentData}, map[string]string{"agent": agentSRI})
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI},
+		}},
+		TopLevel: []string{"agent"},
+		Subpaths: []string{"agent/styles.css"},
+	})
+	var depErr *build.DepBuildError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected *build.DepBuildError for css subpath, got %T: %v", err, err)
+	}
+	if !strings.Contains(depErr.Hint, "CSS") {
+		t.Fatalf("css subpath must carry a hint, got %#v", depErr)
+	}
+}

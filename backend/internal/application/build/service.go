@@ -62,12 +62,16 @@ func (e *DepBuildError) Error() string {
 
 // DepLayoutRequest is the materialization target for a snapshot's frozen
 // dependency lock. TopLevel lists the site's declared bare specifiers (the
-// only ones that get their own _deps bundles); every locked package (including
-// transitives) is still laid out into node_modules/.
+// only ones that get their own _deps bundles); Subpaths lists the bare subpath
+// specifiers the site code imports directly (e.g. "lodash/map"), restricted to
+// top-level deps — each gets its own _deps/<name>@<ver>/<subpath>.js bundle and
+// import-map entry. Every locked package (including transitives) is still laid
+// out into node_modules/.
 type DepLayoutRequest struct {
 	Dir      string
 	Lock     domain.SnapshotLock
 	TopLevel []string
+	Subpaths []string
 }
 
 // DepLayout is the outcome of materializing a snapshot lock: the import-map

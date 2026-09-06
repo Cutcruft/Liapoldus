@@ -70,11 +70,16 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 		}
 	}
 
+	topSet := make(map[string]bool, len(req.TopLevel))
+	for _, name := range req.TopLevel {
+		topSet[name] = true
+	}
+
 	// 2. Bundle the top-level deps (the site's declared bare imports) one by
 	// one. Only the shared libraries stay external: transitive dependencies
 	// are inlined into the top-level bundle, per spec §6.
 	result := build.DepLayout{Deps: map[string]build.DepRef{}}
-	externals := make([]string, 0, len(req.TopLevel))
+	externals := make([]string, 0, len(req.TopLevel)+len(req.Subpaths))
 	for _, name := range req.TopLevel {
 		dep, ok := byName[name]
 		if !ok {
@@ -82,15 +87,48 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 				Pkg: name, Hint: "declared dependency is absent from the snapshot lock (lock was frozen before the declaration)",
 			}
 		}
-		ref, err := l.bundle(ctx, req.Dir, dep)
+		ref, err := l.bundle(ctx, req.Dir, dep, "")
 		if err != nil {
 			return build.DepLayout{}, err
 		}
 		result.Deps[dep.Name] = ref
 		externals = append(externals, dep.Name)
 	}
-	sort.Strings(externals)
-	result.Externals = externals
+
+	// 3. Bundle each bare subpath of a declared top-level dep the site source
+	// imports directly (spec §6): one _deps/<name>@<ver>/<subpath>.js artifact
+	// + import-map entry. Shared externals stay external; everything else is
+	// inlined into the subpath bundle exactly like the top-level one. Subpaths
+	// of undeclared (transitive) packages are not materialized — they resolve
+	// from node_modules and inline where imported.
+	for _, spec := range uniqueSorted(req.Subpaths) {
+		top, rest, ok := splitTopLevel(spec)
+		if !ok || !topSet[top] {
+			continue
+		}
+		if !validSubpath(rest) {
+			return build.DepLayout{}, &build.DepBuildError{
+				Pkg: top, Hint: fmt.Sprintf("subpath %q is not a filesystem-safe JS module path", spec),
+			}
+		}
+		if reason := unsupportedSubpath(rest); reason != "" {
+			return build.DepLayout{}, &build.DepBuildError{Pkg: top, Hint: reason}
+		}
+		dep, ok := byName[top]
+		if !ok {
+			return build.DepLayout{}, &build.DepBuildError{
+				Pkg: top, Hint: fmt.Sprintf("subpath import %q names a package absent from the snapshot lock", spec),
+			}
+		}
+		ref, err := l.bundle(ctx, req.Dir, dep, rest)
+		if err != nil {
+			return build.DepLayout{}, err
+		}
+		result.Deps[spec] = ref
+		externals = append(externals, spec)
+	}
+
+	result.Externals = uniqueSorted(externals)
 	return result, nil
 }
 
@@ -141,23 +179,37 @@ func (l *Layout) blob(ctx context.Context, dep domain.LockedDep) ([]byte, error)
 	return data, nil
 }
 
-// bundle builds one _deps artifact for a top-level dependency. The artifact is
-// a re-export of the package's entry so any named/default import the site
-// source makes resolves at runtime. Only the shared libraries stay external
-// (import-map-resolved); transitive deps are inlined (spec §6).
-func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep) (build.DepRef, error) {
-	entry := filepath.Join(dir, "deps_entries", artifactEntry(dep.Name))
-	if err := os.MkdirAll(filepath.Dir(entry), 0o755); err != nil {
-		return build.DepRef{}, fmt.Errorf("dependency %s: mkdir: %w", dep.Name, err)
+// bundle builds one _deps artifact for a top-level dependency, or for one of
+// its bare subpaths (subpath != ""). The artifact is a re-export of the target
+// module so any named/default import the site source makes resolves at
+// runtime (esbuild omits a default re-export that has no binding, so the same
+// entry works for defaultless subpath modules too). Only the shared libraries
+// stay external (import-map-resolved); transitive deps are inlined (spec §6).
+func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep, subpath string) (build.DepRef, error) {
+	specifier := dep.Name
+	if subpath != "" {
+		specifier = dep.Name + "/" + subpath
 	}
-	entrySource := fmt.Sprintf("export * from %q;\nexport { default } from %q;\n", dep.Name, dep.Name)
-	if err := os.WriteFile(entry, []byte(entrySource), 0o644); err != nil {
-		return build.DepRef{}, fmt.Errorf("dependency %s: write entry: %w", dep.Name, err)
+	artifact := artifactName(dep.Name, dep.Version)
+	if subpath != "" {
+		artifact = strings.TrimSuffix(artifact, ".js") + "/" + subpath
+		if !strings.HasSuffix(artifact, ".js") {
+			artifact += ".js"
+		}
 	}
 
-	outfile := filepath.Join(dir, "dist", "_deps", artifactName(dep.Name, dep.Version))
+	entry := filepath.Join(dir, "deps_entries", artifactEntry(specifier))
+	outfile := filepath.Join(dir, "dist", "_deps", filepath.FromSlash(artifact))
+	if err := os.MkdirAll(filepath.Dir(entry), 0o755); err != nil {
+		return build.DepRef{}, fmt.Errorf("dependency %s: mkdir: %w", specifier, err)
+	}
 	if err := os.MkdirAll(filepath.Dir(outfile), 0o755); err != nil {
-		return build.DepRef{}, fmt.Errorf("dependency %s: mkdir dist: %w", dep.Name, err)
+		return build.DepRef{}, fmt.Errorf("dependency %s: mkdir dist: %w", specifier, err)
+	}
+
+	entrySource := fmt.Sprintf("export * from %q;\nexport { default } from %q;\n", specifier, specifier)
+	if err := os.WriteFile(entry, []byte(entrySource), 0o644); err != nil {
+		return build.DepRef{}, fmt.Errorf("dependency %s: write entry: %w", specifier, err)
 	}
 
 	external := append([]string{}, build.SharedExternals...)
@@ -181,7 +233,7 @@ func (l *Layout) bundle(ctx context.Context, dir string, dep domain.LockedDep) (
 	return build.DepRef{
 		Name:           dep.Name,
 		Version:        dep.Version,
-		PublicArtifact: filepath.ToSlash(filepath.Join("dist", "_deps", artifactName(dep.Name, dep.Version))),
+		PublicArtifact: filepath.ToSlash(filepath.Join("dist", "_deps", artifact)),
 		Integrity:      dep.Integrity,
 	}, nil
 }
@@ -230,6 +282,68 @@ func artifactName(name, version string) string {
 // artifactEntry is the per-dep esbuild entry file name (no slashes, scoped-safe).
 func artifactEntry(name string) string {
 	return strings.ReplaceAll(name, "/", "__") + ".ts"
+}
+
+// splitTopLevel splits a bare import specifier into its package name and the
+// remaining subpath (if any): "x" → ("x", "", false), "x/y/z" → ("x", "y/z",
+// true), "@scope/x/y" → ("@scope/x", "y", true).
+func splitTopLevel(spec string) (top, rest string, isSub bool) {
+	if strings.HasPrefix(spec, "@") {
+		parts := strings.Split(spec, "/")
+		if len(parts) < 3 {
+			return spec, "", false
+		}
+		return parts[0] + "/" + parts[1], strings.Join(parts[2:], "/"), true
+	}
+	idx := strings.Index(spec, "/")
+	if idx < 0 {
+		return spec, "", false
+	}
+	return spec[:idx], spec[idx+1:], true
+}
+
+// validSubpath reports whether a subpath is a safe, plain relative JS-module
+// path with no empty or escaping segments.
+func validSubpath(subpath string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(subpath), "/") {
+		if seg == "" || seg == "." || seg == ".." || strings.Contains(seg, "\\") ||
+			strings.Contains(seg, "%2F") || strings.Contains(seg, "%2f") {
+			return false
+		}
+	}
+	return true
+}
+
+// unsupportedSubpath returns a plain-language reason when a subpath imports a
+// non-JS asset, which the current bundle pipeline does not support (spec §12).
+func unsupportedSubpath(subpath string) string {
+	ext := strings.ToLower(filepath.Ext(subpath))
+	if !unsupportedSubpathExts[ext] {
+		return ""
+	}
+	return fmt.Sprintf("subpath %q imports a non-JS asset; CSS and static assets are not bundled yet — import the package's JS module instead", subpath)
+}
+
+// unsupportedSubpathExts is the asset-extension guard for subpath bundles.
+var unsupportedSubpathExts = map[string]bool{
+	".css": true, ".scss": true, ".sass": true, ".less": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".svg": true,
+	".woff": true, ".woff2": true, ".ttf": true, ".wasm": true,
+}
+
+// uniqueSorted dedupes and sorts a string slice, dropping empty entries.
+func uniqueSorted(items []string) []string {
+	seen := make(map[string]bool, len(items))
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	sort.Strings(out)
+	return out
 }
 
 const maxUnpackBytes = 256 << 20 // 256 MiB safety cap per tarball

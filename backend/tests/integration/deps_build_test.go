@@ -133,13 +133,16 @@ func seedDepsBuildFixture(t *testing.T, reg *fakeRegistry, regClient *registry.C
 		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js","dependencies":{"helper":"^1.0.0"}}`,
 		"index.js": `import { doubling } from "helper";
 import { createElement } from "react";
+import { utilMarker } from "./lib/util.js";
 export const agentName = "agent-live";
+export const agentTag = utilMarker;
 export default function Agent(props) { return createElement("span", null, agentName + ":" + doubling(props.n)); }
 `,
+		"lib/util.js": "export const utilMarker = \"agent-util-live\";\n",
 	})
 
 	seedDefinitionSource(t, mem, site.ID, "text",
-		"import { agentName } from \"agent\";\nexport default (props) => props?.title ?? agentName;\n")
+		"import { agentName } from \"agent\";\nimport { utilMarker } from \"agent/lib/util\";\nexport default (props) => props?.title ?? agentName + \":\" + utilMarker;\n")
 	seedDefinitionSource(t, mem, site.ID, "container",
 		"import React from \"react\";\nexport default (props) => React.createElement(\"div\", null, props?.children ?? null);\n")
 
@@ -242,6 +245,18 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 	if !strings.Contains(string(siteBundle), `from"agent"`) {
 		t.Fatalf("site bundle must import the dependency externally:\n%s", siteBundle[:min(len(siteBundle), 600)])
 	}
+	if !strings.Contains(string(siteBundle), `from"agent/lib/util"`) {
+		t.Fatalf("site bundle must import the subpath externally:\n%s", siteBundle[:min(len(siteBundle), 600)])
+	}
+
+	// The subpath of the agent package gets its own _deps bundle too.
+	subpathBundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist/_deps", "agent@1.0.0", "lib", "util.js"))
+	if err != nil {
+		t.Fatalf("published subpath bundle: %v", err)
+	}
+	if !strings.Contains(string(subpathBundle), "agent-util-live") {
+		t.Fatalf("subpath bundle must carry the module exports:\n%s", subpathBundle)
+	}
 
 	// The manifest is the import-map source: dist/_deps artifact + externals.
 	manifestData, err := os.ReadFile(filepath.Join(artifactRoot, "manifest.json"))
@@ -259,6 +274,13 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 	if ref.PublicArtifact != "dist/_deps/agent@1.0.0.js" {
 		t.Fatalf("dep public artifact = %q", ref.PublicArtifact)
 	}
+	subRef, ok := manifest.Deps["agent/lib/util"]
+	if !ok {
+		t.Fatalf("manifest deps must include the subpath import-map entry: %#v", manifest.Deps)
+	}
+	if subRef.PublicArtifact != "dist/_deps/agent@1.0.0/lib/util.js" {
+		t.Fatalf("subpath public artifact = %q", subRef.PublicArtifact)
+	}
 	found := false
 	for _, ext := range manifest.Externals {
 		if ext == "agent" {
@@ -267,6 +289,15 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("manifest externals must include agent: %#v", manifest.Externals)
+	}
+	foundSub := false
+	for _, ext := range manifest.Externals {
+		if ext == "agent/lib/util" {
+			foundSub = true
+		}
+	}
+	if !foundSub {
+		t.Fatalf("manifest externals must include agent/lib/util: %#v", manifest.Externals)
 	}
 }
 

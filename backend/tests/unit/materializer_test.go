@@ -287,3 +287,80 @@ func TestMaterializeErrors(t *testing.T) {
 		t.Fatalf("empty source must fail materialization")
 	}
 }
+
+// recordingLayouter captures the DepLayoutRequest and returns a canned
+// import-map, replacing the real esbuild layout in materializer tests.
+type recordingLayouter struct{ req build.DepLayoutRequest }
+
+func (r *recordingLayouter) MaterializeDeps(_ context.Context, req build.DepLayoutRequest) (build.DepLayout, error) {
+	r.req = req
+	return build.DepLayout{
+		Deps: map[string]build.DepRef{
+			"agent":          {Name: "agent", Version: "1.0.0", PublicArtifact: "dist/_deps/agent@1.0.0.js", Integrity: "sha512-agent"},
+			"agent/lib/util": {Name: "agent", Version: "1.0.0", PublicArtifact: "dist/_deps/agent@1.0.0/lib/util.js", Integrity: "sha512-agent"},
+		},
+		Externals: []string{"agent", "agent/lib/util"},
+	}, nil
+}
+
+func TestMaterializeDetectsDeclaredSubpathImports(t *testing.T) {
+	ctx := context.Background()
+	mem := storage.NewMemory()
+	layouter := &recordingLayouter{}
+	mat := materializer.New(mem, mem, mem, mem, nil, layouter)
+	site := seedBuildSite(t, mem)
+	seedDef(t, mem, site.ID, "text",
+		"import { agentName } from \"agent\";\n"+
+			"import { utilMarker } from \"agent/lib/util\";\n"+
+			"import { doubling } from \"helper/lib/math\";\n"+
+			"export default (props) => props?.title ?? agentName + \":\" + utilMarker;\n", "sha_sub")
+	seedDef(t, mem, site.ID, "container", "export default (props) => props.children;\n", "sha_cont")
+	seedDef(t, mem, site.ID, "hero", "export default (props) => props.title;\n", "sha_hero")
+	seedMaterializedPage(t, mem, site.ID, "page_1")
+	if err := mem.CreateDependency(ctx, domain.Dependency{
+		SiteID: site.ID, Name: "agent", Spec: "^1.0.0",
+		CreatedAt: testNow(), UpdatedAt: testNow(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := domain.Snapshot{ID: "snapshot_sub", SiteID: site.ID,
+		Pages: []domain.SnapshotPage{{PageID: "page_1", VersionID: "pagever_1", Version: 1}},
+		DepsLock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: "sha512-agent"},
+		}},
+		CreatedAt: testNow()}
+	if err := mem.CreateSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	ws, err := mat.Materialize(ctx, build.WorkspaceRequest{
+		SiteID: site.ID, SnapshotID: snapshot.ID, Environment: domain.EnvironmentDevelopment, Dir: filepath.Join(t.TempDir(), "ws"),
+	})
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if got, want := layouter.req.Subpaths, []string{"agent/lib/util"}; len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("request.Subpaths = %#v, want %#v", got, want)
+	}
+	if got := layouter.req.TopLevel; len(got) != 1 || got[0] != "agent" {
+		t.Fatalf("request.TopLevel = %#v, want [agent]", got)
+	}
+	// The subpath import naming an undeclared package (helper) must be left
+	// out, and the import map must carry the declared subpath artifact.
+	if _, ok := ws.Manifest.Deps["helper/lib/math"]; ok {
+		t.Fatalf("undeclared subpath must not be materialized: %#v", ws.Manifest.Deps)
+	}
+	ref, ok := ws.Manifest.Deps["agent/lib/util"]
+	if !ok || ref.PublicArtifact != "dist/_deps/agent@1.0.0/lib/util.js" {
+		t.Fatalf("manifest deps = %#v", ws.Manifest.Deps)
+	}
+	found := false
+	for _, ext := range ws.Manifest.Externals {
+		if ext == "agent/lib/util" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("externals must include agent/lib/util: %#v", ws.Manifest.Externals)
+	}
+}
