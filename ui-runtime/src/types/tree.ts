@@ -31,6 +31,8 @@ export interface TreeInstance {
 export interface TreeDeclaration {
   snapshotId?: string;
   versionId?: string;
+  /** страница, которой принадлежит дерево (home-page для контракта) */
+  pageId?: string;
   root: TreeInstance;
 }
 

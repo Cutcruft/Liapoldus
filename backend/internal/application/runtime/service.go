@@ -117,6 +117,7 @@ func (s *Service) initialTree(ctx context.Context, snapshot domain.Snapshot, rou
 	return &TreeDeclaration{
 		SnapshotID: snapshot.ID,
 		VersionID:  version.ID,
+		PageID:     selected.PageID,
 		Root:       toTreeNode(version.Root),
 	}, nil
 }

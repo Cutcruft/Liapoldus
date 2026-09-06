@@ -140,6 +140,10 @@ func TestRuntimeContractPinsBootRelease(t *testing.T) {
 	if tree["snapshotId"] != snapshot.ID {
 		t.Fatalf("tree = %#v", tree)
 	}
+	homeAction, _ := home["action"].(map[string]any)
+	if tree["pageId"] != homeAction["pageId"] {
+		t.Fatalf("tree pageId = %#v, want %v", tree["pageId"], homeAction["pageId"])
+	}
 	root, _ := tree["root"].(map[string]any)
 	if root["instanceId"] != "root" || root["definitionId"] != "container" {
 		t.Fatalf("tree root = %#v", root)

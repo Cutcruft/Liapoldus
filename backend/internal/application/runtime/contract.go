@@ -65,6 +65,7 @@ type TreeNode struct {
 type TreeDeclaration struct {
 	SnapshotID string    `json:"snapshotId,omitempty"`
 	VersionID  string    `json:"versionId,omitempty"`
+	PageID     string    `json:"pageId,omitempty"`
 	Root       *TreeNode `json:"root"`
 }
 
