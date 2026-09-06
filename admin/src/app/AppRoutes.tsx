@@ -14,6 +14,8 @@ import { FormEditorPage } from './pages/FormEditorPage';
 import { SiteBuildsPage } from './pages/SiteBuildsPage';
 import { SiteCommitsPage } from './pages/SiteCommitsPage';
 import { SiteTokensPage } from './pages/SiteTokensPage';
+import { SiteDepsPage } from './pages/SiteDepsPage';
+import { SiteAllowlistPage } from './pages/SiteAllowlistPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
@@ -44,6 +46,8 @@ export const appRoutes: RouteObject[] = [
       { path: 'sites/:siteId/builds', element: <SiteBuildsPage /> },
       { path: 'sites/:siteId/git', element: <SiteCommitsPage /> },
       { path: 'sites/:siteId/tokens', element: <SiteTokensPage /> },
+      { path: 'sites/:siteId/deps', element: <SiteDepsPage /> },
+      { path: 'sites/:siteId/allowlist', element: <SiteAllowlistPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

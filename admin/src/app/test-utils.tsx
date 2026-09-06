@@ -10,7 +10,7 @@ export interface MockCall {
   init: RequestInit;
 }
 
-export function jsonResponse(status: number, body: unknown): Response {
+export function jsonResponse(status: number, body?: unknown): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },

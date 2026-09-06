@@ -3,8 +3,8 @@
 Цель: довести проект до рабочего MVP с полной функциональностью.
 `make dev` запускает всё.
 
-**Текущий статус:** M0–M2 + M3-slice 1 (Builds), слайсы 5 (Docker), 1 (Git), 2 (Auth+Dashboard+Settings), 3 (Token Editor) — выполнены.
-Осталось: слайсы 3 (Tokens), 4 (Deps UI), 6 (Cleanup).
+**Текущий статус:** M0–M2 + M3-slice 1 (Builds), слайсы 5 (Docker), 1 (Git), 2 (Auth+Dashboard+Settings), 3 (Token Editor), 4 (Dependencies UI) — выполнены.
+Осталось: слайс 6 (Cleanup).
 
 **Порядок слайсов:** 5 (Docker) → 1 (Git) → 2 (Auth) → 3 (Tokens) → 4 (Deps) → 6 (Cleanup)
 
@@ -568,13 +568,13 @@ tokens: {
 - `GET/POST /api/sites/{id}/dependencies`
 - `DELETE /api/sites/{id}/dependencies/{name}`
 - `GET/POST /api/sites/{id}/dependencies/allowlist`
-- `DELETE /api/sites/{id}/dependencies/allowlist/{entry}`
+- `DELETE /api/sites/{id}/dependencies/allowlist?entry={pattern}` (query — path не матчит `*`/`/`)
 - `GET/PUT /api/sites/{id}/cache-config`
 - `POST /api/sites/{id}/cache-config/evict`
 
-Добавить:
-- `POST /api/sites/{id}/dependencies/resolve` — принудительный resolve (body: `{}`)
-  Возвращает resolved tree (full graph с dependencies, peerDependencies, versions)
+Добавлено:
+- `POST /api/sites/{id}/dependencies/resolve` — принудительный resolve (body не используется)
+  Возвращает плоский `SnapshotLock` (BFS-граф c `requestedBy`/`hoisted`/`peerDependencies`); дерево строит фронт (корни = `requestedBy: ["site"]`)
 
 **Файл:** `backend/internal/api/admin/deps_handler.go` — добавить `Resolve` handler
 
@@ -587,7 +587,7 @@ tokens: {
 **Обновить:**
 - `admin/src/app/pages/SiteHomePage.tsx` — nav: «Зависимости»
 - `admin/src/app/AppRoutes.tsx` — роут `/sites/:siteId/deps`
-- `admin/src/runtime/operations.ts` — ops: `addDependency`, `removeDependency`, `resolveDependencies`, `listCacheConfig`, `updateCacheConfig`, `evictCache`
+- `admin/src/runtime/operations.ts` — ops: `addDependency`, `removeDependency`, `resolveDependencies`, `listAllowlist`, `addAllowlist`, `removeAllowlist`, `getCacheConfig`, `updateCacheConfig`, `evictCache`
 
 **SiteDepsPage:**
 - Список зависимостей: name + version range (из deps宣言)
@@ -611,7 +611,7 @@ tokens: {
 **Обновить:**
 - `admin/src/app/pages/SiteHomePage.tsx` — nav: «Allowlist»
 - `admin/src/app/AppRoutes.tsx` — роут `/sites/:siteId/allowlist`
-- `admin/src/runtime/operations.ts` — ops: `addAllowlistEntry`, `removeAllowlistEntry`
+- `admin/src/runtime/operations.ts` — ops: `addAllowlist`, `removeAllowlist`
 
 **SiteAllowlistPage:**
 - Список записей: name pattern (exact, @scope/*, *)
@@ -902,8 +902,8 @@ VITE_CLIENT_URL=http://localhost:18080
    token service, DB, API, editor page, color picker,
    preview iframe (srcdoc), tests
 
-4. Dependencies UI  ← СЛЕДУЮЩИЙ
-   deps page, allowlist page, resolve tree, tests
+4. Dependencies UI  ✓ ВЫПОЛНЕНО
+   deps page, allowlist page, resolve tree, cache config, tests
 
 5. Docker + Dev Environment  ✓ ВЫПОЛНЕНО
    docker-compose, Makefile, air, .env.example,
@@ -963,11 +963,11 @@ VITE_CLIENT_URL=http://localhost:18080
 - [x] Все unit-тесты проходят
 
 ### Слайс 4: Dependencies UI
-- [ ] Страница «Зависимости»: npm-подобный список, add/remove/resolve
-- [ ] Иерархическое дерево resolved deps (expand/collapse)
-- [ ] Страница «Allowlist»: add/remove patterns
-- [ ] Cache config + evict
-- [ ] Все unit-тесты проходят
+- [x] Страница «Зависимости»: npm-подобный список, add/remove/resolve
+- [x] Иерархическое дерево resolved deps (expand/collapse)
+- [x] Страница «Allowlist»: add/remove patterns
+- [x] Cache config + evict
+- [x] Все unit-тесты проходят
 
 ### Слайс 5: Docker + Dev
 - [x] `make dev` запускает postgres + backend (hot-reload) + frontend

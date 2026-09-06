@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"fmt"
 	"net/http"
 
 	httpapi "github.com/liapoldus/liapoldus/backend/internal/api/http"
@@ -99,13 +100,38 @@ func (h *DepsHandler) AddAllowlist(w http.ResponseWriter, r *http.Request) {
 }
 
 // RemoveAllowlist deletes one allowlist entry. Unknown entries are a 404.
+// The entry is read from the ?entry= query parameter (not a path segment):
+// entries like "@scope/*" and "*" are natural to type in a query value, and
+// path-based encoding of "/" and "*" is awkward and error-prone.
 func (h *DepsHandler) RemoveAllowlist(w http.ResponseWriter, r *http.Request) {
-	entry := r.PathValue("entry")
+	entry := r.URL.Query().Get("entry")
+	if entry == "" {
+		httpapi.RespondError(w, fmt.Errorf("missing ?entry= query parameter"))
+		return
+	}
 	if err := h.deps.RemoveAllowlist(r.Context(), siteID(r), entry); err != nil {
 		httpapi.RespondError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Resolve runs a full dependency resolution of the site's declared range set
+// and returns the frozen instance graph (spec §5, nested-versioned layout).
+// The response mirrors a snapshot's deps-lock: one entry per (name, version)
+// in deterministic BFS order, with the Hoisted flag, RequestedBy parent edges,
+// and each instance's peer metadata, so the admin page can render the graph as
+// an expandable tree. The feed is "what a snapshot would freeze right now" —
+// same allowlist and peer policy as lock creation, so an unsatisfiable graph
+// fails with the same status mapping (e.g. 422 on ErrUnresolvableSpec /
+// ErrUnsatisfiedPeer / ErrDepNotAllowed).
+func (h *DepsHandler) Resolve(w http.ResponseWriter, r *http.Request) {
+	lock, err := h.deps.ResolveLock(r.Context(), siteID(r))
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, lock)
 }
 
 type cacheConfigResponse struct {

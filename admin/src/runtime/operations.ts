@@ -51,7 +51,17 @@ export type OperationKind =
   | 'getDashboard'
   | 'getSettings'
   | 'getTokens'
-  | 'updateTokens';
+  | 'updateTokens'
+  | 'listDependencies'
+  | 'addDependency'
+  | 'removeDependency'
+  | 'resolveDependencies'
+  | 'listAllowlist'
+  | 'addAllowlist'
+  | 'removeAllowlist'
+  | 'getCacheConfig'
+  | 'updateCacheConfig'
+  | 'evictCache';
 
 export interface OperationSpec<TArgs extends Record<string, unknown> = Record<string, unknown>> {
   kind: OperationKind;
@@ -538,6 +548,102 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     method: 'PUT',
     route: (args) => `/api/sites/{siteId}/tokens`,
     body: (args) => args.tokens ?? { colors: [] },
+    detail: () => 'OK',
+  },
+
+  listDependencies: {
+    kind: 'listDependencies',
+    labelKey: 'op.listDependencies',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/dependencies`,
+    detail: (b, t) => {
+      const count = Array.isArray(b) ? b.length : 0;
+      return t('result.count', { n: count });
+    },
+  },
+
+  addDependency: {
+    kind: 'addDependency',
+    labelKey: 'op.addDependency',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/dependencies`,
+    body: (args) => ({ name: args.name, spec: args.spec }),
+    detail: (b, t) => t('op.addDependency.result', { name: (b as { name?: string })?.name ?? '' }),
+  },
+
+  removeDependency: {
+    kind: 'removeDependency',
+    labelKey: 'op.removeDependency',
+    method: 'DELETE',
+    route: (args) => `/api/sites/{siteId}/dependencies/${encodeURIComponent(String(args.name))}`,
+    detail: () => 'OK',
+  },
+
+  resolveDependencies: {
+    kind: 'resolveDependencies',
+    labelKey: 'op.resolveDependencies',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/dependencies/resolve`,
+    body: () => ({}),
+    detail: (b, t) => {
+      const count =
+        typeof b === 'object' && b !== null && Array.isArray((b as { deps?: unknown }).deps)
+          ? (b as { deps: unknown[] }).deps.length
+          : 0;
+      return t('result.count', { n: count });
+    },
+  },
+
+  listAllowlist: {
+    kind: 'listAllowlist',
+    labelKey: 'op.listAllowlist',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/dependencies/allowlist`,
+    detail: (b, t) => {
+      const count = Array.isArray(b) ? b.length : 0;
+      return t('result.count', { n: count });
+    },
+  },
+
+  addAllowlist: {
+    kind: 'addAllowlist',
+    labelKey: 'op.addAllowlist',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/dependencies/allowlist`,
+    body: (args) => ({ entry: args.entry }),
+    detail: (b, t) => t('op.addAllowlist.result', { entry: (b as { entry?: string })?.entry ?? '' }),
+  },
+
+  removeAllowlist: {
+    kind: 'removeAllowlist',
+    labelKey: 'op.removeAllowlist',
+    method: 'DELETE',
+    route: (args) => `/api/sites/{siteId}/dependencies/allowlist?entry=${encodeURIComponent(String(args.entry))}`,
+    detail: () => 'OK',
+  },
+
+  getCacheConfig: {
+    kind: 'getCacheConfig',
+    labelKey: 'op.getCacheConfig',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/cache-config`,
+    detail: () => 'OK',
+  },
+
+  updateCacheConfig: {
+    kind: 'updateCacheConfig',
+    labelKey: 'op.updateCacheConfig',
+    method: 'PUT',
+    route: (args) => `/api/sites/{siteId}/cache-config`,
+    body: (args) => ({ maxDepsBytes: args.limitBytes }),
+    detail: () => 'OK',
+  },
+
+  evictCache: {
+    kind: 'evictCache',
+    labelKey: 'op.evictCache',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/cache-config/evict`,
     detail: () => 'OK',
   },
 };

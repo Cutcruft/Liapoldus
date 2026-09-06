@@ -289,3 +289,43 @@ export type TokenSet = {
   transitions?: Record<string, string>;
   custom?: Record<string, string>;
 };
+
+/** Объявленная зависимость сайта (GET /dependencies). */
+export type Dependency = {
+  name: string;
+  spec: string;
+  resolvedVersion?: string;
+};
+
+/**
+ * Один замороженный инстанс графа зависимостей (как в depsLock снапшота).
+ * Один пакет может встречаться несколько раз (вложенный layout, spec §5):
+ * hoisted-инстанс живёт в node_modules/<name>, остальные — вложены под каждый
+ * parent из requestedBy (ключ инстанса "name@version"; "site" = объявлен в топе).
+ */
+export type LockedDep = {
+  name: string;
+  spec: string;
+  version: string;
+  integrity?: string;
+  hoisted?: boolean;
+  requestedBy?: string[];
+  peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, boolean>;
+};
+
+/** Ответ POST /dependencies/resolve — полный граф текущего набора сайта. */
+export type ResolveResult = {
+  deps: LockedDep[];
+};
+
+/** Per-site лимит кэша тарболов зависимостей (spec §11, channel 7). 0 = не задан. */
+export type SiteCacheConfig = {
+  maxDepsBytes: number;
+};
+
+/** Результат ручной очистки кэша (POST /cache-config/evict). */
+export type EvictResponse = {
+  evicted: number;
+  evictedBytes: number;
+};

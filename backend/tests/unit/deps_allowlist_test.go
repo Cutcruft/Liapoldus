@@ -247,11 +247,11 @@ func TestDepsAllowlistAdminCRUD(t *testing.T) {
 		t.Errorf("allowlist entries = %+v, want [lodash]", entries)
 	}
 
-	del := request(t, handler, http.MethodDelete, "/api/sites/"+siteID+"/dependencies/allowlist/lodash", nil)
+	del := request(t, handler, http.MethodDelete, "/api/sites/"+siteID+"/dependencies/allowlist?entry=lodash", nil)
 	if del.Code != http.StatusNoContent {
 		t.Fatalf("DELETE allowlist status = %d (%s)", del.Code, del.Body.String())
 	}
-	delAgain := request(t, handler, http.MethodDelete, "/api/sites/"+siteID+"/dependencies/allowlist/lodash", nil)
+	delAgain := request(t, handler, http.MethodDelete, "/api/sites/"+siteID+"/dependencies/allowlist?entry=lodash", nil)
 	if delAgain.Code != http.StatusNotFound {
 		t.Fatalf("DELETE missing allowlist status = %d, want 404", delAgain.Code)
 	}
@@ -297,8 +297,8 @@ func TestDepsAllowlistAdminScopedDelete(t *testing.T) {
 	if add.Code != http.StatusCreated {
 		t.Fatalf("POST scoped allowlist status = %d (%s)", add.Code, add.Body.String())
 	}
-	// The "/" in the scoped entry must be URL-encoded (%2F) in the path.
-	del := request(t, handler, http.MethodDelete, "/api/sites/"+siteID+"/dependencies/allowlist/%40acme%2Fcore", nil)
+	// The "/" in the scoped entry must be URL-encoded (%2F) in the query value.
+	del := request(t, handler, http.MethodDelete, "/api/sites/"+siteID+"/dependencies/allowlist?entry=%40acme%2Fcore", nil)
 	if del.Code != http.StatusNoContent {
 		t.Fatalf("DELETE scoped allowlist status = %d (%s)", del.Code, del.Body.String())
 	}

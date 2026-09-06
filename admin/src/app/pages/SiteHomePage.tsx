@@ -14,7 +14,7 @@ const SELECT_CLASS =
 
 const SECTIONS: Array<{
   to: string;
-  labelKey: 'nav.pages' | 'nav.contents' | 'nav.assets' | 'nav.routes' | 'nav.forms' | 'nav.builds' | 'nav.git' | 'nav.tokens';
+  labelKey: 'nav.pages' | 'nav.contents' | 'nav.assets' | 'nav.routes' | 'nav.forms' | 'nav.builds' | 'nav.git' | 'nav.tokens' | 'nav.deps' | 'nav.allowlist';
 }> = [
   { to: 'pages', labelKey: 'nav.pages' },
   { to: 'contents', labelKey: 'nav.contents' },
@@ -24,6 +24,8 @@ const SECTIONS: Array<{
   { to: 'builds', labelKey: 'nav.builds' },
   { to: 'git', labelKey: 'nav.git' },
   { to: 'tokens', labelKey: 'nav.tokens' },
+  { to: 'deps', labelKey: 'nav.deps' },
+  { to: 'allowlist', labelKey: 'nav.allowlist' },
 ];
 
 export function SiteHomePage() {

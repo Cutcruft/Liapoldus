@@ -196,3 +196,93 @@ func TestSnapshotAdminFailsPublishWhenLockResolveFails(t *testing.T) {
 		t.Fatalf("POST snapshot status = %d, want 422 when lock cannot resolve", snap.Code)
 	}
 }
+
+func TestDepsAdminResolveReturnsFullLock(t *testing.T) {
+	reg := &fakeRegistry{resolve: func(_ context.Context, name, _ string) (deps.ResolvedVersion, error) {
+		switch name {
+		case "a":
+			return deps.ResolvedVersion{Name: name, Version: "1.0.0", Integrity: "sha512-a", Dependencies: map[string]string{"b": "^1", "c": "~2"}}, nil
+		case "b":
+			return deps.ResolvedVersion{Name: name, Version: "1.2.0", Integrity: "sha512-b"}, nil
+		case "c":
+			return deps.ResolvedVersion{Name: name, Version: "2.0.1", Integrity: "sha512-c", Dependencies: map[string]string{"b": "^1"}}, nil
+		}
+		return deps.ResolvedVersion{}, domain.ErrPackageNotFound
+	}}
+	app, _, siteID := newDepsApp(t, reg)
+	handler := admin.NewRouter(app)
+
+	for _, d := range []struct{ name, spec string }{{"a", "^1"}, {"b", "^1"}} {
+		create := request(t, handler, http.MethodPost, "/api/sites/"+siteID+"/dependencies", map[string]any{"name": d.name, "spec": d.spec})
+		if create.Code != http.StatusCreated {
+			t.Fatalf("POST deps(%s) status = %d (%s)", d.name, create.Code, create.Body.String())
+		}
+	}
+
+	res := request(t, handler, http.MethodPost, "/api/sites/"+siteID+"/dependencies/resolve", nil)
+	if res.Code != http.StatusOK {
+		t.Fatalf("POST resolve status = %d (%s)", res.Code, res.Body.String())
+	}
+	var lock struct {
+		Deps []struct {
+			Name        string   `json:"name"`
+			Version     string   `json:"version"`
+			Hoisted     bool     `json:"hoisted"`
+			RequestedBy []string `json:"requestedBy"`
+		} `json:"deps"`
+	}
+	decodeResponse(t, res, &lock)
+	if len(lock.Deps) != 3 { // a, b (hoisted), c; b only hoisted once even though a and c both need it
+		t.Fatalf("resolve deps = %+v, want 3 instances (a, hoisted b, c)", lock.Deps)
+	}
+	got := map[string]bool{}
+	for _, d := range lock.Deps {
+		got[d.Name+"@"+d.Version] = true
+	}
+	for _, want := range []string{"a@1.0.0", "b@1.2.0", "c@2.0.1"} {
+		if !got[want] {
+			t.Errorf("resolve missing instance %s; got %+v", want, lock.Deps)
+		}
+	}
+	// b is a top-level decl and the hoisted instance of the shared transitive dep.
+	for _, d := range lock.Deps {
+		if d.Name == "b" && !d.Hoisted {
+			t.Errorf("b expected hoisted, got %+v", d)
+		}
+		if d.Name == "a" {
+			found := false
+			for _, rb := range d.RequestedBy {
+				if rb == "site" {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("a.requestedBy = %+v, want it to include 'site' (top-level decl)", d.RequestedBy)
+			}
+		}
+	}
+}
+
+func TestDepsAdminResolveFailsUnsatisfiable(t *testing.T) {
+	reg := &fakeRegistry{resolve: func(_ context.Context, name, _ string) (deps.ResolvedVersion, error) {
+		switch name {
+		case "a":
+			return deps.ResolvedVersion{Name: name, Version: "1.0.0", Dependencies: map[string]string{"ghost": "^99"}}, nil
+		case "ghost":
+			return deps.ResolvedVersion{}, domain.ErrUnresolvableSpec
+		}
+		return deps.ResolvedVersion{}, domain.ErrPackageNotFound
+	}}
+	app, _, siteID := newDepsApp(t, reg)
+	handler := admin.NewRouter(app)
+
+	create := request(t, handler, http.MethodPost, "/api/sites/"+siteID+"/dependencies", map[string]any{"name": "a", "spec": "^1"})
+	if create.Code != http.StatusCreated {
+		t.Fatalf("POST deps status = %d", create.Code)
+	}
+
+	res := request(t, handler, http.MethodPost, "/api/sites/"+siteID+"/dependencies/resolve", nil)
+	if res.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("POST resolve status = %d, want 422 on unsatisfiable graph", res.Code)
+	}
+}
