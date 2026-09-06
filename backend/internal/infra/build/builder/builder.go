@@ -8,6 +8,7 @@ import (
 
 	"github.com/evanw/esbuild/pkg/api"
 	"github.com/liapoldus/liapoldus/backend/internal/application/build"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shell"
 )
 
 // Builder compiles a materialized workspace with esbuild as a Go library
@@ -51,6 +52,9 @@ func (b *Builder) Build(_ context.Context, workspace build.Workspace) (build.Bun
 			messages = append(messages, err.Text)
 		}
 		return build.BundleResult{}, fmt.Errorf("esbuild failed: %s", strings.Join(messages, "; "))
+	}
+	if err := shell.WriteShell(outdir, workspace.Manifest); err != nil {
+		return build.BundleResult{}, fmt.Errorf("build shell: %w", err)
 	}
 	return build.BundleResult{DistDir: outdir}, nil
 }

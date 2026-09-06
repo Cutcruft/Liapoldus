@@ -114,12 +114,22 @@ func TestEsbuildBuilderProducesBundleWithExternals(t *testing.T) {
 	if ws.Manifest.Shared["react"] != "/build/_shared/react/18.3.1.js" {
 		t.Fatalf("manifest import map = %#v", ws.Manifest.Shared)
 	}
-	// The site source made it into the bundle (register + boot markers).
-	if !strings.Contains(data, "ComponentRegistry") || !strings.Contains(data, "boot") {
-		t.Fatalf("bundle must contain the boot logic")
+	// The site source made it into the bundle: registration + mount markers.
+	if !strings.Contains(data, "ComponentRegistry") || !strings.Contains(data, "mount") {
+		t.Fatalf("bundle must contain the mount logic")
 	}
 	if len(bundle) < 64 {
 		t.Fatalf("bundle too small (%d bytes)", len(bundle))
+	}
+	// The runtime shell (dist/index.html) is written for the published artifact.
+	shell, err := os.ReadFile(filepath.Join(bl.DistDir, "index.html"))
+	if err != nil {
+		t.Fatalf("read dist/index.html: %v", err)
+	}
+	for _, want := range []string{`<div id="root"></div>`, `src="./entry.js"`, `"react":"/build/_shared/react/18.3.1.js"`} {
+		if !strings.Contains(string(shell), want) {
+			t.Fatalf("shell missing %q; got:\n%s", want, shell)
+		}
 	}
 }
 

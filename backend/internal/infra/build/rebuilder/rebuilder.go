@@ -16,6 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/builder"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shell"
 )
 
 // Options controls one development workspace (a site snapshot under the
@@ -176,6 +177,9 @@ func (r *Rebuilder) rebuild(ctx context.Context) error {
 		return nil
 	}
 
+	if err := shell.WriteShell(filepath.Join(r.opts.Request.Dir, "dist"), r.workspace.Manifest); err != nil {
+		return err
+	}
 	artifactDir, err := r.artifacts.Publish(ctx, r.opts.Request.SiteID, r.opts.Request.Environment,
 		r.opts.Request.SnapshotID, r.workspace, build.BundleResult{DistDir: filepath.Join(r.opts.Request.Dir, "dist")})
 	if err != nil {
