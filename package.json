@@ -1,0 +1,17 @@
+{
+  "name": "liapoldus",
+  "private": true,
+  "description": "Liapoldus frontend constructor: ui-runtime core, admin SPA, layout kit",
+  "workspaces": [
+    "ui-runtime",
+    "ui-kit",
+    "admin"
+  ],
+  "scripts": {
+    "dev": "npm -w admin run dev",
+    "build": "npm -w ui-kit run build && npm -w admin run build",
+    "test": "npm -w ui-runtime test -- --run && npm -w ui-kit test -- --run && npm -w admin test -- --run",
+    "test:watch": "npm -w admin test",
+    "typecheck": "npm -w ui-runtime run typecheck && npm -w ui-kit run typecheck && npm -w admin run typecheck"
+  }
+}

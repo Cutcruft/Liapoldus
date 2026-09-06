@@ -27,3 +27,43 @@ export { toErrorCode } from './errors';
 export type { ErrorCode } from './errors';
 export * from './errors';
 export * from './react';
+
+// Transport-слой (переиспользуется admin-редактором как data-слой).
+export { HttpTransport, substitutePath, buildHttpUrl } from './core/transport/http';
+export type {
+  Transport,
+  TransportRequest,
+  TransportResponse,
+  FetchLike,
+  TransportEnv,
+  WebSocketLike,
+  WebSocketCtor,
+  EventSourceLike,
+  EventSourceCtor,
+} from './core/transport/transport';
+
+export type {
+  ProviderProtocol,
+  OperationType,
+  OperationScope,
+  CachePolicy,
+  ProviderDescriptor,
+  SubscribeFields,
+  OperationDescriptor,
+  OperationTypeBinding,
+  EndpointDescriptor,
+  RouteDescriptor,
+  ResolvedRoute,
+  ThemeDescriptor,
+  ThemeTokenDef,
+  FallbackDescriptor,
+  ContractDescriptor,
+  Descriptor,
+} from './types/descriptor';
+
+export type { ResolvedProvider, ResolvedOperation } from './core/registry';
+
+// Обобщённый slice-store (zustand-обёртка). Клиенты (админка) не импортируют zustand напрямую.
+export { createSliceStore } from './core/slice-store';
+export type { SliceStore, SliceUpdater } from './core/slice-store';
+export { useSelector } from './react/use-selector';

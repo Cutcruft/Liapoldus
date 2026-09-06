@@ -76,7 +76,16 @@
 
 ## Этап 6 — Редактор `admin/` (React)
 
-- [ ] Дерево страниц (страницы/роуты), props/content по schema (live-валидация), bindings.
+> Спека и пошаговый план: `docs/editor-spec.md` (M0–M4). M0 (монорепо, ui-kit, каркас admin+runtime) — выполнен.
+> M1-слайс «Список+CRUD» (Sites/Pages/Routes списки, создание/удаление, placeholder редактора) — выполнен: 33 admin-теста, корень 285/285, typecheck+build зелёные.
+
+- [x] `docs/editor-spec.md`: архитектура, решения E1–E11, монорепо `ui-runtime`+`ui-kit`+`admin`, admin-runtime (типы/операции/API), тест-спека.
+- [x] ui-runtime: публичные экспорты (HttpTransport/типы) + обобщённый slice-store `createSliceStore`/`useSelector` (zustand-обёртка; админка zustand напрямую не импортирует).
+- [x] `ui-kit` пакет: layout-примитивы на Tailwind v4 (Box/Stack/Inline/Columns/Grid/Spacer/Divider/Frame/Sidebar/SplitPane) + тесты.
+- [x] `admin` SPA-каркас: Vite+React+TS+Tailwind v4+React Router, proxy `/api`→:8080 и `/runtime` `/build` `/dev`→:18080, AppShell+admin-context+роуты-заглушки.
+- [x] admin-runtime: AdminApi (fetch+токен+ошибки), реестр операций, token-store (slice-store), i18n строки + тесты на mock-fetch.
+- [x] M1 (слайс 1/3): списки+CRUD страниц/роутов: ops listPages/deletePage, use-operation, ConfirmButton/Field/EntityTable, Sites/SiteHome/SitePages/SiteRoutes страницы, роуты, EditorPlaceholder.
+- [ ] M1 (слайс 2/3): редактор дерева (tree render/select/insert/delete), инспектор schema-форм, bindings, draft+автосейв, canvas-превью.
 - [ ] Темы и токены; UI зависимостей «как package.json» (R9).
 - [ ] Git-операции из UI: commit/push/tag, новая версия, снапшот.
 - [ ] Публикация (снапшот → Build → environment), статусы Build, rollback.
