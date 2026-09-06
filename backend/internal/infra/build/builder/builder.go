@@ -24,13 +24,16 @@ var _ build.BundleRunner = (*Builder)(nil)
 // rebuilder reuses it so the incremental context and the one-shot build never
 // drift apart. External libraries (react, site deps, ...) come from the
 // materialized manifest so the site bundle keeps them as runtime imports.
-func Options(entryPoint, outdir string, externals ...string) api.BuildOptions {
+// With multiple entry points (split page chunks), esbuild code-splits shared
+// code automatically (spec §16); outdir holds dist/.
+func Options(outdir string, entryPoints []string, externals ...string) api.BuildOptions {
 	external := append(append([]string{}, build.SharedExternals...), externals...)
 	return api.BuildOptions{
-		EntryPoints:       []string{entryPoint},
+		EntryPoints:       entryPoints,
 		Outdir:            outdir,
 		Bundle:            true,
 		Write:             true,
+		Splitting:         true,
 		Format:            api.FormatESModule,
 		Platform:          api.PlatformBrowser,
 		Target:            api.ES2020,
@@ -45,7 +48,11 @@ func Options(entryPoint, outdir string, externals ...string) api.BuildOptions {
 
 func (b *Builder) Build(_ context.Context, workspace build.Workspace) (build.BundleResult, error) {
 	outdir := filepath.Join(workspace.Dir, "dist")
-	result := api.Build(Options(filepath.Join(workspace.Dir, "src", "entry.tsx"), outdir, workspace.Manifest.Externals...))
+	entryPoints := append([]string{filepath.Join(workspace.Dir, "src", "entry.tsx")})
+	for _, page := range workspace.Manifest.Pages {
+		entryPoints = append(entryPoints, filepath.Join(workspace.Dir, "src", "pages", page.PageID+".tsx"))
+	}
+	result := api.Build(Options(outdir, entryPoints, workspace.Manifest.Externals...))
 	if len(result.Errors) > 0 {
 		messages := make([]string, 0, len(result.Errors))
 		for _, err := range result.Errors {

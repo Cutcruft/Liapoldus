@@ -78,6 +78,7 @@ func TestLiveBuildServesPublishablePage(t *testing.T) {
 		for _, want := range []string{
 			`<div id="root"></div>`,
 			`<script type="module" src="./entry.js"></script>`,
+			`<link rel="modulepreload" href="./pages/page_e2e.js">`,
 			`"@liapoldus/ui-runtime":"/build/_shared/@liapoldus/ui-runtime/0.1.0.js"`,
 			`"react":"/build/_shared/react/18.3.1.js"`,
 		} {
@@ -95,6 +96,9 @@ func TestLiveBuildServesPublishablePage(t *testing.T) {
 
 		if _, entry := get(shell[:len(shell)-len("index.html")] + "entry.js"); entry == "" {
 			t.Fatalf("entry.js for %s served empty", env)
+		}
+		if _, chunk := get(shell[:len(shell)-len("index.html")] + "pages/page_e2e.js"); chunk == "" {
+			t.Fatalf("code-split page chunk for %s served empty", env)
 		}
 	}
 
@@ -121,5 +125,11 @@ func TestLiveBuildManifestServed(t *testing.T) {
 	}
 	if manifest.Shared["react"] != "/build/_shared/react/18.3.1.js" {
 		t.Errorf("manifest shared = %#v", manifest.Shared)
+	}
+	if len(manifest.Pages) != 1 || manifest.Pages[0].PageID != "page_e2e" || manifest.Pages[0].Chunk != "pages/page_e2e.js" {
+		t.Errorf("manifest pages = %#v", manifest.Pages)
+	}
+	if manifest.HomePage != "page_e2e" {
+		t.Errorf("manifest home = %q, want page_e2e", manifest.HomePage)
 	}
 }

@@ -56,7 +56,7 @@ func seedMaterializedPage(t *testing.T, mem *storage.Memory, siteID, pageID stri
 func materializerHarness(t *testing.T) (*storage.Memory, *materializer.Materializer) {
 	t.Helper()
 	mem := storage.NewMemory()
-	mat := materializer.New(mem, mem, mem, mem, nil, nil)
+	mat := materializer.New(mem, mem, mem, mem, nil, nil, mem)
 	return mem, mat
 }
 
@@ -101,26 +101,38 @@ func TestMaterializeCreatesWorkspace(t *testing.T) {
 		t.Fatalf("definition content = %q", text)
 	}
 
-	// entry.tsx imports every definition and registers them before boot.
+	// entry.tsx is the split boot stub: mount() only — definitions and page
+	// trees live in code-split page chunks.
 	content := string(entry)
-	if !strings.Contains(content, `import { ComponentRegistry, mount } from "@liapoldus/ui-runtime";`) {
-		t.Fatalf("entry must import ui-runtime, got: %s", content)
+	if !strings.Contains(content, `import { mount } from "@liapoldus/ui-runtime";`) {
+		t.Fatalf("entry must import ui-runtime mount, got: %s", content)
 	}
-	if !strings.Contains(content, `import def_container from "./definitions/container";`) ||
-		!strings.Contains(content, `import def_text from "./definitions/text";`) ||
-		!strings.Contains(content, `import def_hero from "./definitions/hero";`) {
-		t.Fatalf("entry must import all definitions: %s", content)
+	if strings.Contains(content, "ComponentRegistry") || strings.Contains(content, "registerDefinition") {
+		t.Fatalf("root entry must not register definitions (they live in page chunks): %s", content)
 	}
-	for _, reg := range []string{
-		`ComponentRegistry.registerDefinition("container", def_container);`,
-		`ComponentRegistry.registerDefinition("text", def_text);`,
-	} {
-		if !strings.Contains(content, reg) {
-			t.Fatalf("entry missing %q: %s", reg, content)
-		}
+	if strings.Contains(content, "registerPage") {
+		t.Fatalf("root entry must not carry page trees: %s", content)
 	}
 	if !strings.Contains(content, `void mount("`+site.ID+`", "`+domain.EnvironmentDevelopment+`");`) {
-		t.Fatalf("entry must call boot: %s", content)
+		t.Fatalf("entry must call mount: %s", content)
+	}
+
+	// The page chunk registers the page's own definitions and its tree.
+	pageChunk, err := os.ReadFile(filepath.Join(ws.Dir, "src", "pages", "page_1.tsx"))
+	if err != nil {
+		t.Fatalf("read page chunk: %v", err)
+	}
+	chunk := string(pageChunk)
+	if !strings.Contains(chunk, `ComponentRegistry.registerDefinition("container", def_container);`) ||
+		!strings.Contains(chunk, `ComponentRegistry.registerDefinition("text", def_text);`) ||
+		!strings.Contains(chunk, `import def_container from "../definitions/container";`) {
+		t.Fatalf("page chunk must register its definitions: %s", chunk)
+	}
+	if !strings.Contains(chunk, `registerPage("page_1"`) {
+		t.Fatalf("page chunk must hand the tree to registerPage: %s", chunk)
+	}
+	if !strings.Contains(chunk, `"snapshotId":"snapshot_m1"`) || !strings.Contains(chunk, `"root":{"instanceId":"root"`) {
+		t.Fatalf("page chunk tree JSON missing: %s", chunk)
 	}
 
 	// manifest.json on disk matches the returned manifest.
@@ -137,8 +149,14 @@ func TestMaterializeCreatesWorkspace(t *testing.T) {
 	if ws.Manifest.Definitions["text"].SHA != "sha_text" {
 		t.Fatalf("text sha = %q", ws.Manifest.Definitions["text"].SHA)
 	}
-	if len(ws.Manifest.Pages) != 1 || ws.Manifest.Pages[0] != "page_1" {
+	if len(ws.Manifest.Pages) != 1 {
 		t.Fatalf("manifest pages = %#v", ws.Manifest.Pages)
+	}
+	if p := ws.Manifest.Pages[0]; p.PageID != "page_1" || p.Chunk != "pages/page_1.js" || len(p.Definitions) != 3 {
+		t.Fatalf("manifest page ref = %#v", p)
+	}
+	if ws.Manifest.HomePage != "page_1" {
+		t.Fatalf("manifest home = %q, want page_1 (fallback, no routes)", ws.Manifest.HomePage)
 	}
 	if len(ws.Manifest.Externals) != 4 {
 		t.Fatalf("externals = %#v", ws.Manifest.Externals)
@@ -158,7 +176,7 @@ func TestMaterializeManifestSharedImportMap(t *testing.T) {
 	mat := materializer.New(mem, mem, mem, mem, resolverStub{urls: map[string]string{
 		"react":                 "/build/_shared/react/18.3.1.js",
 		"@liapoldus/ui-runtime": "/build/_shared/@liapoldus/ui-runtime/0.1.0.js",
-	}}, nil)
+	}}, nil, mem)
 	site := seedBuildSite(t, mem)
 	seedDef(t, mem, site.ID, "text", "export default (props) => props.title ?? null;\n", "sha_text")
 	seedDef(t, mem, site.ID, "container", "export default (props) => props.children;\n", "sha_cont")
@@ -310,7 +328,7 @@ func TestMaterializeDetectsDeclaredSubpathImports(t *testing.T) {
 	ctx := context.Background()
 	mem := storage.NewMemory()
 	layouter := &recordingLayouter{}
-	mat := materializer.New(mem, mem, mem, mem, nil, layouter)
+	mat := materializer.New(mem, mem, mem, mem, nil, layouter, mem)
 	site := seedBuildSite(t, mem)
 	seedDef(t, mem, site.ID, "text",
 		"import { agentName } from \"agent\";\n"+
@@ -365,5 +383,94 @@ func TestMaterializeDetectsDeclaredSubpathImports(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("externals must include agent/lib/util: %#v", ws.Manifest.Externals)
+	}
+}
+
+// TestMaterializePageChunksPerPageAndHomeByRoute covers the code-splitting
+// contract (spec §16): each page gets its own chunk with only its definitions,
+// and HomePage follows the route heuristic (most specific renderPage).
+func TestMaterializePageChunksPerPageAndHomeByRoute(t *testing.T) {
+	ctx := context.Background()
+	mem, mat := materializerHarness(t)
+	site := seedBuildSite(t, mem)
+	seedDef(t, mem, site.ID, "text", "export default (props) => props.title;\n", "sha_text")
+	seedDef(t, mem, site.ID, "hero", "export default (props) => props.title;\n", "sha_hero")
+
+	rootA := domain.ComponentNode{InstanceID: "root_a", DefinitionID: "text"}
+	pageA := domain.Page{ID: "page_a", SiteID: site.ID, Name: "A", Slug: "a", Root: rootA, Version: 1,
+		CreatedAt: testNow(), UpdatedAt: testNow()}
+	if err := mem.CreatePage(ctx, pageA, domain.PageVersion{ID: "pagever_a", PageID: "page_a", Number: 1, Root: rootA, CreatedAt: testNow()}); err != nil {
+		t.Fatal(err)
+	}
+	rootB := domain.ComponentNode{InstanceID: "root_b", DefinitionID: "hero"}
+	pageB := domain.Page{ID: "page_b", SiteID: site.ID, Name: "B", Slug: "b", Root: rootB, Version: 1,
+		CreatedAt: testNow(), UpdatedAt: testNow()}
+	if err := mem.CreatePage(ctx, pageB, domain.PageVersion{ID: "pagever_b", PageID: "page_b", Number: 1, Root: rootB, CreatedAt: testNow()}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := domain.Snapshot{ID: "snapshot_pages", SiteID: site.ID,
+		Pages: []domain.SnapshotPage{
+			{PageID: "page_a", VersionID: "pagever_a", Version: 1},
+			{PageID: "page_b", VersionID: "pagever_b", Version: 1},
+		}, CreatedAt: testNow()}
+	if err := mem.CreateSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	// A low-priority route on page_a and a high-priority one on page_b: page_b
+	// is the home page (priority desc wins), regardless of snapshot order.
+	if err := mem.CreateRoute(ctx, domain.Route{ID: "route_a", SiteID: site.ID, Matcher: "^/a$", Priority: 10,
+		Action: domain.RouteAction{Type: "renderPage", PageID: "page_a"}, CreatedAt: testNow(), UpdatedAt: testNow()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mem.CreateRoute(ctx, domain.Route{ID: "route_b", SiteID: site.ID, Matcher: "^/$", Priority: 100,
+		Action: domain.RouteAction{Type: "renderPage", PageID: "page_b"}, CreatedAt: testNow(), UpdatedAt: testNow()}); err != nil {
+		t.Fatal(err)
+	}
+
+	ws, err := mat.Materialize(ctx, build.WorkspaceRequest{
+		SiteID: site.ID, SnapshotID: snapshot.ID, Environment: domain.EnvironmentProduction, Dir: filepath.Join(t.TempDir(), "ws"),
+	})
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if ws.Manifest.HomePage != "page_b" {
+		t.Fatalf("home = %q, want page_b (highest-priority renderPage route)", ws.Manifest.HomePage)
+	}
+	if len(ws.Manifest.Pages) != 2 {
+		t.Fatalf("pages = %#v", ws.Manifest.Pages)
+	}
+	byID := map[string]build.PageRef{}
+	for _, p := range ws.Manifest.Pages {
+		byID[p.PageID] = p
+	}
+	if byID["page_a"].Chunk != "pages/page_a.js" || len(byID["page_a"].Definitions) != 1 || byID["page_a"].Definitions[0] != "text" {
+		t.Fatalf("page_a ref = %#v", byID["page_a"])
+	}
+	if byID["page_b"].Chunk != "pages/page_b.js" || len(byID["page_b"].Definitions) != 1 || byID["page_b"].Definitions[0] != "hero" {
+		t.Fatalf("page_b ref = %#v", byID["page_b"])
+	}
+
+	chunkA, err := os.ReadFile(filepath.Join(ws.Dir, "src", "pages", "page_a.tsx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunkB, err := os.ReadFile(filepath.Join(ws.Dir, "src", "pages", "page_b.tsx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(chunkA), "hero") || strings.Contains(string(chunkB), "text") {
+		t.Fatalf("page chunks must not leak each other's definitions: A=%q B=%q", chunkA, chunkB)
+	}
+	for name, want := range map[string]string{
+		"page_a.tsx": `registerPage("page_a", {"snapshotId":"snapshot_pages","versionId":"pagever_a","pageId":"page_a"`,
+		"page_b.tsx": `registerPage("page_b", {"snapshotId":"snapshot_pages","versionId":"pagever_b","pageId":"page_b"`,
+	} {
+		data, err := os.ReadFile(filepath.Join(ws.Dir, "src", "pages", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("chunk %s must register its own tree, want %q in:\n%s", name, want, data)
+		}
 	}
 }

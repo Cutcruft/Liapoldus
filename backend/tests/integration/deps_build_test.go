@@ -222,7 +222,7 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 	fx := seedDepsBuildFixture(t, reg, regClient)
 
 	builds := build.NewService(fx.mem, fx.mem, fx.mem,
-		materializer.New(fx.mem, fx.mem, fx.mem, fx.mem, shared.NewResolver(), fx.layout),
+		materializer.New(fx.mem, fx.mem, fx.mem, fx.mem, shared.NewResolver(), fx.layout, fx.mem),
 		builder.New(), fx.artifacts)
 
 	result, err := builds.Create(ctx, fx.siteID, fx.snapshotID, domain.EnvironmentDevelopment)
@@ -252,10 +252,10 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 		t.Fatalf("react must stay external in the agent bundle:\n%s", depBundle)
 	}
 
-	// The site bundle keeps the top-level dep external for the import map.
-	siteBundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist", "entry.js"))
+	// The site page chunk keeps the top-level dep external for the import map.
+	siteBundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist", "pages", "page_dep_e2e.js"))
 	if err != nil {
-		t.Fatalf("published site bundle: %v", err)
+		t.Fatalf("published site page chunk: %v", err)
 	}
 	if !strings.Contains(string(siteBundle), `from"agent"`) {
 		t.Fatalf("site bundle must import the dependency externally:\n%s", siteBundle[:min(len(siteBundle), 600)])
@@ -427,7 +427,7 @@ export default agent2Name;
 	})
 	artifacts := artifactstore.New(t.TempDir())
 	builds := build.NewService(mem, mem, mem,
-		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout),
+		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout, mem),
 		builder.New(), artifacts)
 
 	result, err := builds.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment)
@@ -536,7 +536,7 @@ func TestDependencyBuildLegacyFlatLockStillWorks(t *testing.T) {
 	})
 	artifacts := artifactstore.New(t.TempDir())
 	builds := build.NewService(mem, mem, mem,
-		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout),
+		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout, mem),
 		builder.New(), artifacts)
 
 	result, err := builds.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment)
@@ -608,7 +608,7 @@ func TestDependencyBuildFailsOnNodeBuiltin(t *testing.T) {
 		Fetch:    tarballFetcherAdapter{client: regClient},
 	})
 	builds := build.NewService(mem, mem, mem,
-		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout),
+		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout, mem),
 		builder.New(), artifactstore.New(t.TempDir()))
 
 	_, err := builds.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment)
@@ -691,7 +691,7 @@ export default "agent-css-live";
 	})
 	artifacts := artifactstore.New(t.TempDir())
 	builds := build.NewService(mem, mem, mem,
-		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout),
+		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout, mem),
 		builder.New(), artifacts)
 
 	result, err := builds.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment)

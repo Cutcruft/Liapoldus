@@ -109,8 +109,11 @@ type Manifest struct {
 	SnapshotID  string                   `json:"snapshotId"`
 	Environment string                   `json:"environment"`
 	Definitions map[string]DefinitionRef `json:"definitions"`
-	Pages       []string                 `json:"pages"`
-	Externals   []string                 `json:"externals"`
+	// Pages maps every snapshot page to its code-split chunk (relative to
+	// dist/, i.e. "pages/<PageID>.js"); mount() dynamic-imports the current
+	// page's chunk at navigation (spec §16).
+	Pages     []PageRef `json:"pages"`
+	Externals []string  `json:"externals"`
 	// Shared is the import map of the versioned shared bundles (bare import
 	// specifier → public URL); the boot shell turns it into a
 	// <script type="importmap">.
@@ -122,6 +125,19 @@ type Manifest struct {
 	// before the site bundle mounts (spec §12): one per reachable stylesheet
 	// of a dependency (combined per-bundle CSS or a bare CSS subpath).
 	Styles []string `json:"styles,omitempty"`
+	// HomePage is the chunk-targeted snapshot page computed by the same
+	// heuristic as the runtime boot contract: the most specific renderPage
+	// route referencing a snapshot page, else the first snapshot page. The
+	// shell modulepreloads its chunk so the first screen has no JS round-trip.
+	HomePage string `json:"homePage,omitempty"`
+}
+
+// PageRef links a snapshot page to its code-split chunk artifact (relative to
+// dist/) and to the definition ids that chunk registers.
+type PageRef struct {
+	PageID      string   `json:"pageId"`
+	Chunk       string   `json:"chunk"`
+	Definitions []string `json:"definitions"`
 }
 
 // SharedExternals are the runtime libraries the site bundle does not include;

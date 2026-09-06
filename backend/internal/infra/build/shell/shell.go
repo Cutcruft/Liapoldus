@@ -39,6 +39,9 @@ func Render(m build.Manifest) (string, error) {
 	for _, css := range m.Styles {
 		fmt.Fprintf(&b, "<link rel=\"stylesheet\" href=\"%s\">\n", relToPage(css))
 	}
+	if home := homeChunk(m); home != "" {
+		fmt.Fprintf(&b, "<link rel=\"modulepreload\" href=\"%s\">\n", relToPage(home))
+	}
 	fmt.Fprintf(&b, "<script type=\"importmap\">\n%s\n</script>\n", importMap)
 	b.WriteString("</head>\n<body>\n<div id=\"root\"></div>\n")
 	b.WriteString(`<script type="module" src="./entry.js"></script>` + "\n</body>\n</html>\n")
@@ -56,4 +59,19 @@ func WriteShell(distDir string, m build.Manifest) error {
 		return fmt.Errorf("write dist/index.html: %w", err)
 	}
 	return nil
+}
+
+// homeChunk returns the split-chunk artifact ("pages/<HomePage>.js") of the
+// boot page so the shell can modulepreload it — the first screen then needs
+// no JS round-trip after entry.js (+ import map) load.
+func homeChunk(m build.Manifest) string {
+	if m.HomePage == "" {
+		return ""
+	}
+	for _, page := range m.Pages {
+		if page.PageID == m.HomePage {
+			return page.Chunk
+		}
+	}
+	return ""
 }

@@ -30,7 +30,7 @@ func TestDevRebuilderRebuildsOnSourceChange(t *testing.T) {
 
 	hub := rebuilder.NewHub()
 	artifacts := artifactstore.New(filepath.Join(t.TempDir(), "build"))
-	rb := rebuilder.New(materializer.New(mem, mem, mem, mem, nil, nil), artifacts, hub, rebuilder.Options{
+	rb := rebuilder.New(materializer.New(mem, mem, mem, mem, nil, nil, mem), artifacts, hub, rebuilder.Options{
 		Request: build.WorkspaceRequest{
 			SiteID: site.ID, SnapshotID: "snapshot_e2e",
 			Environment: domain.EnvironmentDevelopment, Dir: dir,
@@ -73,8 +73,8 @@ func waitBundleContaining(t *testing.T, hub *rebuilder.Hub, siteID, token string
 	for time.Now().Before(deadline) {
 		event, ok := hub.Current(siteID)
 		if ok && event.Status == "ready" && event.ArtifactDir != "" {
-			for _, entry := range mustReadDir(t, filepath.Join(event.ArtifactDir, "dist")) {
-				data, err := os.ReadFile(filepath.Join(event.ArtifactDir, "dist", entry.Name()))
+			for _, file := range distBundleFiles(t, event.ArtifactDir) {
+				data, err := os.ReadFile(file)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -86,6 +86,24 @@ func waitBundleContaining(t *testing.T, hub *rebuilder.Hub, siteID, token string
 		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatalf("artifact never contained %q (latest event: %+v)", token, mustCurrent(t, hub, siteID))
+}
+
+// distBundleFiles lists every build artifact under dist/ (shallow: root
+// bundles + dist/pages/ split chunks, minus non-bundle files like index.html).
+func distBundleFiles(t *testing.T, artifactDir string) []string {
+	t.Helper()
+	var files []string
+	root := filepath.Join(artifactDir, "dist")
+	for _, entry := range mustReadDir(t, root) {
+		if entry.IsDir() {
+			for _, sub := range mustReadDir(t, filepath.Join(root, entry.Name())) {
+				files = append(files, filepath.Join(root, entry.Name(), sub.Name()))
+			}
+			continue
+		}
+		files = append(files, filepath.Join(root, entry.Name()))
+	}
+	return files
 }
 
 func waitStatus(t *testing.T, hub *rebuilder.Hub, siteID, status string) {

@@ -61,7 +61,11 @@ func (r *Rebuilder) Start(ctx context.Context) error {
 	defer r.Close()
 
 	outdir := filepath.Join(r.opts.Request.Dir, "dist")
-	buildCtx, ctxErr := api.Context(builder.Options(filepath.Join(r.opts.Request.Dir, "src", "entry.tsx"), outdir, r.workspace.Manifest.Externals...))
+	entryPoints := append([]string{filepath.Join(r.opts.Request.Dir, "src", "entry.tsx")})
+	for _, page := range r.workspace.Manifest.Pages {
+		entryPoints = append(entryPoints, filepath.Join(r.opts.Request.Dir, "src", "pages", page.PageID+".tsx"))
+	}
+	buildCtx, ctxErr := api.Context(builder.Options(outdir, entryPoints, r.workspace.Manifest.Externals...))
 	if ctxErr != nil {
 		return fmt.Errorf("dev rebuilder: esbuild context: %s", strings.Join(esbuildErrors(ctxErr.Errors), "; "))
 	}
@@ -113,7 +117,19 @@ func (r *Rebuilder) ensure(ctx context.Context) error {
 			return fmt.Errorf("fsnotify add %s: %w", dir, err)
 		}
 	}
+	// Page chunks exist only when the snapshot has pages (src/pages is created
+	// lazily by the materializer); a missing dir would fail watcher.Add.
+	if pagesDir := filepath.Join(r.opts.Request.Dir, "src", "pages"); dirExists(pagesDir) {
+		if err := watcher.Add(pagesDir); err != nil {
+			return fmt.Errorf("fsnotify add %s: %w", pagesDir, err)
+		}
+	}
 	return nil
+}
+
+func dirExists(dir string) bool {
+	info, err := os.Stat(dir)
+	return err == nil && info.IsDir()
 }
 
 func (r *Rebuilder) loop(ctx context.Context) error {

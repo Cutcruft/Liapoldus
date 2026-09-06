@@ -65,7 +65,7 @@ func materializeTestWorkspace(t *testing.T, mem *storage.Memory, siteID string, 
 		t.Fatal(err)
 	}
 
-	mat := materializer.New(mem, mem, mem, mem, shared.NewResolver(), nil)
+	mat := materializer.New(mem, mem, mem, mem, shared.NewResolver(), nil, mem)
 	ws, err := mat.Materialize(ctx, build.WorkspaceRequest{SiteID: siteID, SnapshotID: snapshot.ID, Environment: domain.EnvironmentDevelopment, Dir: dir})
 	if err != nil {
 		t.Fatalf("materialize: %v", err)
@@ -73,18 +73,11 @@ func materializeTestWorkspace(t *testing.T, mem *storage.Memory, siteID string, 
 	return ws
 }
 
-func readBundle(t *testing.T, distDir string) []byte {
+func readBundle(t *testing.T, distDir, name string) []byte {
 	t.Helper()
-	entries, err := os.ReadDir(distDir)
+	data, err := os.ReadFile(filepath.Join(distDir, name))
 	if err != nil {
-		t.Fatalf("read dist: %v", err)
-	}
-	if len(entries) == 0 {
-		t.Fatalf("dist is empty")
-	}
-	data, err := os.ReadFile(filepath.Join(distDir, entries[0].Name()))
-	if err != nil {
-		t.Fatalf("read bundle: %v", err)
+		t.Fatalf("read %s: %v", name, err)
 	}
 	return data
 }
@@ -98,14 +91,29 @@ func TestEsbuildBuilderProducesBundleWithExternals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("esbuild: %v", err)
 	}
-	bundle := readBundle(t, bl.DistDir)
-	data := string(bundle)
+	pageChunk := string(readBundle(t, bl.DistDir, "pages/page_e2e.js"))
+	entry := string(readBundle(t, bl.DistDir, "entry.js"))
 
-	// Externals stay as runtime imports instead of being inlined.
+	// Externals stay as runtime imports instead of being inlined: the root
+	// entry only boots (mount), the code-split page chunk carries the
+	// registered definitions + page tree.
 	for _, external := range []string{"react", "@liapoldus/ui-runtime"} {
-		if !strings.Contains(data, `from"`+external+`"`) && !strings.Contains(data, `"`+external+`"`) {
-			t.Fatalf("bundle must keep external import for %s; got:\n%s", external, data[:min(len(data), 400)])
+		if !strings.Contains(pageChunk, `"`+external+`"`) {
+			t.Fatalf("page chunk must keep external import for %s; got:\n%s", external, pageChunk[:min(len(pageChunk), 400)])
 		}
+	}
+	if !strings.Contains(entry, `"@liapoldus/ui-runtime"`) {
+		t.Fatalf("root entry must import ui-runtime; got:\n%s", entry)
+	}
+	if strings.Contains(entry, "ComponentRegistry") || strings.Contains(entry, "registerPage") {
+		t.Fatalf("root entry must be boot-only (splitting): %s", entry)
+	}
+	// The site source made it into the page chunk: registration + page tree.
+	if !strings.Contains(pageChunk, "registerDefinition") || !strings.Contains(pageChunk, "registerPage") {
+		t.Fatalf("page chunk must register its content; got:\n%s", pageChunk[:min(len(pageChunk), 400)])
+	}
+	if !strings.Contains(entry, "site_bb") {
+		t.Fatalf("root entry must call mount with the site id; got:\n%s", entry)
 	}
 	// The manifest carries an import map for the shared externals.
 	if len(ws.Manifest.Externals) != len(build.SharedExternals) {
@@ -114,19 +122,18 @@ func TestEsbuildBuilderProducesBundleWithExternals(t *testing.T) {
 	if ws.Manifest.Shared["react"] != "/build/_shared/react/18.3.1.js" {
 		t.Fatalf("manifest import map = %#v", ws.Manifest.Shared)
 	}
-	// The site source made it into the bundle: registration + mount markers.
-	if !strings.Contains(data, "ComponentRegistry") || !strings.Contains(data, "mount") {
-		t.Fatalf("bundle must contain the mount logic")
+	if len(ws.Manifest.Pages) != 1 || ws.Manifest.Pages[0].Chunk != "pages/page_e2e.js" {
+		t.Fatalf("manifest pages = %#v", ws.Manifest.Pages)
 	}
-	if len(bundle) < 64 {
-		t.Fatalf("bundle too small (%d bytes)", len(bundle))
-	}
-	// The runtime shell (dist/index.html) is written for the published artifact.
+	// The runtime shell (dist/index.html) is written for the published artifact
+	// and modulepreloads the home page chunk (first screen, no round-trip).
 	shell, err := os.ReadFile(filepath.Join(bl.DistDir, "index.html"))
 	if err != nil {
 		t.Fatalf("read dist/index.html: %v", err)
 	}
-	for _, want := range []string{`<div id="root"></div>`, `src="./entry.js"`, `"react":"/build/_shared/react/18.3.1.js"`} {
+	for _, want := range []string{`<div id="root"></div>`, `src="./entry.js"`,
+		`"react":"/build/_shared/react/18.3.1.js"`,
+		`<link rel="modulepreload" href="./pages/page_e2e.js">`} {
 		if !strings.Contains(string(shell), want) {
 			t.Fatalf("shell missing %q; got:\n%s", want, shell)
 		}
@@ -158,14 +165,18 @@ func TestEsbuildIncrementalRebuildSmoke(t *testing.T) {
 	ws := materializeTestWorkspace(t, mem, site.ID, filepath.Join(t.TempDir(), "ws"))
 
 	options := api.BuildOptions{
-		EntryPoints: []string{filepath.Join(ws.Dir, "src", "entry.tsx")},
-		Outdir:      filepath.Join(ws.Dir, "dist"),
-		Bundle:      true,
-		Write:       true,
-		Format:      api.FormatESModule,
-		Platform:    api.PlatformBrowser,
-		External:    build.SharedExternals,
-		LogLevel:    api.LogLevelSilent,
+		EntryPoints: []string{
+			filepath.Join(ws.Dir, "src", "entry.tsx"),
+			filepath.Join(ws.Dir, "src", "pages", "page_e2e.tsx"),
+		},
+		Outdir:    filepath.Join(ws.Dir, "dist"),
+		Bundle:    true,
+		Write:     true,
+		Splitting: true,
+		Format:    api.FormatESModule,
+		Platform:  api.PlatformBrowser,
+		External:  build.SharedExternals,
+		LogLevel:  api.LogLevelSilent,
 	}
 	ctx, ctxErr := api.Context(options)
 	if ctxErr != nil {
@@ -188,7 +199,7 @@ func TestEsbuildIncrementalRebuildSmoke(t *testing.T) {
 	if len(second.Errors) > 0 {
 		t.Fatalf("rebuild errors: %v", second.Errors)
 	}
-	bundle := readBundle(t, filepath.Join(ws.Dir, "dist"))
+	bundle := readBundle(t, filepath.Join(ws.Dir, "dist"), "pages/page_e2e.js")
 	if !strings.Contains(string(bundle), "toUpperCase") {
 		t.Fatalf("rebuild must pick up the edited source")
 	}

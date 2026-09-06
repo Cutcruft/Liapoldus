@@ -11,15 +11,19 @@ import (
 	"strings"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/build"
+	routeapp "github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
 // Materializer turns a site snapshot into an esbuild-able workspace:
-// src/entry.tsx + src/definitions/<id>.tsx + manifest.json (plus, when the
+// src/entry.tsx (boot only) + src/definitions/<id>.tsx + one code-split
+// src/pages/<pageID>.tsx per snapshot page + manifest.json (plus, when the
 // snapshot has a frozen dependency lock and a DepLayouter is configured,
 // node_modules/ + dist/_deps/ bundles). Definition sources come from the
 // component registry mirror of the git HEAD (R5), so no git checkout is needed
-// at build time.
+// at build time. Page chunks self-register their definitions and page tree via
+// ComponentRegistry/registerPage; mount() dynamic-imports the current page's
+// chunk at navigation (spec §16).
 type Materializer struct {
 	snapshots domain.SnapshotRepository
 	pages     domain.PageRepository
@@ -27,12 +31,13 @@ type Materializer struct {
 	depsRepo  domain.DependencyRepository
 	shared    build.SharedResolver
 	deps      build.DepLayouter
+	routes    domain.RouteRepository
 }
 
 func New(snapshots domain.SnapshotRepository, pages domain.PageRepository,
 	defs domain.ComponentDefinitionRepository, depsRepo domain.DependencyRepository,
-	shared build.SharedResolver, deps build.DepLayouter) *Materializer {
-	return &Materializer{snapshots: snapshots, pages: pages, defs: defs, depsRepo: depsRepo, shared: shared, deps: deps}
+	shared build.SharedResolver, deps build.DepLayouter, routes domain.RouteRepository) *Materializer {
+	return &Materializer{snapshots: snapshots, pages: pages, defs: defs, depsRepo: depsRepo, shared: shared, deps: deps, routes: routes}
 }
 
 var _ build.WorkspaceBuilder = (*Materializer)(nil)
@@ -62,11 +67,28 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		return fail("snapshot", fmt.Errorf("%w: snapshot does not belong to site", domain.ErrNotFound))
 	}
 
-	// Collect every definition referenced by the snapshot's page trees.
-	definitionIds, err := m.collectDefinitions(ctx, snapshot)
-	if err != nil {
-		return fail("tree", err)
+	// Load every page version pinned by the snapshot and collect the
+	// definition ids each page's tree references. Each page becomes a
+	// code-split chunk that registers exactly its own definitions.
+	var pages []pageSlice
+	seenDefs := make(map[string]bool)
+	for _, p := range snapshot.Pages {
+		version, err := m.pages.GetPageVersion(ctx, p.PageID, p.VersionID)
+		if err != nil {
+			return fail("page "+p.PageID, err)
+		}
+		pageDefs := map[string]bool{}
+		collectNodeDefs(version.Root, pageDefs)
+		for id := range pageDefs {
+			seenDefs[id] = true
+		}
+		pages = append(pages, pageSlice{Page: p, Version: version, Definitions: sortedKeys(pageDefs)})
 	}
+	definitionIds := make([]string, 0, len(seenDefs))
+	for id := range seenDefs {
+		definitionIds = append(definitionIds, id)
+	}
+	sort.Strings(definitionIds)
 
 	// Resolve the site's declared dependency names up-front: the definitions
 	// loop below scans their sources for bare subpath imports and must only
@@ -117,7 +139,8 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		SnapshotID:  req.SnapshotID,
 		Environment: req.Environment,
 		Definitions: refs,
-		Pages:       pageIDs(snapshot),
+		Pages:       pageRefs(pages),
+		HomePage:    homePage(req.SiteID, snapshot.Pages, m.routes),
 		Externals:   build.SharedExternals,
 	}
 	if m.shared != nil {
@@ -143,7 +166,32 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		manifest.Styles = layout.Styles
 	}
 
-	entry := generateEntry(req.SiteID, req.Environment, definitionIds)
+	// Write one code-split entry per page: the chunk statically imports and
+	// registers the page's definitions, then hands the page tree to the
+	// runtime PageRegistry via registerPage (spec §16).
+	pagesDir := filepath.Join(req.Dir, "src", "pages")
+	if len(pages) > 0 {
+		if err := os.MkdirAll(pagesDir, 0o755); err != nil {
+			return fail("mkdir pages", err)
+		}
+	}
+	for _, p := range pages {
+		treeJSON, err := json.Marshal(pageTree{
+			SnapshotID: req.SnapshotID,
+			VersionID:  p.Version.ID,
+			PageID:     p.Page.PageID,
+			Root:       wireTreeNode(p.Version.Root),
+		})
+		if err != nil {
+			return fail("tree "+p.Page.PageID, err)
+		}
+		chunk := generatePageChunk(p.Page.PageID, string(treeJSON), p.Definitions)
+		if err := os.WriteFile(filepath.Join(pagesDir, p.Page.PageID+".tsx"), []byte(chunk), 0o644); err != nil {
+			return fail("write page "+p.Page.PageID, err)
+		}
+	}
+
+	entry := generateEntry(req.SiteID, req.Environment)
 	if err := os.MkdirAll(filepath.Join(req.Dir, "src"), 0o755); err != nil {
 		return fail("mkdir src", err)
 	}
@@ -162,41 +210,136 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 	return build.Workspace{Dir: req.Dir, Manifest: manifest}, nil
 }
 
-// collectDefinitions walks every page version pinned by the snapshot and
-// returns the unique, sorted definition ids referenced by their trees.
-func (m *Materializer) collectDefinitions(ctx context.Context, snapshot domain.Snapshot) ([]string, error) {
-	seen := make(map[string]bool)
-	for _, page := range snapshot.Pages {
-		version, err := m.pages.GetPageVersion(ctx, page.PageID, page.VersionID)
-		if err != nil {
-			return nil, err
-		}
-		collectNode(version.Root, seen)
-	}
-	result := make([]string, 0, len(seen))
-	for id := range seen {
-		result = append(result, id)
-	}
-	sort.Strings(result)
-	return result, nil
+// pageSlice bundles a snapshot page with its pinned version and the sorted
+// definition ids its tree references.
+type pageSlice struct {
+	Page        domain.SnapshotPage
+	Version     domain.PageVersion
+	Definitions []string
 }
 
-func collectNode(node domain.ComponentNode, seen map[string]bool) {
+// collectNodeDefs records every definition id referenced by a tree.
+func collectNodeDefs(node domain.ComponentNode, seen map[string]bool) {
 	if node.DefinitionID != "" {
 		seen[node.DefinitionID] = true
 	}
 	for _, child := range node.Children {
-		collectNode(child, seen)
+		collectNodeDefs(child, seen)
 	}
 }
 
-func pageIDs(snapshot domain.Snapshot) []string {
-	result := make([]string, 0, len(snapshot.Pages))
-	for _, page := range snapshot.Pages {
-		result = append(result, page.PageID)
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
 	}
-	sort.Strings(result)
-	return result
+	sort.Strings(out)
+	return out
+}
+
+// pageRefs maps each page to its split chunk artifact (dist/pages/<PageID>.js.
+// esbuild mirrors the entry tree under an outbase of src/, so an entry at
+// src/pages/<id>.tsx emits dist/pages/<id>.js). Sorted for deterministic
+// manifest output; HomePage is computed independently.
+func pageRefs(pages []pageSlice) []build.PageRef {
+	out := make([]build.PageRef, 0, len(pages))
+	for _, p := range pages {
+		out = append(out, build.PageRef{
+			PageID:      p.Page.PageID,
+			Chunk:       "pages/" + p.Page.PageID + ".js",
+			Definitions: p.Definitions,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].PageID < out[j].PageID })
+	return out
+}
+
+// homePage picks the snapshot page the boot contract will render first, using
+// the same heuristic as the runtime Service.initialTree: the most specific
+// renderPage route referencing a snapshot page, else the first page in
+// snapshot order. Returns "" for a snapshot without pages. When no route
+// repository is configured the fallback (first page) applies.
+func homePage(siteID string, pages []domain.SnapshotPage, routes domain.RouteRepository) string {
+	if len(pages) == 0 {
+		return ""
+	}
+	inSnapshot := make(map[string]bool, len(pages))
+	for _, p := range pages {
+		inSnapshot[p.PageID] = true
+	}
+	if routes != nil {
+		all, err := routes.ListRoutesBySite(context.Background(), siteID)
+		if err == nil {
+			sorted := append([]domain.Route(nil), all...)
+			sort.SliceStable(sorted, func(i, j int) bool {
+				if sorted[i].Priority != sorted[j].Priority {
+					return sorted[i].Priority > sorted[j].Priority
+				}
+				return sorted[i].CreatedAt.Before(sorted[j].CreatedAt)
+			})
+			for _, r := range sorted {
+				if r.Action.Type == routeapp.RenderPage && inSnapshot[r.Action.PageID] {
+					return r.Action.PageID
+				}
+			}
+		}
+	}
+	return pages[0].PageID
+}
+
+// pageTree is the wire shape registerPage stores for a page (matches the
+// ui-runtime TreeDeclaration; Root is the wire tree).
+type pageTree struct {
+	SnapshotID string    `json:"snapshotId"`
+	VersionID  string    `json:"versionId"`
+	PageID     string    `json:"pageId"`
+	Root       *wireNode `json:"root"`
+}
+
+// wireNode mirrors the runtime TreeNode: props/bindings/children are always
+// arrays/objects (never null) because the ui-runtime crawler iterates them.
+type wireNode struct {
+	InstanceID   string                    `json:"instanceId"`
+	DefinitionID string                    `json:"definitionId"`
+	Props        map[string]any            `json:"props"`
+	Bindings     []domain.ComponentBinding `json:"bindings"`
+	Children     []*wireNode               `json:"children"`
+}
+
+func wireTreeNode(node domain.ComponentNode) *wireNode {
+	return &wireNode{
+		InstanceID:   node.InstanceID,
+		DefinitionID: node.DefinitionID,
+		Props:        wireProps(node.Props),
+		Bindings:     wireBindings(node.Bindings),
+		Children:     wireTreeNodes(node.Children),
+	}
+}
+
+func wireTreeNodes(nodes []domain.ComponentNode) []*wireNode {
+	out := make([]*wireNode, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, wireTreeNode(n))
+	}
+	return out
+}
+
+func wireBindings(bindings []domain.ComponentBinding) []domain.ComponentBinding {
+	if bindings == nil {
+		return []domain.ComponentBinding{}
+	}
+	return bindings
+}
+
+func wireProps(props map[string]any) map[string]any {
+	if len(props) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(props))
+	for k, v := range props {
+		out[k] = v
+	}
+	return out
 }
 
 // uniqueSorted dedupes + sorts a slice in place.
@@ -231,18 +374,29 @@ func bareSubpathImports(source string, declared map[string]bool) []string {
 	return out
 }
 
-// generateEntry builds src/entry.tsx: every definition is statically imported
-// and registered in the ComponentRegistry before mount().
-func generateEntry(siteID, environment string, definitionIds []string) string {
+// generateEntry builds src/entry.tsx: only the boot/mount — every definition
+// and page tree lives in code-split page chunks (spec §16) that mount()
+// dynamic-imports on navigation.
+func generateEntry(siteID, environment string) string {
 	var builder strings.Builder
-	builder.WriteString("import { ComponentRegistry, mount } from \"@liapoldus/ui-runtime\";\n")
+	builder.WriteString("import { mount } from \"@liapoldus/ui-runtime\";\n\n")
+	fmt.Fprintf(&builder, "void mount(%q, %q);\n", siteID, environment)
+	return builder.String()
+}
+
+// generatePageChunk builds src/pages/<pageID>.tsx: the chunk registers the
+// page's definitions in the ComponentRegistry and hands the page tree to the
+// runtime PageRegistry. tree is a DSL JSON object literal (already marshalled).
+func generatePageChunk(pageID, tree string, definitionIds []string) string {
+	var builder strings.Builder
+	builder.WriteString("import { ComponentRegistry, registerPage } from \"@liapoldus/ui-runtime\";\n")
 	for _, id := range definitionIds {
-		fmt.Fprintf(&builder, "import %s from \"./definitions/%s\";\n", definitionName(id), id)
+		fmt.Fprintf(&builder, "import %s from \"../definitions/%s\";\n", definitionName(id), id)
 	}
 	builder.WriteString("\n")
 	for _, id := range definitionIds {
 		fmt.Fprintf(&builder, "ComponentRegistry.registerDefinition(%q, %s);\n", id, definitionName(id))
 	}
-	fmt.Fprintf(&builder, "\nvoid mount(%q, %q);\n", siteID, environment)
+	fmt.Fprintf(&builder, "\nregisterPage(%q, %s);\n", pageID, tree)
 	return builder.String()
 }

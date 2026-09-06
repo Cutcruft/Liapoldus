@@ -58,6 +58,31 @@ func TestShellRenderEmpty(t *testing.T) {
 	if !strings.Contains(html, `src="./entry.js"`) {
 		t.Errorf("entry script missing")
 	}
+	if strings.Contains(html, "modulepreload") {
+		t.Errorf("no home page -> no modulepreload expected:\n%s", html)
+	}
+}
+
+// TestShellRenderHomePagePreload covers the first-screen contract: the home
+// page's code-split chunk is modulepreloaded by the shell.
+func TestShellRenderHomePagePreload(t *testing.T) {
+	m := build.Manifest{
+		HomePage: "page_a",
+		Pages: []build.PageRef{
+			{PageID: "page_a", Chunk: "pages/page_a.js"},
+			{PageID: "page_b", Chunk: "pages/page_b.js"},
+		},
+	}
+	html, err := shell.Render(m)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if !strings.Contains(html, `<link rel="modulepreload" href="./pages/page_a.js">`) {
+		t.Errorf("home chunk must be modulepreloaded:\n%s", html)
+	}
+	if strings.Contains(html, "page_b.js") {
+		t.Errorf("non-home chunks must not be preloaded:\n%s", html)
+	}
 }
 
 func TestShellWrite(t *testing.T) {

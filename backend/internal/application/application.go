@@ -72,7 +72,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 	buildEvents := rebuilder.NewHub()
 	builds := buildapp.NewService(
 		storage, storage, storage,
-		materializer.New(storage, storage, storage, storage, shared.NewResolver(), depsLayout),
+		materializer.New(storage, storage, storage, storage, shared.NewResolver(), depsLayout, storage),
 		builder.New(),
 		artifacts,
 		buildEvents,

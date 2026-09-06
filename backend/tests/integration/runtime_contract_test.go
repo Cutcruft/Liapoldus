@@ -61,7 +61,7 @@ func runtimeContractFixture(t *testing.T, siteID string) (*storage.Memory, domai
 	}
 
 	artifacts := artifactstore.New(filepath.Join(t.TempDir(), "build"))
-	builds := build.NewService(mem, mem, mem, materializer.New(mem, mem, mem, mem, nil, nil), builder.New(), artifacts)
+	builds := build.NewService(mem, mem, mem, materializer.New(mem, mem, mem, mem, nil, nil, mem), builder.New(), artifacts)
 	if _, err := builds.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentProduction); err != nil {
 		t.Fatalf("publish production build: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestRuntimeContractVersionIdOverridesEnvironment(t *testing.T) {
 	// Only snapshot_a is published (production). snapshot_b must still be
 	// reachable by explicit versionId.
 	artifacts := artifactstore.New(filepath.Join(t.TempDir(), "build"))
-	builds := build.NewService(mem, mem, mem, materializer.New(mem, mem, mem, mem, nil, nil), builder.New(), artifacts)
+	builds := build.NewService(mem, mem, mem, materializer.New(mem, mem, mem, mem, nil, nil, mem), builder.New(), artifacts)
 	if _, err := builds.Create(ctx, "site_rc2", snapA.ID, domain.EnvironmentProduction); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
