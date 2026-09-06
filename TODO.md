@@ -49,10 +49,17 @@
 
 ## Этап 4 — Runtime-контракт (Go-endpoints)
 
-- [ ] `/runtime/contract` (дескрипторы), `/runtime/tree`, `/runtime/routes`, `/runtime/tokens`.
-- [ ] Выдача снапшота для boot (siteId + environment + версии).
-- [ ] Интеграционные тесты контракта против автономного boot-скрипта.
+- [x] **Boot-контракт (часть 1)**: `GET /runtime/contract` переписан на `internal/application/runtime.Service` — выдача снапшота для boot (siteId + environment + версии: `versionId` → точный снапшот; без версии → последний `ready`-билд окружения). JSON совпадает с `parseDescriptors`/`extractTree` ui-runtime; wire-дерево с всегда-присутствующими `props/bindings/children` (иначе `resolveInstance` падает); `providers/operations/endpoints/themes` пустые (builtin регистрируется автоматически; токены — часть 2).
+- [x] **Автономный boot-скрипт**: фикстура `tests/integration/fixtures/ui-runtime-core.mjs` (esbuild-bандл `ui-runtime/src/core/boot.ts`, без react) + `fixtures/boot.mjs`; integration-тест `httptest` + реальный `node boot()` против контракта.
+- [ ] `/runtime/*`-дескрипторы: `/runtime/tree`, `/runtime/routes`, `/runtime/tokens`.
 - [ ] Переделать снапшоты на git
+
+## Этап 4b — Dependency-сервис (zero-node npm-зависимости, spec: `docs/backend/dependency-service.md`)
+
+- [x] Спека: дизайн confirmed решений (zero-node/zero-sh Go, npm-registry напрямую, резолв на publish снапшота, диапазон→lock exact+sha512, fail на несовместимых); план фаз §11, ограничения §12.
+- [ ] **Фаза 1 (MVP)**: domain+storage (005), `deps.Service` (CRUD, резолв+flat-graph, integrity-cache); registry-фетчер (packument abbr, tarball, semver, backoff); диск-стор blobs; lock в снапшот + materializer (node_modules-layout → esbuild per-dep `_deps/*.js` → `manifest.deps`+externals, `DepBuildError`); admin API `dependencies`; тесты unit/integration/e2e.
+- [ ] **Фаза 2**: полное subpath-покрытие, вложенные версионные layout, CSS/ассеты пакетов, peer-fail, allowlist scopes.
+- [ ] **Фаза 3**: `cmd/dependency-build` вместо `scripts/build-shared` (npm уходит полностью), ликвидация shell-обёрток, SBOM.
 
 ## Этап 5 — Boot и рендеринг на живой сборке
 
