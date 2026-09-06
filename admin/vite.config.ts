@@ -3,6 +3,11 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
+// Proxy targets come from the environment so the same config works on the
+// host (defaults) and inside docker-compose (VITE_API_URL=http://backend:8080).
+const API_TARGET = process.env.VITE_API_URL || 'http://localhost:8080';
+const CLIENT_TARGET = process.env.VITE_CLIENT_URL || 'http://localhost:18080';
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -15,10 +20,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:8080', changeOrigin: true, ws: true },
-      '/runtime': { target: 'http://localhost:18080', changeOrigin: true },
-      '/build': { target: 'http://localhost:18080', changeOrigin: true },
-      '/dev': { target: 'http://localhost:18080', changeOrigin: true, ws: true },
+      '/api': { target: API_TARGET, changeOrigin: true, ws: true },
+      '/runtime': { target: CLIENT_TARGET, changeOrigin: true },
+      '/build': { target: CLIENT_TARGET, changeOrigin: true },
+      '/dev': { target: CLIENT_TARGET, changeOrigin: true, ws: true },
     },
   },
   test: {

@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: liapoldus
+      POSTGRES_USER: liapoldus
+      POSTGRES_PASSWORD: liapoldus
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U liapoldus -d liapoldus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+      - "18080:18080"
+    environment:
+      LIAPOLDUS_ADMIN_ADDR: ":8080"
+      LIAPOLDUS_CLIENT_ADDR: ":18080"
+      LIAPOLDUS_ADMIN_TOKEN: "dev-admin-token"
+      LIAPOLDUS_STORAGE: "postgres"
+      LIAPOLDUS_DATABASE_URL: "postgres://liapoldus:liapoldus@postgres:5432/liapoldus?sslmode=disable"
+      LIAPOLDUS_ASSET_DIR: "/data/assets"
+      LIAPOLDUS_GIT_DIR: "/data/git"
+      LIAPOLDUS_BUILD_DIR: "/data/build"
+      LIAPOLDUS_DEPS_DIR: "/data/deps"
+      LIAPOLDUS_DEFAULT_LOCALE: "ru"
+      LIAPOLDUS_REDIRECT_DEFAULT_STATUS: "302"
+      LIAPOLDUS_REDIRECT_ALLOWED_STATUSES: "301,302,307,308"
+      LIAPOLDUS_COMPONENT_MAX_DEPTH: "10"
+      LIAPOLDUS_PAGE_INITIAL_VERSION: "1"
+      LIAPOLDUS_EMAIL_PATTERN: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      LIAPOLDUS_MASTER_VARIANT_NAME: "original"
+      LIAPOLDUS_ASSET_FALLBACK_NAME: "asset"
+      LIAPOLDUS_ASSET_FALLBACK_MIME: "application/octet-stream"
+      LIAPOLDUS_ASSET_FILE_URL_TEMPLATE: "/api/assets/{id}/file"
+      LIAPOLDUS_ASSET_CACHE_MAX_AGE_SECONDS: "86400"
+      LIAPOLDUS_MAX_UPLOAD_BYTES: "10485760"
+      LIAPOLDUS_STARTUP_TIMEOUT: "10s"
+      LIAPOLDUS_SHUTDOWN_TIMEOUT: "5s"
+      LIAPOLDUS_READ_HEADER_TIMEOUT: "10s"
+      LIAPOLDUS_NPM_REGISTRY: "https://registry.npmjs.org"
+    volumes:
+      - appdata:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: "http://backend:8080"
+      VITE_CLIENT_URL: "http://backend:18080"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  pgdata:
+  appdata:

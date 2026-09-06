@@ -1,7 +1,7 @@
-.git
-.github
-.codex
-node_modules
-dist
+tmp
 bin
+build
+data
 *.log
+tests
+scripts
