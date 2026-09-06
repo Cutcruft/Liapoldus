@@ -976,8 +976,8 @@ VITE_CLIENT_URL=http://localhost:18080
 - [x] .env.example файлы на месте
 
 ### Слайс 6: Doc + Code Cleanup
-- [ ] Удалён мёртвый код (Head, label.tsx, Placeholder, dev-ws)
-- [ ] Хардкод извлечён в конфиги/константы
-- [ ] Все доки актуальны
-- [ ] README содержит quick start
-- [ ] `go vet ./...` и `npx tsc --noEmit` чисто
+- [x] Удалён мёртвый код (Head, label.tsx, Placeholder, dev-ws)
+- [x] Хардкод извлечён в конфиги/константы
+- [x] Все доки актуальны
+- [x] README содержит quick start
+- [x] `go vet ./...` и `npx tsc --noEmit` чисто
