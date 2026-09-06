@@ -96,7 +96,7 @@ func NewRouter(a *App) http.Handler {
 	// snapshot); serve them straight from disk. The pattern is more specific
 	// than "/", so it wins over the edge handler's host-based resolution.
 	if a.BuildDir != "" {
-		mux.Handle("GET /build/", http.StripPrefix("/build/", http.FileServer(http.Dir(a.BuildDir))))
+		mux.Handle("GET /build/", buildFileServer(a.BuildDir))
 	}
 
 	// Dev rebuild pushes: the browser subscribes here to learn when the
@@ -121,6 +121,28 @@ func serveAssetBytes(w http.ResponseWriter, r *http.Request, asset domain.Asset,
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, reader)
+}
+
+// buildCachePolicy is the client-side cache policy for a /build/ artifact
+// (spec §15 Cache). Production snapshots and the versioned shared/dep bundles
+// are immutable — the URL is pinned to a snapshot/version — so browsers may
+// hold them long. Development artifacts are rebuilt in place (dev rebuilder)
+// under the same URL and must be revalidated.
+func buildCachePolicy(urlPath string) string {
+	if strings.Contains(urlPath, "/"+domain.EnvironmentDevelopment+"/") {
+		return "no-cache"
+	}
+	return "public, max-age=31536000, immutable"
+}
+
+// buildFileServer serves the /build/ artifact root with cache headers derived
+// from the environment segment of the requested path.
+func buildFileServer(root string) http.Handler {
+	fileServer := http.FileServer(http.Dir(root))
+	return http.StripPrefix("/build/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", buildCachePolicy(r.URL.Path))
+		fileServer.ServeHTTP(w, r)
+	}))
 }
 
 type EdgeHandler struct{ app *App }
