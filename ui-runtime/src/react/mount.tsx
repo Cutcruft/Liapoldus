@@ -1,15 +1,26 @@
-import { useEffect } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { boot, type BootOptions, type BootRuntime } from '../core/boot';
 import { componentMapFromRegistry } from './builtin';
+import { PageLoader, getPageTree, hasPageTree, resolveBuildBase } from '../core/pages';
 import { RuntimeProvider, useRuntime } from './context';
-import { PageRenderer, type ComponentMap } from './render';
+import { PageRenderer, pageIdOf, type ComponentMap } from './render';
+import { useRoute } from './hooks';
 
 export interface MountOptions extends BootOptions {
   /** корень монтирования: элемент, id-селектор или null → `#root`. */
   root?: HTMLElement | string;
-  /** карта компонентов (default — ComponentRegistry: builtin + site-определения). */
+  /** карта компонентов (default — ComponentRegistry: builtin + зарегистрированные site-определения). */
   components?: ComponentMap;
+  /** корень раздачи сборки (manifest.json + чанки); default — вывод из URL/`baseUrl`. */
+  buildBaseUrl?: string;
+  /** место пока держится placeholder, пока догружается чанк страницы (0-контент ОК). */
+  fallback?: ReactNode;
+  /**
+   * Догрузчик чанков (тесты). default — нативный `import()`.
+   * Чанк сам вызывает `registerPage`/ComponentRegistry — загрузчик только ждёт его.
+   */
+  importer?: (chunkUrl: string) => Promise<unknown>;
 }
 
 export interface MountResult {
@@ -52,29 +63,90 @@ function BindingRefresh() {
   return null;
 }
 
+interface CodeSplitPagesProps {
+  runtime: BootRuntime;
+  loader: PageLoader;
+  components?: ComponentMap;
+  fallback?: ReactNode;
+}
+
 /**
- * Монтирует собранную страницу (Этап 5): boot() + RuntimeProvider +
- * PageRenderer поверх дерева из контракта. Компоненты берутся из
- * ComponentRegistry (builtin + определения site-бандла) — entry.tsx
- * регистрирует их до вызова mount.
+ * Слой код-сплиттинга (§16#8): при переходе на renderPage-роут догружает чанк
+ * странице (один раз, кэш), берёт зарегистрированное дерево и переключает
+ * store.tree. Пока несколько страниц используют один реестр деревьев — старый
+ * контент остаётся на экране (без белых кадров), placeholder показывается только
+ * до первого дерева (контракт/dev-WS не отдали его).
+ */
+function CodeSplitPages({ runtime, loader, components, fallback }: CodeSplitPagesProps) {
+  const route = useRoute();
+  const pageId = pageIdOf(route);
+  const [loadedTick, setLoadedTick] = useState(0);
+
+  useEffect(() => {
+    if (!pageId || hasPageTree(pageId)) return;
+    let alive = true;
+    loader.load(pageId).then(() => {
+      if (!alive) return;
+      const decl = getPageTree(pageId);
+      if (decl && runtime.store.getState().tree?.pageId !== pageId) {
+        runtime.tree.load(decl);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [pageId, runtime, loader]);
+
+  useEffect(() => loader.onLoaded(() => setLoadedTick((n) => n + 1)), [loader]);
+
+  if (!pageId) return null;
+  void loadedTick;
+  const map = components ?? componentMapFromRegistry();
+  const ready = hasPageTree(pageId) || (runtime.store.getState().tree?.pageId ?? null) === pageId;
+  if (!ready && !runtime.store.getState().tree) {
+    return fallback ? <>{fallback}</> : null;
+  }
+  return <PageRenderer components={map} />;
+}
+
+/**
+ * Монтирует собранный сайт (Этап 5 п.4): boot() + RuntimeProvider + догрузчик
+ * код-сплит чанков + PageRenderer.
+ *
+ * Порядок: boot() берёт контракт (дескрипторы/роуты/тему/стартовое дерево),
+ * PageLoader читает manifest.json и гарантирует загрузку домашнего чанка
+ * (modulepreload в shell делает его почти мгновенным) — поэтому первый экран
+ * рендерится сразу с компонентами сайта, а при навигации чанки остальных
+ * страниц догружаются по требованию.
  *
  * `baseUrl` по умолчанию — origin текущей страницы (контракт и /build живут на
  * одном сервере); в node/тестах передаётся явно.
  */
 export function mount(siteId: string, environment = 'production', opts: MountOptions = {}): Promise<MountResult> {
-  const { root, components, ...bootOptions } = opts;
+  const { root, components, buildBaseUrl, fallback, importer, ...bootOptions } = opts;
   const baseUrl = bootOptions.baseUrl ?? (typeof location !== 'undefined' ? location.origin : undefined);
   const runtimePromise = boot(siteId, environment, { ...bootOptions, baseUrl });
   const container = rootElement(root);
   const el = createRoot(container);
-  const map = components ?? componentMapFromRegistry();
+  const buildRoot = resolveBuildBase(baseUrl, siteId, environment, bootOptions.versionId, buildBaseUrl);
+  const loader = new PageLoader(buildRoot, bootOptions.env?.fetch, importer);
 
   el.render(
     <RuntimeProvider runtime={runtimePromise}>
-      <BindingRefresh />
-      <PageRenderer components={map} />
+      <ReadyPages loader={loader} components={components} fallback={fallback} />
     </RuntimeProvider>,
   );
 
-  return runtimePromise.then((runtime) => ({ runtime, root: el }));
+  return runtimePromise.then((r) => ({ runtime: r, root: el }));
+}
+
+/** Проксирует loader в CodeSplitPages после readiness RuntimeProvider. */
+function ReadyPages(props: Omit<CodeSplitPagesProps, 'runtime'>) {
+  const runtime = useRuntime();
+  return (
+    <>
+      <BindingRefresh />
+      <CodeSplitPages runtime={runtime} {...props} />
+    </>
+  );
 }

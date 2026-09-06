@@ -20,6 +20,15 @@ export type { ComponentDefinition } from './core/component-registry';
 export { SyncEngine } from './core/sync';
 export type { Channel, SubscriptionMeta, SyncOptions } from './core/sync';
 export { TreeController } from './core/tree';
+export {
+  PageLoader,
+  getPageTree,
+  hasPageTree,
+  parseManifest,
+  registerPage,
+  resolveBuildBase,
+} from './core/pages';
+export type { BuildManifest, ChunkImporter, PageLoaderListener, PageRef } from './core/pages';
 export { createRuntimeStore, defaultStoreState } from './core/store';
 export type { RuntimeActions, RuntimeState, RuntimeStore, RuntimeStoreState } from './core/store';
 export { createMatcher } from './core/matcher';

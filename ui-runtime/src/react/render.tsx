@@ -53,7 +53,8 @@ export function RouteOutlet({ pages, fallback }: RouteOutletProps) {
   return createElement(Page, { route: route ?? undefined });
 }
 
-function pageIdOf(route: ResolvedRoute | null): string | undefined {
+/** pageId активного renderPage-роута (для догрузчика код-сплит чанков). */
+export function pageIdOf(route: ResolvedRoute | null): string | undefined {
   if (!route) return undefined;
   const action = route.route.action;
   return action.type === 'renderPage' ? action.pageId : undefined;
