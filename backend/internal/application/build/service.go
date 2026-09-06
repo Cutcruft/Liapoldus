@@ -204,12 +204,34 @@ type Service struct {
 	builder   WorkspaceBuilder
 	runner    BundleRunner
 	artifacts ArtifactStore
+	events    DevEventHub
 }
 
 func NewService(sites domain.SiteRepository, snapshots domain.SnapshotRepository,
 	builds domain.BuildRepository, builder WorkspaceBuilder, runner BundleRunner,
-	artifacts ArtifactStore) *Service {
-	return &Service{sites: sites, snapshots: snapshots, builds: builds, builder: builder, runner: runner, artifacts: artifacts}
+	artifacts ArtifactStore, events ...DevEventHub) *Service {
+	svc := &Service{sites: sites, snapshots: snapshots, builds: builds, builder: builder, runner: runner, artifacts: artifacts}
+	if len(events) > 0 && events[0] != nil {
+		svc.events = events[0]
+	}
+	return svc
+}
+
+// publish fans the build's current lifecycle state out to hub subscribers
+// (admin `/api/builds/ws`). Optional: a nil hub is a no-op.
+func (s *Service) publish(build domain.Build, buildErr string) {
+	if s.events == nil {
+		return
+	}
+	s.events.Publish(DevRebuildEvent{
+		SiteID:      build.SiteID,
+		Environment: build.Environment,
+		SnapshotID:  build.SnapshotID,
+		ArtifactDir: build.ArtifactDir,
+		Status:      string(build.Status),
+		Error:       buildErr,
+		UpdatedAt:   time.Now().UTC(),
+	})
 }
 
 // validEnvironments is the closed set of environment strings supported in
@@ -284,6 +306,7 @@ func (s *Service) run(ctx context.Context, build domain.Build) (domain.Build, er
 	if err := s.builds.UpdateBuild(ctx, build); err != nil {
 		return domain.Build{}, err
 	}
+	s.publish(build, "")
 
 	wsDir, err := os.MkdirTemp("", "liapoldus-ws-*")
 	if err != nil {
@@ -326,6 +349,7 @@ func (s *Service) run(ctx context.Context, build domain.Build) (domain.Build, er
 	if err := s.builds.UpdateBuild(ctx, build); err != nil {
 		return domain.Build{}, err
 	}
+	s.publish(build, "")
 	return build, nil
 }
 
@@ -337,6 +361,7 @@ func (s *Service) fail(ctx context.Context, build domain.Build, stage string, ca
 	build.FinishedAt = &now
 	build.Log = append(build.Log, fmt.Sprintf("%s failed: %v", stage, cause))
 	_ = s.builds.UpdateBuild(ctx, build)
+	s.publish(build, fmt.Sprintf("%s: %v", stage, cause))
 	return build, fmt.Errorf("%w: %s: %v", domain.ErrBuildFailed, stage, cause)
 }
 

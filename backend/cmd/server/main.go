@@ -96,6 +96,7 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 		Deps:       services.Deps,
 		Logger:     logger,
 		AdminToken: cfg.AdminToken,
+		BuildEvents: services.BuildEvents,
 	})
 	clientHandler := client.NewRouter(&client.App{
 		Sites:                   services.Sites,

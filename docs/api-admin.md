@@ -199,6 +199,51 @@ GET /api/snapshots/{snapshotId}
 DELETE /api/snapshots/{snapshotId}   // 204
 ```
 
+## Build
+
+Публикация снапшота в окружение. Сборка **синхронная**: `POST …/builds` возвращает готовый Build (`queued→building→ready|failed`); повторная публикация той же пары snapshot+environment — no-op и возвращает существующий ready-Build. Окружение — одно из `development|production` (staging нет).
+
+```http
+POST /api/sites/{siteId}/builds
+Content-Type: application/json
+
+{"snapshotId":"snap1","environment":"production"}
+```
+
+```http
+GET /api/sites/{siteId}/builds     // список Build сайта, по возрастанию created_at
+GET /api/builds/{buildId}
+```
+
+Build:
+
+```json
+{"id":"b1","siteId":"s1","snapshotId":"snap1","environment":"production",
+ "status":"ready","log":["..."],"artifactDir":"build/s1/production/snap1",
+ "createdAt":"…","startedAt":"…","finishedAt":"…"}
+```
+
+Артефакты раздаются публично на `/build/…` (без Bearer). Текущий на prod = новейшая `ready`-сборка `production`; «откат» — повторный `POST …/builds` для старого снапшота.
+
+### Живой статус сборок (WS)
+
+```http
+GET /api/builds/ws?siteId={siteId}&token={adminToken}
+```
+
+WebSocket событий жизненного цикла сборки. Событие:
+
+```json
+{"siteId":"s1","environment":"production","snapshotId":"snap1",
+ "status":"building","artifactDir":"…","updatedAt":"…"}
+```
+
+События приходят на каждом переходе: `building`, `ready`, `failed` (с `error`). Поле `updatedAt` уникально идентифицирует событие — повторная доставка того же события игнорируется.
+
+- Браузерные `WebSocket` не умеют слать HTTP-заголовки, поэтому **токен передаётся query-параметром** `?token=` (валидируется constant-time до апгрейда, как BearerAuth). Пустой `LIAPOLDUS_ADMIN_TOKEN` = открыто.
+- Роут смонтирован на внешнем mux (до BearerAuth) и работает только если сервер собран с build-событиями.
+- Фильтрация по `siteId` на стороне сервера; поля `environment`/`snapshotId`/`artifactDir`/`error` — только для контекста UI.
+
 ## Аутентификация
 
 - Если `LIAPOLDUS_ADMIN_TOKEN` пуст — admin открыт (режим разработки).

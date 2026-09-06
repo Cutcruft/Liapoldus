@@ -7,14 +7,14 @@ import { ConfirmButton } from '../components/ConfirmButton';
 
 const SECTIONS: Array<{
   to: string;
-  labelKey: 'nav.pages' | 'nav.contents' | 'nav.assets' | 'nav.routes' | 'nav.forms' | 'nav.snapshots';
+  labelKey: 'nav.pages' | 'nav.contents' | 'nav.assets' | 'nav.routes' | 'nav.forms' | 'nav.builds';
 }> = [
   { to: 'pages', labelKey: 'nav.pages' },
   { to: 'contents', labelKey: 'nav.contents' },
   { to: 'assets', labelKey: 'nav.assets' },
   { to: 'routes', labelKey: 'nav.routes' },
   { to: 'forms', labelKey: 'nav.forms' },
-  { to: 'snapshots', labelKey: 'nav.snapshots' },
+  { to: 'builds', labelKey: 'nav.builds' },
 ];
 
 export function SiteHomePage() {

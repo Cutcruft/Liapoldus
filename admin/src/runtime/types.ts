@@ -152,6 +152,17 @@ export type DevRebuildEvent = {
   updatedAt: string;
 };
 
+/** Событие жизненного цикла сборки (admin `/api/builds/ws`, M3). */
+export type BuildEvent = {
+  siteId: string;
+  environment: string;
+  snapshotId: string;
+  artifactDir?: string;
+  status: BuildStatus;
+  error?: string;
+  updatedAt: string;
+};
+
 /** Статус рантайма сайта (Этап 4: /runtime/status — ожидается на бэкенде). */
 export type RuntimeStatus = {
   siteId: string;

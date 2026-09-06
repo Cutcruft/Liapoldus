@@ -11,6 +11,7 @@ import { ContentEditorPage } from './pages/ContentEditorPage';
 import { SiteAssetsPage } from './pages/SiteAssetsPage';
 import { SiteFormsPage } from './pages/SiteFormsPage';
 import { FormEditorPage } from './pages/FormEditorPage';
+import { SiteBuildsPage } from './pages/SiteBuildsPage';
 import { EditorPage } from './editor/EditorPage';
 
 export const appRoutes: RouteObject[] = [
@@ -30,7 +31,7 @@ export const appRoutes: RouteObject[] = [
       { path: 'sites/:siteId/routes/:routeId', element: <RouteEditorPage /> },
       { path: 'sites/:siteId/forms', element: <SiteFormsPage /> },
       { path: 'sites/:siteId/forms/:formId', element: <FormEditorPage /> },
-      { path: 'sites/:siteId/snapshots', element: <Placeholder titleKey="nav.snapshots" scope="—" /> },
+      { path: 'sites/:siteId/builds', element: <SiteBuildsPage /> },
       { path: 'settings', element: <Placeholder titleKey="nav.settings" /> },
     ],
   },

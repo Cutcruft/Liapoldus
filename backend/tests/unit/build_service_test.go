@@ -309,3 +309,68 @@ func seedBuildSiteAt(t *testing.T, mem *storage.Memory, id string) domain.Site {
 	}
 	return site
 }
+
+type fakeEventHub struct {
+	events []build.DevRebuildEvent
+}
+
+func (h *fakeEventHub) Publish(event build.DevRebuildEvent) { h.events = append(h.events, event) }
+func (h *fakeEventHub) Subscribe() (<-chan build.DevRebuildEvent, func()) {
+	return make(<-chan build.DevRebuildEvent), func() {}
+}
+func (h *fakeEventHub) Current(string) (build.DevRebuildEvent, bool) {
+	return build.DevRebuildEvent{}, false
+}
+
+func TestBuildPublishesLifecycleEvents(t *testing.T) {
+	ctx := context.Background()
+	mem := storage.NewMemory()
+	site := seedBuildSite(t, mem)
+	snapshot := seedBuildSnapshot(t, mem, site.ID)
+	hub := &fakeEventHub{}
+	service := build.NewService(mem, mem, mem,
+		&fakeBuilder{manifest: build.Manifest{SiteID: site.ID, SnapshotID: snapshot.ID}},
+		&fakeRunner{}, &fakeArtifacts{}, hub)
+
+	if _, err := service.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment); err != nil {
+		t.Fatalf("create build: %v", err)
+	}
+
+	statuses := []string{}
+	for _, e := range hub.events {
+		statuses = append(statuses, e.Status)
+	}
+	if len(statuses) < 2 {
+		t.Fatalf("events = %v, want building + ready", statuses)
+	}
+	if statuses[0] != "building" || statuses[len(statuses)-1] != "ready" {
+		t.Fatalf("events %v, want building...ready", statuses)
+	}
+	last := hub.events[len(hub.events)-1]
+	if last.SiteID != site.ID || last.SnapshotID != snapshot.ID || last.Environment != domain.EnvironmentDevelopment {
+		t.Fatalf("last event = %#v", last)
+	}
+	if last.ArtifactDir == "" {
+		t.Fatalf("ready event must carry artifactDir")
+	}
+}
+
+func TestBuildFailedPublishesErrorEvent(t *testing.T) {
+	ctx := context.Background()
+	mem := storage.NewMemory()
+	site := seedBuildSite(t, mem)
+	snapshot := seedBuildSnapshot(t, mem, site.ID)
+	hub := &fakeEventHub{}
+	service := build.NewService(mem, mem, mem,
+		&fakeBuilder{manifest: build.Manifest{SiteID: site.ID}, err: errors.New("boom")},
+		&fakeRunner{}, &fakeArtifacts{}, hub)
+
+	_, err := service.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment)
+	if err == nil {
+		t.Fatal("want error on failed build")
+	}
+	last := hub.events[len(hub.events)-1]
+	if last.Status != "failed" || last.Error == "" {
+		t.Fatalf("last event = %#v, want failed with error", last)
+	}
+}

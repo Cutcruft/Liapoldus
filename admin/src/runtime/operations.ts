@@ -41,6 +41,7 @@ export type OperationKind =
   | 'deleteSnapshot'
   | 'createBuild'
   | 'getBuild'
+  | 'listBuilds'
   | 'runtimeStatus';
 
 export interface OperationSpec<TArgs extends Record<string, unknown> = Record<string, unknown>> {
@@ -404,6 +405,14 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
       const status = typeof b === 'object' && b !== null && 'status' in b ? String((b as { status: unknown }).status) : '';
       return status ? status : t('result.count', { n: 0 });
     },
+  },
+
+  listBuilds: {
+    kind: 'listBuilds',
+    labelKey: 'op.listBuilds',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/builds`,
+    detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
   },
 
   runtimeStatus: {

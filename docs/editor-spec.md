@@ -255,7 +255,7 @@ LEFT  Дерево                 CENTER Canvas-превью          RIGHT И�
 
 ### M3 — Публикация, git, темы, зависимости
 
-- [ ] Builds: snapshot→build→env, живые статусы, лог, rollback; publish-защита prod.
+- [x] Builds: snapshot→build→env, живые статусы, лог, rollback; publish-защита prod.
 - [ ] Git-UI: commit/push/tag, история версий компонентов, checkout/rollback.
 - [ ] Темы/токены: editor токенов + предпросмотр (зависит от `/runtime/tokens`).
 - [ ] Зависимости: package.json-UI (зависит от Dependency-сервиса Фаза 1).

@@ -36,6 +36,16 @@ func (h *BuildHandler) Create(w http.ResponseWriter, r *http.Request) {
 	httpapi.RespondJSON(w, http.StatusCreated, result)
 }
 
+// List returns every build of the site, oldest first.
+func (h *BuildHandler) List(w http.ResponseWriter, r *http.Request) {
+	result, err := h.builds.ListBySite(r.Context(), siteID(r))
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, result)
+}
+
 func (h *BuildHandler) Get(w http.ResponseWriter, r *http.Request) {
 	buildID := r.PathValue("buildID")
 	if buildID == "" {

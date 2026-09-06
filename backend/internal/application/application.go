@@ -20,6 +20,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/artifactstore"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/builder"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/materializer"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/rebuilder"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shared"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/layout"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/registry"
@@ -42,6 +43,8 @@ type Services struct {
 	Builds     *buildapp.Service
 	Runtime    *runtime.Service
 	Deps       *deps.Service
+	// BuildEvents relays build lifecycle events to admin WS subscribers.
+	BuildEvents buildapp.DevEventHub
 }
 
 // New builds every aggregate service from the given storage, blob store and
@@ -63,11 +66,13 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Fetch:    tarballFetcher{client: reg},
 		Accessor: storage,
 	})
+	buildEvents := rebuilder.NewHub()
 	builds := buildapp.NewService(
 		storage, storage, storage,
 		materializer.New(storage, storage, storage, storage, shared.NewResolver(), depsLayout),
 		builder.New(),
 		artifacts,
+		buildEvents,
 	)
 	routes := route.NewService(storage, route.Settings{
 		DefaultStatus: cfg.RedirectDefaultStatus,
@@ -84,6 +89,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Components: comps,
 		Snapshots:  snapshot.NewService(storage, storage, storage, depsSvc),
 		Builds:     builds,
+		BuildEvents: buildEvents,
 		Runtime:    runtime.NewService(storage, storage, storage, routes, builds),
 		Contents:   content.NewService(storage),
 		Assets: asset.NewService(storage, blobs, storage, asset.Settings{

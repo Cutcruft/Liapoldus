@@ -5,6 +5,7 @@ export type {
   AssetVariant,
   BindingSource,
   Build,
+  BuildEvent,
   BuildStatus,
   ComponentNode,
   ContentDetail,

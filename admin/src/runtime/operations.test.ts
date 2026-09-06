@@ -48,6 +48,22 @@ describe('runOperation', () => {
     expect(res.data).toEqual([{ id: 's1' }, { id: 's2' }]);
   });
 
+  it('listBuilds: count в detail', async () => {
+    const api = fixtureApi(async (url) => {
+      expect(url).toBe('/api/sites/s1/builds');
+      return json(200, [
+        { id: 'b1', siteId: 's1', snapshotId: 'snap1', environment: 'production', status: 'ready', log: [], artifactDir: 'x', createdAt: '' },
+      ]);
+    });
+    const res = await runOperation(api, 'listBuilds', { siteId: 's1' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.label).toBe('Список сборок');
+    expect(res.detail).toBe('1 шт.');
+    expect(res.data).toEqual([
+      { id: 'b1', siteId: 's1', snapshotId: 'snap1', environment: 'production', status: 'ready', log: [], artifactDir: 'x', createdAt: '' },
+    ]);
+  });
+
   it('createSite: POST → тело и label/detail', async () => {
     const api = fixtureApi(async (url, init) => {
       expect(url).toBe('/api/sites');
