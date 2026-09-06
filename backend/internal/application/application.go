@@ -109,11 +109,13 @@ func (a registryAdapter) Resolve(ctx context.Context, name, spec string) (deps.R
 		return deps.ResolvedVersion{}, err
 	}
 	return deps.ResolvedVersion{
-		Name:         resolved.Name,
-		Version:      resolved.Version,
-		Integrity:    resolved.Integrity,
-		TarballURL:   resolved.TarballURL,
-		Dependencies: resolved.Dependencies,
+		Name:                 resolved.Name,
+		Version:              resolved.Version,
+		Integrity:            resolved.Integrity,
+		TarballURL:           resolved.TarballURL,
+		Dependencies:         resolved.Dependencies,
+		PeerDependencies:     resolved.PeerDependencies,
+		PeerDependenciesMeta: resolved.PeerDependenciesMeta,
 	}, nil
 }
 

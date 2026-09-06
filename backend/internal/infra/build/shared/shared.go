@@ -51,6 +51,18 @@ func PublicURL(a Artifact) string {
 	return "/build/" + PublicRel(a)
 }
 
+// Versions maps the shared external specifier keys to their pinned versions.
+// The dependency peer policy (spec §5) uses the map to decide whether a fixed
+// shared external — react, react-dom, react/jsx-runtime, @liapoldus/ui-runtime —
+// satisfies a peer range.
+func Versions() map[string]string {
+	m := make(map[string]string, len(Artifacts))
+	for _, a := range Artifacts {
+		m[a.Key] = a.Version
+	}
+	return m
+}
+
 // Install materialises the embedded shared bundles under root/_shared/... so
 // the existing client /build/ handler can serve them without any runtime
 // compilation. Idempotent: existing files are never overwritten, so an

@@ -18,6 +18,11 @@ var (
 	// ErrVersionConflict means two packages in the graph pin the same package to
 	// different versions that cannot both satisfy all requesting specs.
 	ErrVersionConflict = errors.New("conflicting versions in dependency graph")
+	// ErrUnsatisfiedPeer means a locked instance declares a required peer
+	// dependency (peerDependencies) that no instance in the graph and no fixed
+	// shared external satisfies (peer policy, spec §5). Optional peers and
+	// self-references are exempt.
+	ErrUnsatisfiedPeer = errors.New("unsatisfied peer dependency")
 )
 
 var depNamePattern = regexp.MustCompile(`^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$`)
@@ -55,6 +60,13 @@ type LockedDep struct {
 	Integrity   string   `json:"integrity"`
 	Hoisted     bool     `json:"hoisted,omitempty"`
 	RequestedBy []string `json:"requestedBy,omitempty"`
+	// PeerDependencies records this instance's declared peers with their ranges
+	// (SBOM transparency, spec §5). PeerDependenciesMeta lists only the peers
+	// marked optional in peerDependenciesMeta. Required peers are guaranteed by
+	// the peer policy at lock time, so a lock only ever contains satisfiable
+	// graphs.
+	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
+	PeerDependenciesMeta map[string]bool   `json:"peerDependenciesMeta,omitempty"`
 }
 
 // InstanceKey returns the graph-unique key of a locked instance.
@@ -75,5 +87,10 @@ type DepPackage struct {
 	Integrity    string            `json:"integrity"`
 	TarballURL   string            `json:"tarballUrl"`
 	Dependencies map[string]string `json:"dependencies"`
-	FetchedAt    time.Time         `json:"fetchedAt"`
+	// PeerDependencies / PeerDependenciesMeta mirror the manifest's peer
+	// metadata so the peer policy and later audits can rely on the immutable
+	// cache instead of re-fetching.
+	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
+	PeerDependenciesMeta map[string]bool   `json:"peerDependenciesMeta,omitempty"`
+	FetchedAt            time.Time         `json:"fetchedAt"`
 }

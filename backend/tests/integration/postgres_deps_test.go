@@ -3,6 +3,7 @@ package integrationtest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,10 +17,11 @@ import (
 )
 
 type registryFixtureVersion struct {
-	Name         string            `json:"name"`
-	Version      string            `json:"version"`
-	Dependencies map[string]string `json:"dependencies,omitempty"`
-	Dist         struct {
+	Name             string            `json:"name"`
+	Version          string            `json:"version"`
+	Dependencies     map[string]string `json:"dependencies,omitempty"`
+	PeerDependencies map[string]string `json:"peerDependencies,omitempty"`
+	Dist             struct {
 		Integrity string `json:"integrity"`
 		Tarball   string `json:"tarball"`
 	} `json:"dist"`
@@ -214,5 +216,97 @@ func TestDependencyConflictFailsSnapshot(t *testing.T) {
 		if dep.Name == "a" && dep.Version != "1.0.0" {
 			t.Errorf("a frozen to %q, want 1.0.0 (top-level exact pins first)", dep.Version)
 		}
+	}
+}
+
+func TestDependencyPeerPolicy(t *testing.T) {
+	ctx := context.Background()
+
+	// Stand-alone registry with two packages: widget peers on the shared react
+	// 18.3.1 (^18 satisfied), broken peers on react ^17 (mismatch).
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		var versions map[string]registryFixtureVersion
+		switch name {
+		case "widget", "broken":
+			v := registryFixtureVersion{Name: name, Version: "1.0.0", PeerDependencies: map[string]string{"react": "^18"}}
+			if name == "broken" {
+				v.PeerDependencies = map[string]string{"react": "^17"}
+			}
+			v.Dist.Integrity = "sha512-" + name
+			v.Dist.Tarball = "https://r.example/t/" + name + "/1.0.0.tgz"
+			versions = map[string]registryFixtureVersion{"1.0.0": v}
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		doc := struct {
+			Versions map[string]registryFixtureVersion `json:"versions"`
+		}{Versions: versions}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(doc)
+	}))
+	t.Cleanup(server.Close)
+
+	blobs, err := storage.NewDiskBlobStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	makeCfg := func() config.Config {
+		return config.Config{
+			DefaultLocale:           "ru",
+			RedirectDefaultStatus:   301,
+			RedirectAllowedStatuses: []int{301, 302},
+			ComponentMaxDepth:       5,
+			ComponentTypes:          []string{"Container", "Text"},
+			PageInitialVersion:      1,
+			LocalGitDir:             t.TempDir(),
+			MasterVariantName:       "master",
+			AssetFallbackName:       "asset",
+			AssetFallbackMime:       "application/octet-stream",
+			AssetFileURLTemplate:    "/api/assets/{id}/file",
+			AssetCacheMaxAgeSeconds: 31536000,
+			MaxUploadBytes:          10485760,
+			NPMRegistryURL:          server.URL,
+		}
+	}
+	services := application.New(storage.NewMemory(), blobs, makeCfg())
+
+	good, err := services.Sites.Create(ctx, "PeerGood", "peergood", "ru", []string{"peergood.test"})
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	if _, err := services.Deps.Add(ctx, good.ID, "widget", "^1"); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := services.Deps.ResolveLock(ctx, good.ID)
+	if err != nil {
+		t.Fatalf("ResolveLock(peer react ^18 via shared): %v", err)
+	}
+	var widgetLock *domain.LockedDep
+	for i := range lock.Deps {
+		if lock.Deps[i].Name == "widget" {
+			widgetLock = &lock.Deps[i]
+		}
+	}
+	if widgetLock == nil || widgetLock.PeerDependencies["react"] != "^18" {
+		t.Fatalf("lock missing peer metadata for widget: %+v", lock.Deps)
+	}
+	if _, err := services.Snapshots.Create(ctx, good.ID, "v1"); err != nil {
+		t.Fatalf("create snapshot with satisfied peer: %v", err)
+	}
+
+	bad, err := services.Sites.Create(ctx, "PeerBad", "peerbad", "ru", []string{"peerbad.test"})
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	if _, err := services.Deps.Add(ctx, bad.ID, "broken", "^1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := services.Deps.ResolveLock(ctx, bad.ID); !errors.Is(err, domain.ErrUnsatisfiedPeer) {
+		t.Fatalf("ResolveLock(peer react ^17) error = %v, want ErrUnsatisfiedPeer", err)
+	}
+	if _, err := services.Snapshots.Create(ctx, bad.ID, "v1"); !errors.Is(err, domain.ErrUnsatisfiedPeer) {
+		t.Fatalf("create snapshot with unsatisfied peer error = %v, want ErrUnsatisfiedPeer", err)
 	}
 }

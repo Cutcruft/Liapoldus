@@ -22,13 +22,18 @@ import (
 
 // ResolvedVersion is the outcome of resolving a range against a packument: the
 // exact version, its dist integrity (sha512 base64) for supply-chain pinning,
-// the canonical tarball URL and the runtime dependencies to resolve next.
+// the canonical tarball URL and the manifest's dependencies plus peer
+// dependencies to evaluate the peer policy downstream. PeerDependencies keeps
+// the declared peer ranges; PeerDependenciesMeta lists only the peers marked
+// optional in peerDependenciesMeta (absent entries are required).
 type ResolvedVersion struct {
-	Name         string
-	Version      string
-	Integrity    string
-	TarballURL   string
-	Dependencies map[string]string
+	Name                 string
+	Version              string
+	Integrity            string
+	TarballURL           string
+	Dependencies         map[string]string
+	PeerDependencies     map[string]string
+	PeerDependenciesMeta map[string]bool
 }
 
 // Client is a race-free HTTP client for one registry base URL with a small
@@ -55,10 +60,18 @@ type packument struct {
 }
 
 type packumentVersion struct {
-	Name         string            `json:"name"`
-	Version      string            `json:"version"`
-	Dependencies map[string]string `json:"dependencies"`
-	Dist         packumentDist     `json:"dist"`
+	Name                 string                 `json:"name"`
+	Version              string                 `json:"version"`
+	Dependencies         map[string]string      `json:"dependencies"`
+	PeerDependencies     map[string]string      `json:"peerDependencies"`
+	PeerDependenciesMeta map[string]peerDepMeta `json:"peerDependenciesMeta"`
+	Dist                 packumentDist          `json:"dist"`
+}
+
+// peerDepMeta carries the peerDependenciesMeta flags that matter to the peer
+// policy (spec §5): a peer marked optional does not have to be satisfiable.
+type peerDepMeta struct {
+	Optional bool `json:"optional"`
 }
 
 type packumentDist struct {
@@ -117,12 +130,20 @@ func (c *Client) Resolve(ctx context.Context, name, spec string) (ResolvedVersio
 		return ResolvedVersion{}, fmt.Errorf("%w: %s@%s", domain.ErrUnresolvableSpec, name, spec)
 	}
 	meta := doc.Versions[bestVersion]
+	optionalPeers := make(map[string]bool, len(meta.PeerDependenciesMeta))
+	for peer, peerMeta := range meta.PeerDependenciesMeta {
+		if peerMeta.Optional {
+			optionalPeers[peer] = true
+		}
+	}
 	return ResolvedVersion{
-		Name:         name,
-		Version:      bestVersion,
-		Integrity:    meta.Dist.Integrity,
-		TarballURL:   meta.Dist.Tarball,
-		Dependencies: meta.Dependencies,
+		Name:                 name,
+		Version:              bestVersion,
+		Integrity:            meta.Dist.Integrity,
+		TarballURL:           meta.Dist.Tarball,
+		Dependencies:         meta.Dependencies,
+		PeerDependencies:     meta.PeerDependencies,
+		PeerDependenciesMeta: optionalPeers,
 	}, nil
 }
 

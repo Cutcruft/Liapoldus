@@ -17,10 +17,16 @@ import (
 )
 
 type packumentVersionFixture struct {
-	Name         string               `json:"name"`
-	Version      string               `json:"version"`
-	Dependencies map[string]string    `json:"dependencies,omitempty"`
-	Dist         packumentDistFixture `json:"dist"`
+	Name                 string                 `json:"name"`
+	Version              string                 `json:"version"`
+	Dependencies         map[string]string      `json:"dependencies,omitempty"`
+	PeerDependencies     map[string]string      `json:"peerDependencies,omitempty"`
+	PeerDependenciesMeta map[string]peerDepMeta `json:"peerDependenciesMeta,omitempty"`
+	Dist                 packumentDistFixture   `json:"dist"`
+}
+
+type peerDepMeta struct {
+	Optional bool `json:"optional"`
 }
 
 type packumentDistFixture struct {
@@ -139,6 +145,41 @@ func TestRegistryResolveParsesDependencies(t *testing.T) {
 	}
 	if got := resolved.Dependencies["lodash"]; got != "^4" {
 		t.Errorf("Dependencies[lodash] = %q, want ^4", got)
+	}
+}
+
+func TestRegistryResolveParsesPeers(t *testing.T) {
+	packages := packumentBytes(map[string]map[string]packumentVersionFixture{
+		"widget": {
+			"1.0.0": packumentVersionFixture{
+				Name:             "widget",
+				Version:          "1.0.0",
+				Dist:             packumentDistFixture{Integrity: "sha512-w", Tarball: "https://r.example/widget-1.0.0.tgz"},
+				PeerDependencies: map[string]string{"react": "^18", "toolkit": "^2"},
+				PeerDependenciesMeta: map[string]peerDepMeta{
+					"toolkit": {Optional: true},
+				},
+			},
+		},
+	})
+	server := fakeNPM(t, packages)
+	client := registry.New(server.server.URL)
+
+	resolved, err := client.Resolve(context.Background(), "widget", "^1")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got := resolved.PeerDependencies["react"]; got != "^18" {
+		t.Errorf("PeerDependencies[react] = %q, want ^18", got)
+	}
+	if got := resolved.PeerDependencies["toolkit"]; got != "^2" {
+		t.Errorf("PeerDependencies[toolkit] = %q, want ^2", got)
+	}
+	if !resolved.PeerDependenciesMeta["toolkit"] {
+		t.Errorf("PeerDependenciesMeta[toolkit] = false, want true (optional)")
+	}
+	if resolved.PeerDependenciesMeta["react"] {
+		t.Errorf("PeerDependenciesMeta[react] = true, want false (required)")
 	}
 }
 

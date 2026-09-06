@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; осталось: peer-политика, allowlist scopes**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; осталось: allowlist scopes, кэш-лимиты/эвикция**.
 
 ## 1. Цель и принципы
 
@@ -97,9 +97,18 @@ storage (новые tables `005_dependencies.sql`):
   каждого импортирующего файла ближайший физический экземпляр → каждый потребитель получает свою
   версию. Вершинные имена уникальны → `dist/_deps/<name>@<ver>.js` и import-map не меняются;
   дубликаты инлайнятся в бандлы потребителей.
-- peers: peerDependencies учитываем при резолве диапазона, но не инсталим отдельно, если
-  версия уже в графе. Неудовлетворённый peer → предупреждение в лог, не fail
-  (финальное ужесточение — фаза 2).
+- **Peer-политика (peer-fail, слайс 5)**. Registry парсит `peerDependencies` +
+  `peerDependenciesMeta` (packument abbr), `ResolvedVersion`/`DepPackage`/`LockedDep`
+  несут их (SBOM-прозрачность). После заморозки графа `checkPeers` обходит все экземпляры
+  в BFS-порядке: обязательный peer (не отмеченный `optional` и не self-ссылка) должен быть
+  удовлетворён — экземпляром графа с версией в диапазоне peer **или** фиксированным shared
+  external (react 18.3.1, react-dom 18.3.1, react/jsx-runtime, @liapoldus/ui-runtime 0.1.0,
+  `build/shared.Versions()`) с версией в диапазоне. Иначе — `ErrUnsatisfiedPeer`
+  (422 на API): `потребитель@version требует peer "name" (range); доступно: …`.
+  Проверка на уровне имя/версия; физическую достижимость удовлетворителя из позиции
+  потребителя оставляет walk-up вложенного layout. Optional-peer не требуем: «тихий»
+  неверный резолв (напр. peer react@^17 при shared 18.3.1) теперь падает на создании
+  снапшота, а не уходит в браузер.
 
 ## 6. Бандл deps (Go esbuild)
 
@@ -144,7 +153,9 @@ storage (новые tables `005_dependencies.sql`):
 
 - `CreateSnapshot` получает опциональные вершинные deps сайта (резолв на этом шаге; невалид →
   ошибка снапшота). В снапшот пишется `deps_lock: LockedDep[]` (top-level + транзитивные;
-   вложенный версионный layout — по BFS `name@version` с `hoisted`/`requestedBy`).
+   вложенный версионный layout — по BFS `name@version` с `hoisted`/`requestedBy`;
+   обязательные peer-контракты удовлетворены peer-политикой (§5), `peerDependencies`/
+   `peerDependenciesMeta` каждого экземпляра фиксируются в lock).
 - Артефакты публикации: `_deps/*.js` рядом с site bundle; **отдаются существующим FileServer**
   артефактов (`/build/<site>/<env>/<snapshot>/_deps/<file>`) — отдельного endpoint нет.
 - `manifest.json` пополняется:
@@ -166,6 +177,7 @@ storage (новые tables `005_dependencies.sql`):
 - Admin: `GET /api/sites/{id}/dependencies`, `POST /api/sites/{id}/dependencies {name, spec}`,
   `DELETE /api/sites/{id}/dependencies/{name}`. Порт `deps.DomainService`; хендлер в admin api.
 - Ошибки: неизвестный пакет → 404; нерезолвящийся диапазон → 422 `{error, detail|hint}`;
+  неудовлетворённый peer (peer-политика §5) → 422;
   конфликт версий → 422 (legacy-контракт; при вложенном layout резолв больше не падает — см. §5);
   `latest`/тег-спек → 400.
 - Резолв **не** в POST: объявление зависимости валидирует форму/пакетный синтаксис, а сам резолв
@@ -236,8 +248,12 @@ JS-stub `…css.js` в import-map; `.css` убран из unsupported-ext; non-C
 fail-fast с hint, «No loader is configured» детектится в `depBuildError`;
 `manifest.styles` (dedup, сортировка) для `<link>`; инверсия css-reject-тестов на png +
 unit-тесты трёх путей + e2e `TestDependencyBuildCSSArtifacts`).
-Осталось: peer-политика (fail по неудовлетворённым peers), allowlist scopes,
-кэш-лимиты/эвикция.
+✅ peer-политика (слайс 5: registry парсит `peerDependencies`/`peerDependenciesMeta`,
+`ResolvedVersion`/`DepPackage`/`LockedDep` несут их; post-pass `checkPeers` по BFS-порядку —
+обязательный peer удовлетворяется экземпляром графа или фиксированным shared external,
+иначе `ErrUnsatisfiedPeer` (422), optional/self exempt; lock фиксирует peer-метаданные;
+unit: 6 кейсов политики + парсинг packument, integration `TestDependencyPeerPolicy`).
+Осталось: allowlist scopes, кэш-лимиты/эвикция.
 
 **Фаза 3:** `cmd/dependency-build` (замена `scripts/build-shared`, npm больше нигде не упоминается),
 ликвидация shell-обёрток, SBOM/audit-экспорт.

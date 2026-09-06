@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
@@ -364,5 +365,164 @@ func TestResolveLockFailsBuildOnUnresolvable(t *testing.T) {
 
 	if _, err := svc.ResolveLock(ctx, "site-1"); !errors.Is(err, domain.ErrUnresolvableSpec) {
 		t.Fatalf("ResolveLock error = %v, want ErrUnresolvableSpec", err)
+	}
+}
+
+func peerRegistry(peer func(name, version string) deps.ResolvedVersion) *fakeRegistry {
+	return &fakeRegistry{resolve: func(_ context.Context, name, spec string) (deps.ResolvedVersion, error) {
+		switch name {
+		case "h":
+			return peer("h", "1.0.0"), nil
+		case "b":
+			return deps.ResolvedVersion{Name: "b", Version: "1.5.0", Integrity: "sha512-b"}, nil
+		case "a":
+			return deps.ResolvedVersion{Name: "a", Version: "1.0.0", Integrity: "sha512-a"}, nil
+		}
+		return deps.ResolvedVersion{}, domain.ErrPackageNotFound
+	}}
+}
+
+func addDeps(t *testing.T, svc *deps.Service, site string, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		if _, err := svc.Add(context.Background(), site, name, "^1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestResolveLockPeerSatisfiedByGraphInstance(t *testing.T) {
+	reg := peerRegistry(func(name, version string) deps.ResolvedVersion {
+		return deps.ResolvedVersion{Name: name, Version: version, PeerDependencies: map[string]string{"b": "^1"}}
+	})
+	svc, _ := newTestDepsService(t, reg)
+	ctx := context.Background()
+	addDeps(t, svc, "site-1", "h", "b")
+
+	// h@1.0.0 requires peer b@^1; the graph already contains b@1.5.0, so the
+	// peer is satisfied without any extra resolution.
+	lock, err := svc.ResolveLock(ctx, "site-1")
+	if err != nil {
+		t.Fatalf("ResolveLock: %v", err)
+	}
+	var hLock *domain.LockedDep
+	for i := range lock.Deps {
+		if lock.Deps[i].Name == "h" {
+			hLock = &lock.Deps[i]
+		}
+	}
+	if hLock == nil {
+		t.Fatalf("lock.Deps missing h: %+v", lock.Deps)
+	}
+	if got := hLock.PeerDependencies["b"]; got != "^1" {
+		t.Errorf("h.PeerDependencies[b] = %q, want ^1", got)
+	}
+}
+
+func TestResolveLockPeerSatisfiedBySharedExternal(t *testing.T) {
+	reg := peerRegistry(func(name, version string) deps.ResolvedVersion {
+		return deps.ResolvedVersion{Name: name, Version: version, PeerDependencies: map[string]string{"react": "^18"}}
+	})
+	svc, _ := newTestDepsService(t, reg)
+	ctx := context.Background()
+	addDeps(t, svc, "site-1", "h")
+
+	// react is a fixed shared external pinned at 18.3.1 (build/_shared), which
+	// falls in ^18: no react instance needs to exist in the graph.
+	if _, err := svc.ResolveLock(ctx, "site-1"); err != nil {
+		t.Fatalf("ResolveLock: %v", err)
+	}
+}
+
+func TestResolveLockPeerVersionMismatchSharedFails(t *testing.T) {
+	reg := peerRegistry(func(name, version string) deps.ResolvedVersion {
+		return deps.ResolvedVersion{Name: name, Version: version, PeerDependencies: map[string]string{"react": "^17"}}
+	})
+	svc, _ := newTestDepsService(t, reg)
+	ctx := context.Background()
+	addDeps(t, svc, "site-1", "h")
+
+	// The shared react is 18.3.1; the peer demands ^17, and no react instance
+	// is in the graph — the previously "quiet" mismatch now fails the lock.
+	_, err := svc.ResolveLock(ctx, "site-1")
+	if !errors.Is(err, domain.ErrUnsatisfiedPeer) {
+		t.Fatalf("ResolveLock error = %v, want ErrUnsatisfiedPeer", err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "requires peer \"react\"") {
+		t.Errorf("error = %q, want it to name the peer react", msg)
+	}
+	if !strings.Contains(msg, "(shared)") {
+		t.Errorf("error = %q, want it to list the shared react version", msg)
+	}
+}
+
+func TestResolveLockPeerAbsentFails(t *testing.T) {
+	reg := peerRegistry(func(name, version string) deps.ResolvedVersion {
+		return deps.ResolvedVersion{Name: name, Version: version, PeerDependencies: map[string]string{"b": "^2"}}
+	})
+	svc, _ := newTestDepsService(t, reg)
+	ctx := context.Background()
+	addDeps(t, svc, "site-1", "h")
+
+	// b@1.5.0 is the graph's only b instance and does not satisfy ^2; h itself
+	// is the only declared dependency, so the peer is unsatisfiable.
+	_, err := svc.ResolveLock(ctx, "site-1")
+	if !errors.Is(err, domain.ErrUnsatisfiedPeer) {
+		t.Fatalf("ResolveLock error = %v, want ErrUnsatisfiedPeer", err)
+	}
+	if msg := err.Error(); !strings.Contains(msg, "requires peer \"b\" (^2)") {
+		t.Errorf("error = %q, want it to name the peer b and its range", msg)
+	}
+}
+
+func TestResolveLockOptionalPeerNotRequired(t *testing.T) {
+	reg := peerRegistry(func(name, version string) deps.ResolvedVersion {
+		return deps.ResolvedVersion{
+			Name:                 name,
+			Version:              version,
+			PeerDependencies:     map[string]string{"b": "^2"},
+			PeerDependenciesMeta: map[string]bool{"b": true},
+		}
+	})
+	svc, _ := newTestDepsService(t, reg)
+	ctx := context.Background()
+	addDeps(t, svc, "site-1", "h")
+
+	// b is marked optional in peerDependenciesMeta, so its absence is fine; the
+	// lock still records the peer + optional flag for SBOM transparency.
+	lock, err := svc.ResolveLock(ctx, "site-1")
+	if err != nil {
+		t.Fatalf("ResolveLock: %v", err)
+	}
+	var hLock *domain.LockedDep
+	for i := range lock.Deps {
+		if lock.Deps[i].Name == "h" {
+			hLock = &lock.Deps[i]
+		}
+	}
+	if hLock == nil {
+		t.Fatalf("lock.Deps missing h: %+v", lock.Deps)
+	}
+	if !hLock.PeerDependenciesMeta["b"] {
+		t.Errorf("h.PeerDependenciesMeta[b] = false, want true")
+	}
+}
+
+func TestResolveLockSelfPeerExempt(t *testing.T) {
+	reg := &fakeRegistry{resolve: func(_ context.Context, name, _ string) (deps.ResolvedVersion, error) {
+		if name == "a" {
+			return deps.ResolvedVersion{Name: "a", Version: "1.0.0", PeerDependencies: map[string]string{"a": "^1"}}, nil
+		}
+		return deps.ResolvedVersion{}, domain.ErrPackageNotFound
+	}}
+	svc, _ := newTestDepsService(t, reg)
+	ctx := context.Background()
+	addDeps(t, svc, "site-1", "a")
+
+	// A rare self-peer (a@^1 on a@1.0.0) is trivially satisfied by the instance
+	// itself and must not fail the lock.
+	if _, err := svc.ResolveLock(ctx, "site-1"); err != nil {
+		t.Fatalf("ResolveLock: %v", err)
 	}
 }

@@ -14,16 +14,19 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shared"
 )
 
 // ResolvedVersion is the application-level view of a registry resolution:
 // exact version + integrity (sha512) to pin in a lock.
 type ResolvedVersion struct {
-	Name         string
-	Version      string
-	Integrity    string
-	TarballURL   string
-	Dependencies map[string]string
+	Name                 string
+	Version              string
+	Integrity            string
+	TarballURL           string
+	Dependencies         map[string]string
+	PeerDependencies     map[string]string
+	PeerDependenciesMeta map[string]bool
 }
 
 // Registry resolves a package range to an exact version. Implementations must
@@ -122,6 +125,15 @@ func (s *Service) List(ctx context.Context, siteID string) ([]domain.Dependency,
 // deterministic BFS (parents before children) so the layout reproduces the
 // same physical placement at build time. An edge whose range no published
 // version satisfies still fails with ErrUnresolvableSpec.
+//
+// After the graph is frozen, the peer policy (spec §5, peer-fail) runs over
+// every instance: a required peer must be satisfiable — by an instance already
+// in the graph whose version falls in the peer range, or by a fixed shared
+// external (react/react-dom/react/jsx-runtime/ui-runtime) whose pinned version
+// is in the range. Optional peers and self-references are exempt. An
+// unsatisfiable peer fails lock creation with ErrUnsatisfiedPeer and names the
+// consumer plus the offending range, so a snapshot never freezes a graph whose
+// peers resolve wrong at build time.
 func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.SnapshotLock, error) {
 	s.resolveMu.Lock()
 	defer s.resolveMu.Unlock()
@@ -175,12 +187,14 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 
 		key := current.name + "@" + resolved.Version
 		dep := domain.LockedDep{
-			Name:        current.name,
-			Spec:        current.spec,
-			Version:     resolved.Version,
-			Integrity:   resolved.Integrity,
-			Hoisted:     len(perName[current.name]) == 0,
-			RequestedBy: []string{current.requestedBy},
+			Name:                 current.name,
+			Spec:                 current.spec,
+			Version:              resolved.Version,
+			Integrity:            resolved.Integrity,
+			Hoisted:              len(perName[current.name]) == 0,
+			RequestedBy:          []string{current.requestedBy},
+			PeerDependencies:     resolved.PeerDependencies,
+			PeerDependenciesMeta: resolved.PeerDependenciesMeta,
 		}
 		instances[key] = dep
 		perName[current.name] = append(perName[current.name], key)
@@ -196,6 +210,10 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 		}
 	}
 
+	if err := checkPeers(instances, order); err != nil {
+		return domain.SnapshotLock{}, err
+	}
+
 	deps := make([]domain.LockedDep, 0, len(order))
 	for _, key := range order {
 		dep := instances[key]
@@ -207,14 +225,80 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 
 func (s *Service) cachePackage(ctx context.Context, resolved ResolvedVersion) {
 	pkg := domain.DepPackage{
-		Name:         resolved.Name,
-		Version:      resolved.Version,
-		Integrity:    resolved.Integrity,
-		TarballURL:   resolved.TarballURL,
-		Dependencies: resolved.Dependencies,
-		FetchedAt:    time.Now().UTC(),
+		Name:                 resolved.Name,
+		Version:              resolved.Version,
+		Integrity:            resolved.Integrity,
+		TarballURL:           resolved.TarballURL,
+		Dependencies:         resolved.Dependencies,
+		PeerDependencies:     resolved.PeerDependencies,
+		PeerDependenciesMeta: resolved.PeerDependenciesMeta,
+		FetchedAt:            time.Now().UTC(),
 	}
 	_ = s.packages.CreateDepPackage(ctx, pkg) // immutable cache: no-op on duplicates
+}
+
+// checkPeers enforces the peer policy (spec §5, peer-fail). It walks the full
+// deterministic instance order — so a provider discovered later in the graph
+// still counts — and for every required peer either finds an instance in the
+// graph whose version is inside the peer range or a fixed shared external
+// whose pinned version matches. The check is name/version level: the physical
+// reachability of the satisfier from the consumer position is left to the
+// nested-versioned layout's walk-up resolution at build time.
+func checkPeers(instances map[string]domain.LockedDep, order []string) error {
+	sharedVersions := shared.Versions()
+	for _, key := range order {
+		dep := instances[key]
+		if len(dep.PeerDependencies) == 0 {
+			continue
+		}
+		names := make([]string, 0, len(dep.PeerDependencies))
+		for name := range dep.PeerDependencies {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, peer := range names {
+			if dep.PeerDependenciesMeta[peer] || peer == dep.Name {
+				continue // optional peer / self-reference: exempt
+			}
+			peerRange := dep.PeerDependencies[peer]
+
+			present := make(map[string]bool) // dedupes the "could have served" list
+			satisfied := false
+			for _, otherKey := range order {
+				other := instances[otherKey]
+				if other.Name != peer {
+					continue
+				}
+				if versionSatisfies(other.Version, peerRange) {
+					satisfied = true
+					break
+				}
+				present[other.Version] = true
+			}
+			if !satisfied {
+				if sharedVersion, ok := sharedVersions[peer]; ok {
+					present[sharedVersion+" (shared)"] = true
+					satisfied = versionSatisfies(sharedVersion, peerRange)
+				}
+			}
+			if satisfied {
+				continue
+			}
+
+			versions := make([]string, 0, len(present))
+			for v := range present {
+				versions = append(versions, v)
+			}
+			sort.Strings(versions)
+			detail := "none of its versions are present"
+			if len(versions) > 0 {
+				detail = "present versions: " + strings.Join(versions, ", ")
+			}
+			return fmt.Errorf("%w: %s@%s requires peer %q (%s); %s",
+				domain.ErrUnsatisfiedPeer, dep.Name, dep.Version, peer, peerRange, detail)
+		}
+	}
+	return nil
 }
 
 func validateName(name string) error {

@@ -32,7 +32,7 @@ func RespondError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, domain.ErrPackageNotFound):
 		status = http.StatusNotFound
-	case errors.Is(err, domain.ErrUnresolvableSpec), errors.Is(err, domain.ErrVersionConflict):
+	case errors.Is(err, domain.ErrUnresolvableSpec), errors.Is(err, domain.ErrVersionConflict), errors.Is(err, domain.ErrUnsatisfiedPeer):
 		status = http.StatusUnprocessableEntity
 	}
 	RespondJSON(w, status, map[string]string{"error": err.Error()})
