@@ -100,6 +100,20 @@ describe('builds (Этап 3)', () => {
     // A path outside the artifact directory is a 404.
     const traversal = await client.get(`/build/${site.id}/development/${snapshot.id}/../../../../etc/passwd`)
     expect([400, 404]).toContain(traversal.status)
+
+    // Shared runtime bundles (react/react-dom/ui-runtime) are installed on
+    // boot and served as versioned ESM. Keep versions in sync with
+    // backend/internal/infra/build/shared/shared.go (Artifacts).
+    for (const path of [
+      '/build/_shared/react/18.3.1.js',
+      '/build/_shared/react-dom/18.3.1.js',
+      '/build/_shared/@liapoldus/ui-runtime/0.1.0.js',
+    ]) {
+      const shared = await client.get(path)
+      expect(shared.status, path).toBe(200)
+      expect(shared.headers['content-type']).toMatch(/javascript/)
+      expect(shared.text.length).toBeGreaterThan(512)
+    }
   })
 
   it('rejects invalid environments and missing snapshots', async () => {

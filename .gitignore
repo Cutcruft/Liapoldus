@@ -12,6 +12,10 @@ backend/.env
 # Node
 backend/tests/e2e/node_modules/
 backend/tests/e2e/coverage/
+backend/scripts/build-shared/node_modules/
 ui-runtime/node_modules/
 ui-runtime/dist/
 ui-runtime/coverage/
+
+# build artifact root (LIAPOLDUS_BUILD_DIR default ./build)
+backend/build/

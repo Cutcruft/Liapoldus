@@ -22,10 +22,12 @@ type Materializer struct {
 	snapshots domain.SnapshotRepository
 	pages     domain.PageRepository
 	defs      domain.ComponentDefinitionRepository
+	shared    build.SharedResolver
 }
 
-func New(snapshots domain.SnapshotRepository, pages domain.PageRepository, defs domain.ComponentDefinitionRepository) *Materializer {
-	return &Materializer{snapshots: snapshots, pages: pages, defs: defs}
+func New(snapshots domain.SnapshotRepository, pages domain.PageRepository,
+	defs domain.ComponentDefinitionRepository, shared build.SharedResolver) *Materializer {
+	return &Materializer{snapshots: snapshots, pages: pages, defs: defs, shared: shared}
 }
 
 var _ build.WorkspaceBuilder = (*Materializer)(nil)
@@ -89,6 +91,9 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		Definitions: refs,
 		Pages:       pageIDs(snapshot),
 		Externals:   build.SharedExternals,
+	}
+	if m.shared != nil {
+		manifest.Shared = m.shared.SharedURLs()
 	}
 
 	entry := generateEntry(req.SiteID, req.Environment, definitionIds)

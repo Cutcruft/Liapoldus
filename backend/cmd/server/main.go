@@ -16,6 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/config"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/rebuilder"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shared"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/db"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
@@ -46,6 +47,11 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+
+	if err := shared.Install(cfg.BuildDir); err != nil {
+		return err
+	}
+	logger.Info("shared bundles installed", "dir", cfg.BuildDir)
 
 	services := application.New(store, blobs, cfg)
 

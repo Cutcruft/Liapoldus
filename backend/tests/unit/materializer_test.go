@@ -56,7 +56,7 @@ func seedMaterializedPage(t *testing.T, mem *storage.Memory, siteID, pageID stri
 func materializerHarness(t *testing.T) (*storage.Memory, *materializer.Materializer) {
 	t.Helper()
 	mem := storage.NewMemory()
-	mat := materializer.New(mem, mem, mem)
+	mat := materializer.New(mem, mem, mem, nil)
 	return mem, mat
 }
 
@@ -137,8 +137,54 @@ func TestMaterializeCreatesWorkspace(t *testing.T) {
 	if len(ws.Manifest.Pages) != 1 || ws.Manifest.Pages[0] != "page_1" {
 		t.Fatalf("manifest pages = %#v", ws.Manifest.Pages)
 	}
-	if len(ws.Manifest.Externals) != 3 {
+	if len(ws.Manifest.Externals) != 4 {
 		t.Fatalf("externals = %#v", ws.Manifest.Externals)
+	}
+	if ws.Manifest.Shared != nil {
+		t.Fatalf("manifest must not carry a shared import map without a resolver: %#v", ws.Manifest.Shared)
+	}
+}
+
+type resolverStub struct{ urls map[string]string }
+
+func (r resolverStub) SharedURLs() map[string]string { return r.urls }
+
+func TestMaterializeManifestSharedImportMap(t *testing.T) {
+	ctx := context.Background()
+	mem := storage.NewMemory()
+	mat := materializer.New(mem, mem, mem, resolverStub{urls: map[string]string{
+		"react":                 "/build/_shared/react/18.3.1.js",
+		"@liapoldus/ui-runtime": "/build/_shared/@liapoldus/ui-runtime/0.1.0.js",
+	}})
+	site := seedBuildSite(t, mem)
+	seedDef(t, mem, site.ID, "text", "export default (props) => props.title ?? null;\n", "sha_text")
+	seedDef(t, mem, site.ID, "container", "export default (props) => props.children;\n", "sha_cont")
+	seedDef(t, mem, site.ID, "hero", "export default (props) => props.title;\n", "sha_hero")
+	seedMaterializedPage(t, mem, site.ID, "page_1")
+	snapshot := domain.Snapshot{ID: "snapshot_shared", SiteID: site.ID,
+		Pages: []domain.SnapshotPage{{PageID: "page_1", VersionID: "pagever_1", Version: 1}}, CreatedAt: testNow()}
+	if err := mem.CreateSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	ws, err := mat.Materialize(ctx, build.WorkspaceRequest{
+		SiteID: site.ID, SnapshotID: snapshot.ID, Environment: domain.EnvironmentDevelopment, Dir: filepath.Join(t.TempDir(), "ws"),
+	})
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if ws.Manifest.Shared["react"] != "/build/_shared/react/18.3.1.js" {
+		t.Fatalf("shared import map = %#v", ws.Manifest.Shared)
+	}
+	if ws.Manifest.Shared["@liapoldus/ui-runtime"] != "/build/_shared/@liapoldus/ui-runtime/0.1.0.js" {
+		t.Fatalf("shared import map = %#v", ws.Manifest.Shared)
+	}
+	manifestData, err := os.ReadFile(filepath.Join(ws.Dir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifestData), `"shared"`) {
+		t.Fatalf("manifest.json must persist the import map: %s", manifestData)
 	}
 }
 

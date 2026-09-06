@@ -124,6 +124,18 @@ vitest (`tests/e2e/build.test.ts`, шаблон `api.test.ts` с Bearer-auth): �
 
 Тесты: unit `hub` (broadcast/unsubscribe/current/slow-receiver), integration `rebuilder` (real fsnotify + esbuild context + артефакты: правка определения → новый бандл + событие; синтаксическая ошибка → failed), integration WS (`httptest` + `coder/websocket`: стрим, relay при подключении, фильтр по `siteId`).
 
+## §8 Shared-бандлы (реальные ESM через npm + go:embed)
+
+Реализовано: поставляется import-map из 4 зафиксированных **реальных** ESM-бандлов, собранных esbuild из npm-пакетов и реакторного `ui-runtime/src`.
+
+- Сборочный скрипт `backend/scripts/build-shared/` (`npm ci && npm run build`): bundles `react`, `react-dom` (+ `createRoot`/`hydrateRoot` в один модуль), `react/jsx-runtime` и `@liapoldus/ui-runtime` в `backend/internal/infra/build/shared/embed/<key>/<version>.js`; статический smoke (parse ESM + маркеры поверхности API). Версия ui-runtime читается из его `package.json`; react/react-dom фиксированы `18.3.1` и **должны совпадать с таблицей `Artifacts`** в `internal/infra/build/shared/shared.go`.
+- Артефакты коммитятся в репозиторий и вшиваются в бинарник через `go:embed`. `shared.Install(BuildDir)` раскладывает их в `build/_shared/<key>/<version>.js` (идемпотентно, без перезаписи), откуда их раздаёт существующий хендлер client-сервера `GET /build/_shared/...` (тот же `http.FileServer`, что и site-артефакты).
+- Манифест сборки получает `shared` (import-map: bare-спецификатор → публичный URL); `Externals` пополнен `react/jsx-runtime`, чтобы automatic JSX-transform никогда не инлайнил React в site-бандл. Boot-шелл (Этап 5) превратит `manifest.shared` в `<script type="importmap">`.
+- Fetch/cache по CDN и Dependency-сервис остаются за R9 (см. «Решённые решения»).
+- Известный разрыв (Этап 4, runtime-контракт): шаблон `src/entry.tsx` (§3) импортирует `ComponentRegistry.register(id, def)`, а ui-runtime сегодня экспортирует `RuntimeRegistry.register(descriptor)` (другое API). esbuild не валидирует экстерналы, поэтому сборка проходит; API компонент-реестра будет добавлен в ui-runtime на Этапе 4 (runtime-контракт). `boot(siteId, environment)` уже совпадает сигнатурой.
+
+Тесты: unit `shared` (все декларированные артефакты вшиты, URL/import-map, `Install` идемпотентен и не перезаписывает), unit materializer (import-map попадает в `manifest.json` только при наличии резолвера), integration `httptest` + FileServer (4 бандла отдаются 200 `text/javascript`, неизвестные версии — 404), e2e §8 (клиентский сервер отдаёт 3 shared-бандла).
+
 ## Решённые решения (подтверждены пользователем)
 
 - **Источник исходников**: определения берутся из **реестра** (`Source`+`CurrentSHA`); git checkout на этапе сборки не вызывается (реестр зеркалит хэд).

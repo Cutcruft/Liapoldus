@@ -1,0 +1,14 @@
+{
+  "name": "liapoldus-build-shared",
+  "private": true,
+  "type": "module",
+  "description": "Builds the versioned shared runtime bundles embedded into the Go server (see internal/infra/build/shared).",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

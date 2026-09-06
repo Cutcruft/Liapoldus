@@ -27,6 +27,8 @@
 | Persistence | Реализовано | PostgreSQL adapter (миграции `001`–`004`) и in-memory adapter |
 | Build (synchronous, Этот 3) | Реализовано | `POST /api/sites/{id}/builds` {snapshotId, environment} → синхронная сборка (queued→ready/failed), no-op повторной публикации; материализация (workspace: `src/entry.tsx` + `src/definitions/*.tsx` + `manifest.json`), esbuild как библиотека Go, артефакты `build/<site>/<env>/<snapshot>/`; статика отдаётся публично на `/build/...` |
 | Dev-пересборщик (Этап 3 §7) | Реализовано | `internal/infra/build/rebuilder`: fsnotify → esbuild `Context` (Incremental) → publish + бродкаст `DevRebuildEvent`; `Hub` с relay `Current`; WS-канал `GET /dev/build/ws` (фильтр `?siteId=`, failed не заменяет последний удачный артефакт); привязка к boot-рантайму — Этап 5 |
+| Shared-бандлы (Этап 3 §8) | Реализовано | Реальные ESM-бандлы (react/react-dom/jsx-runtime 18.3.1 + ui-runtime 0.1.0) из `scripts/build-shared`, go:embed → `/build/_shared/<key>/<version>.js`; манифест содержит import-map `shared`; `Externals` += `react/jsx-runtime`. CDN fetch+lock — R9 |
+| Runtime-контракт (Этап 4) | Планируется | `/runtime/contract`, `/runtime/tree`, `/runtime/tokens`; в т.ч. API компонент-реестра для entry-шаблона: сегодня `ComponentRegistry` не существует в ui-runtime (только `RuntimeRegistry` для дескрипторов) |
 
 ## Пока не реализовано
 

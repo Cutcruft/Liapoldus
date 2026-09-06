@@ -16,6 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/artifactstore"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/builder"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/materializer"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shared"
 	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 )
 
@@ -47,7 +48,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 	artifacts := artifactstore.New(cfg.BuildDir)
 	builds := buildapp.NewService(
 		storage, storage, storage,
-		materializer.New(storage, storage, storage),
+		materializer.New(storage, storage, storage, shared.NewResolver()),
 		builder.New(),
 		artifacts,
 	)

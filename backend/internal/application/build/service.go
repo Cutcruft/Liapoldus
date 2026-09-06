@@ -28,11 +28,22 @@ type Manifest struct {
 	Definitions map[string]DefinitionRef `json:"definitions"`
 	Pages       []string                 `json:"pages"`
 	Externals   []string                 `json:"externals"`
+	// Shared is the import map of the versioned shared bundles (bare import
+	// specifier → public URL); the boot shell turns it into a
+	// <script type="importmap">.
+	Shared map[string]string `json:"shared,omitempty"`
 }
 
 // SharedExternals are the runtime libraries the site bundle does not include;
-// they are served separately by the backend (R3).
-var SharedExternals = []string{"react", "react-dom", "@liapoldus/ui-runtime"}
+// they are served separately by the backend. react/jsx-runtime is included so
+// esbuild's automatic JSX transform never inlines React into a site bundle.
+var SharedExternals = []string{"react", "react-dom", "react/jsx-runtime", "@liapoldus/ui-runtime"}
+
+// SharedResolver maps the bare import specifiers of the shared externals to
+// the public URLs of their versioned bundles (the manifest import map).
+type SharedResolver interface {
+	SharedURLs() map[string]string
+}
 
 // WorkspaceRequest describes the materialization target. Dir is chosen by the
 // caller (typically a temporary directory) and must not exist yet or be empty.

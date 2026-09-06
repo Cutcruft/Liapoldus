@@ -13,6 +13,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/builder"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/materializer"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shared"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
 
@@ -64,7 +65,7 @@ func materializeTestWorkspace(t *testing.T, mem *storage.Memory, siteID string, 
 		t.Fatal(err)
 	}
 
-	mat := materializer.New(mem, mem, mem)
+	mat := materializer.New(mem, mem, mem, shared.NewResolver())
 	ws, err := mat.Materialize(ctx, build.WorkspaceRequest{SiteID: siteID, SnapshotID: snapshot.ID, Environment: domain.EnvironmentDevelopment, Dir: dir})
 	if err != nil {
 		t.Fatalf("materialize: %v", err)
@@ -105,6 +106,13 @@ func TestEsbuildBuilderProducesBundleWithExternals(t *testing.T) {
 		if !strings.Contains(data, `from"`+external+`"`) && !strings.Contains(data, `"`+external+`"`) {
 			t.Fatalf("bundle must keep external import for %s; got:\n%s", external, data[:min(len(data), 400)])
 		}
+	}
+	// The manifest carries an import map for the shared externals.
+	if len(ws.Manifest.Externals) != len(build.SharedExternals) {
+		t.Fatalf("externals = %#v", ws.Manifest.Externals)
+	}
+	if ws.Manifest.Shared["react"] != "/build/_shared/react/18.3.1.js" {
+		t.Fatalf("manifest import map = %#v", ws.Manifest.Shared)
 	}
 	// The site source made it into the bundle (register + boot markers).
 	if !strings.Contains(data, "ComponentRegistry") || !strings.Contains(data, "boot") {

@@ -45,7 +45,7 @@
 - [x] `LIAPOLDUS_BUILD_DIR` (default `./build`), admin API `POST /api/sites/{id}/builds`, `GET /api/builds/{id}`, статика клиентского сервера `/build/...`.
 - [x] Тесты: unit §1/§2/§4/§5 (моки, t.TempDir + memory, реальный материализатор/артефакт-стор, Postgres-очередь), integration §3 (real esbuild + `Incremental` smoke), e2e §6 (10/10).
 - [x] Dev-пересборщик §7: `internal/infra/build/rebuilder` (fsnotify по workspace → esbuild `Context` `Incremental` → publish + бродкаст `DevRebuildEvent` в `Hub`), WS-канал `GET /dev/build/ws` на client-сервере (стрим + relay `Current` + фильтр `?siteId=`); failed не заменяет последний удачный артефакт. Тесты unit+integration (real fsnotify/esbuild/WS). Привязка к boot-рантайму — Этап 5.
-- [ ] Shared-бандлы react/react-dom/ui-runtime: `build/_shared/{name}/{version}.js` (go:embed/stub; fetch+lock — с Dependency-сервисом R9).
+- [x] Shared-бандлы §8: `scripts/build-shared` (npm) → реальные ESM react/react-dom/jsx-runtime + ui-runtime в `internal/infra/build/shared/embed` (go:embed), `Install(BuildDir)` → `build/_shared/{key}/{version}.js`, манифест получает import-map `shared`, `Externals` += `react/jsx-runtime`. Найдено: `ComponentRegistry` в entry-шаблоне отсутствует в ui-runtime → API добавится с runtime-контрактом (Этап 4). Fetch+lock — R9.
 
 ## Этап 4 — Runtime-контракт (Go-endpoints)
 
