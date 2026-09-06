@@ -96,7 +96,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Snapshots:    snapshot.NewService(storage, storage, storage, depsSvc),
 		Builds:       builds,
 		BuildEvents:  buildEvents,
-		Runtime:      runtime.NewService(storage, storage, storage, routes, builds),
+		Runtime:      runtime.NewService(storage, storage, storage, routes, builds, storage),
 		Contents:     content.NewService(storage),
 		Assets: asset.NewService(storage, blobs, storage, asset.Settings{
 			MasterVariant: cfg.MasterVariantName,

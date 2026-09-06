@@ -241,7 +241,11 @@ func (h *ContractHandler) Routes(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondError(w, err)
 		return
 	}
-	routes, err := h.app.Routes.List(r.Context(), site.ID)
+	if h.app.Runtime == nil {
+		httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": "runtime contract is not configured"})
+		return
+	}
+	routes, err := h.app.Runtime.RouteDescriptors(r.Context(), site.ID)
 	if err != nil {
 		httpapi.RespondError(w, err)
 		return
@@ -249,4 +253,60 @@ func (h *ContractHandler) Routes(w http.ResponseWriter, r *http.Request) {
 	httpapi.RespondJSON(w, http.StatusOK, map[string]any{
 		"routes": routes,
 	})
+}
+
+// Tree serves the snapshot-pinned wire tree of one page (Этап 4 builtin
+// `tree.get`): the query param `pageId` selects a snapshot page directly,
+// `routeId` resolves a renderPage route to its page, and with neither the boot
+// home-page heuristic applies. `versionId` pins a precise snapshot; otherwise
+// the newest ready build of the environment is the release.
+func (h *ContractHandler) Tree(w http.ResponseWriter, r *http.Request) {
+	site, err := h.app.resolveSite(r)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	if h.app.Runtime == nil {
+		httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": "runtime contract is not configured"})
+		return
+	}
+	q := r.URL.Query()
+	tree, err := h.app.Runtime.PageTree(r.Context(), site, q.Get("environment"),
+		q.Get("versionId"), q.Get("pageId"), q.Get("routeId"))
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		httpapi.RespondError(w, err)
+		return
+	}
+	if tree == nil {
+		httpapi.RespondJSON(w, http.StatusOK, map[string]any{"tree": nil})
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, map[string]any{"tree": tree})
+}
+
+// Tokens serves the site's design-token set as a single runtime theme (Этап 4
+// builtin `tokens.get`); the `themeId` query param defaults to "default".
+func (h *ContractHandler) Tokens(w http.ResponseWriter, r *http.Request) {
+	site, err := h.app.resolveSite(r)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	if h.app.Runtime == nil {
+		httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": "runtime contract is not configured"})
+		return
+	}
+	theme, err := h.app.Runtime.Tokens(r.Context(), site.ID, r.URL.Query().Get("themeId"))
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	if theme.Tokens == nil {
+		theme.Tokens = map[string]any{}
+	}
+	httpapi.RespondJSON(w, http.StatusOK, theme)
 }

@@ -22,11 +22,12 @@ type Service struct {
 	pages     domain.PageRepository
 	routes    *routeapp.Service
 	builds    *build.Service
+	tokens    domain.TokenRepository
 }
 
 func NewService(sites domain.SiteRepository, snapshots domain.SnapshotRepository,
-	pages domain.PageRepository, routes *routeapp.Service, builds *build.Service) *Service {
-	return &Service{sites: sites, snapshots: snapshots, pages: pages, routes: routes, builds: builds}
+	pages domain.PageRepository, routes *routeapp.Service, builds *build.Service, tokens domain.TokenRepository) *Service {
+	return &Service{sites: sites, snapshots: snapshots, pages: pages, routes: routes, builds: builds, tokens: tokens}
 }
 
 var validEnvironments = map[string]bool{
@@ -54,7 +55,7 @@ func (s *Service) BootContract(ctx context.Context, site domain.Site, environmen
 		return Contract{}, err
 	}
 
-	tree, err := s.initialTree(ctx, snapshot, routes)
+	tree, err := s.PageTree(ctx, site, environment, versionID, "", "")
 	if err != nil {
 		return Contract{}, err
 	}
@@ -99,16 +100,30 @@ func (s *Service) resolveSnapshot(ctx context.Context, siteID, environment, vers
 	return s.snapshots.GetSnapshot(ctx, build.SnapshotID)
 }
 
-// initialTree picks the boot page: the renderPage route with the highest
-// priority referencing a snapshot page (the home page); otherwise the first
-// page in snapshot order. Returns nil when the snapshot has no pages.
-func (s *Service) initialTree(ctx context.Context, snapshot domain.Snapshot, routes []domain.Route) (*TreeDeclaration, error) {
-	selected, ok := matchHomePage(snapshot.Pages, routes)
-	if !ok {
-		if len(snapshot.Pages) == 0 {
-			return nil, nil
-		}
-		selected = snapshot.Pages[0]
+// PageTree returns the wire tree of a page in a snapshot release: `pageID`
+// selects the page directly (must belong to the snapshot), `routeID` resolves a
+// renderPage route to its page, and with neither the boot heuristic applies —
+// the renderPage route with the highest priority referencing a snapshot page
+// (the home page); otherwise the first page in snapshot order. A snapshot with
+// no pages yields nil without error (endpoints return an empty reply, the boot
+// contract keeps `tree` omitted).
+func (s *Service) PageTree(ctx context.Context, site domain.Site, environment, versionID, pageID, routeID string) (*TreeDeclaration, error) {
+	if environment == "" {
+		environment = domain.EnvironmentProduction
+	}
+	if !validEnvironments[environment] {
+		return nil, fmt.Errorf("%w: environment must be one of development, production", domain.ErrInvalidRequest)
+	}
+	snapshot, err := s.resolveSnapshot(ctx, site.ID, environment, versionID)
+	if err != nil {
+		return nil, err
+	}
+	selected, err := s.selectPage(ctx, site.ID, snapshot, pageID, routeID)
+	if err != nil && (pageID == "" && routeID == "") && len(snapshot.Pages) == 0 {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	version, err := s.pages.GetPageVersion(ctx, selected.PageID, selected.VersionID)
 	if err != nil {
@@ -120,6 +135,86 @@ func (s *Service) initialTree(ctx context.Context, snapshot domain.Snapshot, rou
 		PageID:     selected.PageID,
 		Root:       toTreeNode(version.Root),
 	}, nil
+}
+
+func (s *Service) selectPage(ctx context.Context, siteID string, snapshot domain.Snapshot, pageID, routeID string) (domain.SnapshotPage, error) {
+	if routeID != "" {
+		route, err := s.routes.Get(ctx, siteID, routeID)
+		if err != nil {
+			return domain.SnapshotPage{}, err
+		}
+		if route.Action.Type != routeapp.RenderPage || route.Action.PageID == "" {
+			return domain.SnapshotPage{}, fmt.Errorf("%w: route is not a renderPage route", domain.ErrInvalidRequest)
+		}
+		pageID = route.Action.PageID
+	}
+	if pageID != "" {
+		for _, p := range snapshot.Pages {
+			if p.PageID == pageID {
+				return p, nil
+			}
+		}
+		return domain.SnapshotPage{}, fmt.Errorf("%w: page %q not in snapshot", domain.ErrNotFound, pageID)
+	}
+	routes, err := allRoutes(ctx, s.routes, siteID)
+	if err != nil {
+		return domain.SnapshotPage{}, err
+	}
+	selected, ok := matchHomePage(snapshot.Pages, routes)
+	if !ok {
+		if len(snapshot.Pages) == 0 {
+			return domain.SnapshotPage{}, fmt.Errorf("%w: snapshot has no pages", domain.ErrNotFound)
+		}
+		selected = snapshot.Pages[0]
+	}
+	return selected, nil
+}
+
+// RouteDescriptors maps the site's routes onto the descriptor form the runtime
+// boot contract uses (skipping routes whose matcher is not a valid ^…$ regex).
+func (s *Service) RouteDescriptors(ctx context.Context, siteID string) ([]RouteDescriptor, error) {
+	routes, err := allRoutes(ctx, s.routes, siteID)
+	if err != nil {
+		return nil, err
+	}
+	return toRouteDescriptors(routes), nil
+}
+
+// Tokens returns the site's design-token set as a single runtime theme. Only
+// the default theme exists today — a non-empty themeID is resolved as the
+// default so the editor's `tokens.get` builtin has a stable reply.
+func (s *Service) Tokens(ctx context.Context, siteID, themeID string) (ThemeDescriptor, error) {
+	tokens, err := s.tokens.GetTokens(ctx, siteID)
+	if err != nil {
+		return ThemeDescriptor{}, err
+	}
+	if tokens == nil {
+		tokens = &domain.TokenSet{}
+	}
+	if themeID == "" {
+		themeID = "default"
+	}
+	return ThemeDescriptor{ThemeID: themeID, Tokens: tokenSetMap(tokens)}, nil
+}
+
+func allRoutes(ctx context.Context, routes *routeapp.Service, siteID string) ([]domain.Route, error) {
+	return routes.List(ctx, siteID)
+}
+
+// tokenSetMap flattens the domain TokenSet into the runtime theme token map.
+func tokenSetMap(t *domain.TokenSet) map[string]any {
+	return map[string]any{
+		"colors":      t.Colors,
+		"typography":  t.Typography,
+		"spacing":     t.Spacing,
+		"shadows":     t.Shadows,
+		"borders":     t.Borders,
+		"breakpoints": t.Breakpoints,
+		"zIndex":      t.ZIndex,
+		"opacity":     t.Opacity,
+		"transitions": t.Transitions,
+		"custom":      t.Custom,
+	}
 }
 
 // toTreeNode converts a domain tree into the wire tree that always carries
