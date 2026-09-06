@@ -237,12 +237,17 @@ func (m *Memory) DeletePage(_ context.Context, id string) error {
 	if _, ok := m.pages[id]; !ok {
 		return domain.ErrNotFound
 	}
-	for _, snapshot := range m.snapshots {
+	// Snapshot page lists are bookkeeping — the canonical content lives in the
+	// site git tree. Deleting a page prunes its stale refs, never blocks.
+	for snapshotID, snapshot := range m.snapshots {
+		kept := snapshot.Pages[:0]
 		for _, page := range snapshot.Pages {
-			if page.PageID == id {
-				return domain.ErrInvalidRequest
+			if page.PageID != id {
+				kept = append(kept, page)
 			}
 		}
+		snapshot.Pages = kept
+		m.snapshots[snapshotID] = snapshot
 	}
 	delete(m.pages, id)
 	delete(m.versions, id)

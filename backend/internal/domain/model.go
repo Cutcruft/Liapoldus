@@ -13,6 +13,7 @@ var (
 	ErrSchemaInvalid      = errors.New("invalid JSON schema")
 	ErrVersionNotFound    = errors.New("component version not found")
 	ErrBuildFailed        = errors.New("build failed")
+	ErrNotFastForward     = errors.New("not a fast-forward merge")
 )
 
 type Site struct {
@@ -20,6 +21,7 @@ type Site struct {
 	Name          string    `json:"name"`
 	Slug          string    `json:"slug"`
 	DefaultLocale string    `json:"defaultLocale"`
+	DefaultBranch string    `json:"defaultBranch,omitempty"`
 	Hosts         []string  `json:"hosts"`
 	CreatedAt     time.Time `json:"createdAt"`
 }
@@ -67,8 +69,9 @@ type ComponentDefinition struct {
 	UpdatedAt  time.Time      `json:"updatedAt"`
 }
 
-// ComponentVersion is a commit in the site's git repo representing a released
-// definition of a component.
+// ComponentVersion is a released definition of a component. Its ID is a
+// generated opaque identifier (not a git sha); concrete versions are captured
+// by the site-wide snapshot git history (slice 1).
 type ComponentVersion struct {
 	ID           string    `json:"id"`
 	SiteID       string    `json:"siteId"`
@@ -106,6 +109,7 @@ type Snapshot struct {
 	ID        string         `json:"id"`
 	SiteID    string         `json:"siteId"`
 	Name      string         `json:"name"`
+	GitSHA    string         `json:"gitSha,omitempty"`
 	Pages     []SnapshotPage `json:"pages"`
 	DepsLock  SnapshotLock   `json:"depsLock,omitempty"`
 	CreatedAt time.Time      `json:"createdAt"`

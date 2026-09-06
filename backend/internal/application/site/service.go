@@ -39,7 +39,7 @@ func (s *Service) Create(ctx context.Context, name, slug, defaultLocale string, 
 	if err != nil {
 		return domain.Site{}, err
 	}
-	site := domain.Site{ID: id, Name: name, Slug: slug, DefaultLocale: defaultLocale, Hosts: hosts, CreatedAt: time.Now().UTC()}
+	site := domain.Site{ID: id, Name: name, Slug: slug, DefaultLocale: defaultLocale, Hosts: hosts, DefaultBranch: "main", CreatedAt: time.Now().UTC()}
 	if err := s.repo.CreateSite(ctx, site); err != nil {
 		return domain.Site{}, err
 	}

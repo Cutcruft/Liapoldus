@@ -12,6 +12,7 @@ import { SiteAssetsPage } from './pages/SiteAssetsPage';
 import { SiteFormsPage } from './pages/SiteFormsPage';
 import { FormEditorPage } from './pages/FormEditorPage';
 import { SiteBuildsPage } from './pages/SiteBuildsPage';
+import { SiteCommitsPage } from './pages/SiteCommitsPage';
 import { EditorPage } from './editor/EditorPage';
 
 export const appRoutes: RouteObject[] = [
@@ -32,6 +33,7 @@ export const appRoutes: RouteObject[] = [
       { path: 'sites/:siteId/forms', element: <SiteFormsPage /> },
       { path: 'sites/:siteId/forms/:formId', element: <FormEditorPage /> },
       { path: 'sites/:siteId/builds', element: <SiteBuildsPage /> },
+      { path: 'sites/:siteId/git', element: <SiteCommitsPage /> },
       { path: 'settings', element: <Placeholder titleKey="nav.settings" /> },
     ],
   },

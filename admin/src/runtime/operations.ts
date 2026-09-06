@@ -42,7 +42,12 @@ export type OperationKind =
   | 'createBuild'
   | 'getBuild'
   | 'listBuilds'
-  | 'runtimeStatus';
+  | 'runtimeStatus'
+  | 'getGitOverview'
+  | 'commitGit'
+  | 'publishGit'
+  | 'restoreGit'
+  | 'rollbackGit';
 
 export interface OperationSpec<TArgs extends Record<string, unknown> = Record<string, unknown>> {
   kind: OperationKind;
@@ -423,6 +428,67 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     detail: (b, t) => {
       const version = typeof b === 'object' && b !== null && 'version' in b ? (b as { version: unknown }).version : undefined;
       return version === undefined ? t('result.runtime.miss') : t('result.saved.v', { version: Number(version) });
+    },
+  },
+
+  getGitOverview: {
+    kind: 'getGitOverview',
+    labelKey: 'op.getGitOverview',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/git`,
+    detail: (b, t) => {
+      const commits = typeof b === 'object' && b !== null && Array.isArray((b as { commits?: unknown }).commits)
+        ? (b as { commits: unknown[] }).commits.length
+        : 0;
+      return t('result.count', { n: commits });
+    },
+  },
+
+  commitGit: {
+    kind: 'commitGit',
+    labelKey: 'op.commitGit',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/git/commit`,
+    body: (args) => ({ message: String(args.message ?? '') }),
+    detail: (b, t) => {
+      const sha = typeof b === 'object' && b !== null && 'sha' in b ? String((b as { sha: unknown }).sha) : '';
+      return sha ? t('result.saved.sha', { sha: sha.slice(0, 8) }) : 'OK';
+    },
+  },
+
+  publishGit: {
+    kind: 'publishGit',
+    labelKey: 'op.publishGit',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/git/publish`,
+    body: (args) => ({ message: String(args.message ?? '') }),
+    detail: (b, t) => {
+      const sha = typeof b === 'object' && b !== null && 'sha' in b ? String((b as { sha: unknown }).sha) : '';
+      return sha ? t('result.saved.sha', { sha: sha.slice(0, 8) }) : 'OK';
+    },
+  },
+
+  restoreGit: {
+    kind: 'restoreGit',
+    labelKey: 'op.restoreGit',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/git/restore`,
+    body: (args) => ({ message: String(args.message ?? ''), sha: String(args.sha) }),
+    detail: (b, t) => {
+      const sha = typeof b === 'object' && b !== null && 'sha' in b ? String((b as { sha: unknown }).sha) : '';
+      return sha ? t('result.saved.sha', { sha: sha.slice(0, 8) }) : 'OK';
+    },
+  },
+
+  rollbackGit: {
+    kind: 'rollbackGit',
+    labelKey: 'op.rollbackGit',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/git/rollback`,
+    body: (args) => ({ message: String(args.message ?? ''), sha: String(args.sha) }),
+    detail: (b, t) => {
+      const sha = typeof b === 'object' && b !== null && 'sha' in b ? String((b as { sha: unknown }).sha) : '';
+      return sha ? t('result.saved.sha', { sha: sha.slice(0, 8) }) : 'OK';
     },
   },
 };

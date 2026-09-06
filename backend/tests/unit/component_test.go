@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
-	"github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
@@ -59,68 +59,10 @@ func (f *fakeDefs) Delete(_ context.Context, siteID, id string) error {
 	return nil
 }
 
-type fakeGitCommit struct {
-	siteID, definitionID, message string
-	files                         map[string][]byte
-	sha                           string
-}
-
-type fakeGit struct {
-	commits     []fakeGitCommit
-	inits       []string
-	head        string
-	initErr     error
-	commitErr   error
-	checkoutErr error
-}
-
-func (f *fakeGit) Init(_ context.Context, siteID string) error {
-	if f.initErr != nil {
-		return f.initErr
-	}
-	f.inits = append(f.inits, siteID)
-	return nil
-}
-
-func (f *fakeGit) Commit(_ context.Context, siteID, definitionID, message string, files map[string][]byte) (string, error) {
-	if f.commitErr != nil {
-		return "", f.commitErr
-	}
-	sha := "git-sha" + string(rune('a'+len(f.commits)))
-	f.commits = append(f.commits, fakeGitCommit{siteID, definitionID, message, files, sha})
-	f.head = sha
-	return sha, nil
-}
-
-func (f *fakeGit) ListVersions(_ context.Context, _ string, definitionID string) ([]string, error) {
-	var out []string
-	for _, c := range f.commits {
-		if c.definitionID == definitionID {
-			out = append(out, c.sha)
-		}
-	}
-	return out, nil
-}
-
-func (f *fakeGit) Checkout(_ context.Context, _ string, sha string) (map[string][]byte, error) {
-	if f.checkoutErr != nil {
-		return nil, f.checkoutErr
-	}
-	for _, c := range f.commits {
-		if c.sha == sha {
-			return c.files, nil
-		}
-	}
-	return nil, domain.ErrVersionNotFound
-}
-
-func (f *fakeGit) Head(_ context.Context, _ string) (string, error) { return f.head, nil }
-
-func newComponentService(t *testing.T) (*component.Service, *fakeGit, *fakeDefs) {
+func newComponentService(t *testing.T) (*component.Service, *fakeDefs) {
 	t.Helper()
-	fg := &fakeGit{}
 	fd := newFakeDefs()
-	return component.NewService(fd, git.NewService(fg, fd)), fg, fd
+	return component.NewService(fd), fd
 }
 
 var componentSchemaFixture = mustJSONMap(`{
@@ -156,32 +98,21 @@ func mustSchema(t *testing.T, raw string) map[string]any {
 
 func TestComponentDefine(t *testing.T) {
 	ctx := context.Background()
-	svc, fg, fd := newComponentService(t)
+	svc, fd := newComponentService(t)
 	d := componentDefinition("site_1", "card", "Карточка статьи")
 
 	ver, err := svc.Define(ctx, d)
 	if err != nil {
 		t.Fatalf("Define: %v", err)
 	}
-	if ver.ID == "" || ver.DefinitionID != "card" || ver.SiteID != "site_1" {
+	if ver.ID == "" || !strings.HasPrefix(ver.ID, "componentver_") {
+		t.Fatalf("version id must be a generated componentver id, got %q", ver.ID)
+	}
+	if ver.DefinitionID != "card" || ver.SiteID != "site_1" {
 		t.Fatalf("unexpected version: %+v", ver)
 	}
-	if len(fg.commits) != 1 {
-		t.Fatalf("want 1 commit, got %d", len(fg.commits))
-	}
-	c := fg.commits[0]
-	if c.message != "component card: Карточка статьи" {
-		t.Fatalf("commit message = %q", c.message)
-	}
-	if string(c.files[git.FileDefinition]) != d.Source {
-		t.Fatal("definition.tsx does not carry the source")
-	}
-	var committedSchema map[string]any
-	if err := json.Unmarshal(c.files[git.FileSchema], &committedSchema); err != nil {
-		t.Fatalf("schema.json invalid: %v", err)
-	}
-	if !reflect.DeepEqual(committedSchema, d.Schema) {
-		t.Fatalf("schema.json mismatch:\n got %v\nwant %v", committedSchema, d.Schema)
+	if ver.Message != "initial version" {
+		t.Fatalf("version message = %q, want %q", ver.Message, "initial version")
 	}
 	if len(fd.saved) != 1 {
 		t.Fatalf("want 1 saved definition, got %d", len(fd.saved))
@@ -189,11 +120,17 @@ func TestComponentDefine(t *testing.T) {
 	if fd.saved[0].CurrentSHA != ver.ID {
 		t.Fatalf("saved CurrentSHA = %q, version = %q", fd.saved[0].CurrentSHA, ver.ID)
 	}
+	if fd.saved[0].Source != d.Source {
+		t.Fatal("definition source not persisted")
+	}
+	if !reflect.DeepEqual(fd.saved[0].Schema, d.Schema) {
+		t.Fatalf("schema mismatch:\n got %v\nwant %v", fd.saved[0].Schema, d.Schema)
+	}
 }
 
 func TestComponentDefineInvalidSchema(t *testing.T) {
 	ctx := context.Background()
-	svc, fg, fd := newComponentService(t)
+	svc, fd := newComponentService(t)
 	d := componentDefinition("site_1", "card", "Карточка")
 	d.Schema = mustSchema(t, `{"type":"object","properties":{"title":{"type":"bogus"}}}`)
 
@@ -201,14 +138,14 @@ func TestComponentDefineInvalidSchema(t *testing.T) {
 	if !errors.Is(err, domain.ErrSchemaInvalid) {
 		t.Fatalf("want ErrSchemaInvalid, got %v", err)
 	}
-	if len(fg.commits) != 0 || len(fd.saved) != 0 {
+	if len(fd.saved) != 0 {
 		t.Fatal("invalid schema must not write anything")
 	}
 }
 
 func TestComponentDefineDuplicate(t *testing.T) {
 	ctx := context.Background()
-	svc, fg, _ := newComponentService(t)
+	svc, fd := newComponentService(t)
 	d := componentDefinition("site_1", "card", "Карточка")
 
 	if _, err := svc.Define(ctx, d); err != nil {
@@ -217,14 +154,14 @@ func TestComponentDefineDuplicate(t *testing.T) {
 	if _, err := svc.Define(ctx, d); !errors.Is(err, domain.ErrAlreadyExists) {
 		t.Fatalf("want ErrAlreadyExists, got %v", err)
 	}
-	if len(fg.commits) != 1 {
-		t.Fatalf("duplicate define must not commit, got %d commits", len(fg.commits))
+	if len(fd.saved) != 1 {
+		t.Fatalf("duplicate define must not write, got %d definitions", len(fd.saved))
 	}
 }
 
 func TestComponentGet(t *testing.T) {
 	ctx := context.Background()
-	svc, _, _ := newComponentService(t)
+	svc, _ := newComponentService(t)
 	if _, err := svc.Define(ctx, componentDefinition("site_1", "card", "Карточка")); err != nil {
 		t.Fatalf("define: %v", err)
 	}
@@ -242,7 +179,7 @@ func TestComponentGet(t *testing.T) {
 
 func TestComponentList(t *testing.T) {
 	ctx := context.Background()
-	svc, _, _ := newComponentService(t)
+	svc, _ := newComponentService(t)
 	for _, d := range []domain.ComponentDefinition{
 		componentDefinition("site_1", "card", "Карточка"),
 		componentDefinition("site_1", "layout.main", "Layout"),
@@ -268,7 +205,7 @@ func TestComponentList(t *testing.T) {
 
 func TestComponentUpdate(t *testing.T) {
 	ctx := context.Background()
-	svc, fg, fd := newComponentService(t)
+	svc, fd := newComponentService(t)
 	if _, err := svc.Define(ctx, componentDefinition("site_1", "card", "Карточка")); err != nil {
 		t.Fatalf("define: %v", err)
 	}
@@ -282,14 +219,11 @@ func TestComponentUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if ver.ID == "git-shaa" {
-		t.Fatal("update must produce a new commit")
+	if !strings.HasPrefix(ver.ID, "componentver_") {
+		t.Fatalf("update must produce a new version id, got %q", ver.ID)
 	}
-	if len(fg.commits) != 2 {
-		t.Fatalf("want 2 commits, got %d", len(fg.commits))
-	}
-	if fg.commits[1].message != "component card: Карточка v2" {
-		t.Fatalf("commit message = %q", fg.commits[1].message)
+	if ver.Message != "updated version" {
+		t.Fatalf("version message = %q, want %q", ver.Message, "updated version")
 	}
 	last := fd.saved[len(fd.saved)-1]
 	if last.Name != "Карточка v2" || last.Kind != "component" {
@@ -302,19 +236,19 @@ func TestComponentUpdate(t *testing.T) {
 
 func TestComponentUpdateNotFound(t *testing.T) {
 	ctx := context.Background()
-	svc, fg, _ := newComponentService(t)
+	svc, fd := newComponentService(t)
 	_, err := svc.Update(ctx, componentDefinition("site_1", "ghost", "Ghost"))
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
-	if len(fg.commits) != 0 {
-		t.Fatal("update of missing component must not commit")
+	if len(fd.saved) != 0 {
+		t.Fatal("update of missing component must not write")
 	}
 }
 
 func TestComponentUpdateStricterSchemaAllowed(t *testing.T) {
 	ctx := context.Background()
-	svc, _, _ := newComponentService(t)
+	svc, _ := newComponentService(t)
 	if _, err := svc.Define(ctx, componentDefinition("site_1", "card", "Карточка")); err != nil {
 		t.Fatalf("define: %v", err)
 	}
@@ -328,7 +262,7 @@ func TestComponentUpdateStricterSchemaAllowed(t *testing.T) {
 
 func TestComponentDelete(t *testing.T) {
 	ctx := context.Background()
-	svc, fg, fd := newComponentService(t)
+	svc, fd := newComponentService(t)
 	if _, err := svc.Define(ctx, componentDefinition("site_1", "card", "Карточка")); err != nil {
 		t.Fatalf("define: %v", err)
 	}
@@ -338,10 +272,6 @@ func TestComponentDelete(t *testing.T) {
 	if _, err := svc.Get(ctx, "site_1", "card"); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("want ErrNotFound after delete, got %v", err)
 	}
-	// Delete must not touch git: history (the source of truth) stays intact.
-	if len(fg.commits) != 1 {
-		t.Fatalf("delete must not create commits, got %d", len(fg.commits))
-	}
 	if !fd.deleted[fd.key("site_1", "card")] {
 		t.Fatal("registry entry was not deleted")
 	}
@@ -349,13 +279,13 @@ func TestComponentDelete(t *testing.T) {
 
 func TestComponentDefineEmptySource(t *testing.T) {
 	ctx := context.Background()
-	svc, fg, fd := newComponentService(t)
+	svc, fd := newComponentService(t)
 	d := componentDefinition("site_1", "card", "Карточка")
 	d.Source = ""
 	if _, err := svc.Define(ctx, d); !errors.Is(err, domain.ErrInvalidRequest) {
 		t.Fatalf("want ErrInvalidRequest, got %v", err)
 	}
-	if len(fg.commits) != 0 || len(fd.saved) != 0 {
+	if len(fd.saved) != 0 {
 		t.Fatal("empty source must not write anything")
 	}
 }
@@ -368,7 +298,7 @@ func TestComponentDefineInvalidID(t *testing.T) {
 		"a.b": true, "a_b": true,
 	}
 	for id, valid := range cases {
-		svc, fg, _ := newComponentService(t)
+		svc, fd := newComponentService(t)
 		d := componentDefinition("site_1", id, "X")
 		_, err := svc.Define(ctx, d)
 		if valid {
@@ -380,8 +310,8 @@ func TestComponentDefineInvalidID(t *testing.T) {
 		if !errors.Is(err, domain.ErrInvalidRequest) {
 			t.Fatalf("id %q: want ErrInvalidRequest, got %v", id, err)
 		}
-		if len(fg.commits) != 0 {
-			t.Fatalf("id %q: invalid id must not commit", id)
+		if len(fd.saved) != 0 {
+			t.Fatalf("id %q: invalid id must not write", id)
 		}
 	}
 }

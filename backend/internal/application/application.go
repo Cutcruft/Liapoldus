@@ -9,7 +9,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
-	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/git"
+	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/runtime"
@@ -31,18 +31,19 @@ import (
 // Services bundles all aggregate services wired to one storage and the
 // externally-configured defaults.
 type Services struct {
-	Store      domain.Storage
-	Sites      *site.Service
-	Pages      *page.Service
-	Snapshots  *snapshot.Service
-	Contents   *content.Service
-	Assets     *asset.Service
-	Routes     *route.Service
-	Forms      *form.Service
-	Components *component.Service
-	Builds     *buildapp.Service
-	Runtime    *runtime.Service
-	Deps       *deps.Service
+	Store        domain.Storage
+	Sites        *site.Service
+	Pages        *page.Service
+	Snapshots    *snapshot.Service
+	Contents     *content.Service
+	Assets       *asset.Service
+	Routes       *route.Service
+	Forms        *form.Service
+	Components   *component.Service
+	GitSnapshots *gitapp.Service
+	Builds       *buildapp.Service
+	Runtime      *runtime.Service
+	Deps         *deps.Service
 	// BuildEvents relays build lifecycle events to admin WS subscribers.
 	BuildEvents buildapp.DevEventHub
 }
@@ -56,7 +57,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		redirectAllowed[status] = true
 	}
 	gitRepo := gitrepo.NewRepo(cfg.LocalGitDir)
-	comps := component.NewService(storage, gitapp.NewService(gitRepo, storage))
+	comps := component.NewService(storage)
 	artifacts := artifactstore.New(cfg.BuildDir)
 	reg := registry.New(cfg.NPMRegistryURL)
 	depsStore := store.New(cfg.DepsDir)
@@ -79,6 +80,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Allowed:       redirectAllowed,
 	})
 	depsSvc := deps.NewService(storage, storage, registryAdapter{client: reg}).WithTarballCache(depsStore)
+	gitSnaps := gitapp.NewService(gitRepo, storage, storage, storage, storage, storage, storage, storage, depsSvc)
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
@@ -86,12 +88,13 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 			InitialVersion: cfg.PageInitialVersion,
 			MaxDepth:       cfg.ComponentMaxDepth,
 		}),
-		Components: comps,
-		Snapshots:  snapshot.NewService(storage, storage, storage, depsSvc),
-		Builds:     builds,
-		BuildEvents: buildEvents,
-		Runtime:    runtime.NewService(storage, storage, storage, routes, builds),
-		Contents:   content.NewService(storage),
+		Components:   comps,
+		GitSnapshots: gitSnaps,
+		Snapshots:    snapshot.NewService(storage, storage, storage, depsSvc),
+		Builds:       builds,
+		BuildEvents:  buildEvents,
+		Runtime:      runtime.NewService(storage, storage, storage, routes, builds),
+		Contents:     content.NewService(storage),
 		Assets: asset.NewService(storage, blobs, storage, asset.Settings{
 			MasterVariant: cfg.MasterVariantName,
 			FallbackName:  cfg.AssetFallbackName,

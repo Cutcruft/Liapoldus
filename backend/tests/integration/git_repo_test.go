@@ -2,342 +2,233 @@ package integrationtest
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
-	"github.com/liapoldus/liapoldus/backend/internal/application/component"
-	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/git"
-	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
-	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
-	"github.com/liapoldus/liapoldus/backend/internal/schema"
 )
 
-func gitRepo(t *testing.T) (*gitrepo.Repo, *storage.Memory, *gitapp.Service) {
+func itoa(i int) string { return strconv.Itoa(i) }
+
+func testRepo(t *testing.T, siteID string) *gitrepo.Repo {
 	t.Helper()
-	mem := storage.NewMemory()
 	repo := gitrepo.NewRepo(t.TempDir())
-	return repo, mem, gitapp.NewService(repo, mem)
-}
-
-// release commits a component through the service and returns its sha.
-func gitRelease(t *testing.T, svc *gitapp.Service, siteID, id, name, source string) string {
-	t.Helper()
-	v, err := svc.Release(context.Background(), siteID, id, name, source,
-		map[string]any{"type": "object"},
-		map[string]any{"label": name})
-	if err != nil {
-		t.Fatalf("release %s: %v", id, err)
+	if err := repo.InitRepo(context.Background(), siteID); err != nil {
+		t.Fatalf("init repo: %v", err)
 	}
-	return v.ID
+	return repo
 }
 
-func TestGitRepoInitCreatesBare(t *testing.T) {
-	repo, _, _ := gitRepo(t)
+func TestInitRepoCreatesBareWithDevAndMain(t *testing.T) {
+	repo := gitrepo.NewRepo(t.TempDir())
 	siteID := "site-bare"
 
-	if err := repo.Init(context.Background(), siteID); err != nil {
+	if err := repo.InitRepo(context.Background(), siteID); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	dir := repo.Dir(siteID)
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		t.Fatalf("bare repository must exist on disk at %s: %v", dir, err)
 	}
-	// HEAD present => valid bare gitdir.
 	if _, err := os.Stat(filepath.Join(dir, "HEAD")); err != nil {
 		t.Fatalf("bare repo HEAD missing: %v", err)
 	}
-	if err := repo.Init(context.Background(), siteID); err != nil {
+	devSHA, err := repo.HeadSHA(context.Background(), siteID, "dev")
+	if err != nil {
+		t.Fatalf("dev head: %v", err)
+	}
+	mainSHA, err := repo.HeadSHA(context.Background(), siteID, "main")
+	if err != nil {
+		t.Fatalf("main head: %v", err)
+	}
+	if devSHA != mainSHA {
+		t.Fatalf("dev and main must share the initial commit, dev=%s main=%s", devSHA, mainSHA)
+	}
+	if err := repo.InitRepo(context.Background(), siteID); err != nil {
 		t.Fatalf("repeat init must be ok, got %v", err)
 	}
+	branches, err := repo.ListBranches(context.Background(), siteID)
+	if err != nil {
+		t.Fatalf("list branches: %v", err)
+	}
+	if len(branches) != 2 || branches[0] != "dev" || branches[1] != "main" {
+		t.Fatalf("branches = %v, want [dev main]", branches)
+	}
 }
 
-func TestGitRepoTwoComponentsTwoCommits(t *testing.T) {
-	repo, _, svc := gitRepo(t)
-	siteID := "site-two"
-	if err := repo.Init(context.Background(), siteID); err != nil {
-		t.Fatal(err)
+func TestCommitOnBranchTwoCommitsAndReadFiles(t *testing.T) {
+	repo := testRepo(t, "site-two")
+	ctx := context.Background()
+
+	shaCard, err := repo.CommitOnBranch(ctx, "site-two", "dev", "add card", map[string][]byte{
+		"components/card/source.tsx": []byte("src-card-1"),
+		"pages/p_1.json":             []byte(`{"tree":{}}`),
+	})
+	if err != nil {
+		t.Fatalf("commit 1: %v", err)
 	}
-	shaCard := gitRelease(t, svc, siteID, "card", "Card", "src-card-1")
-	shaLayout := gitRelease(t, svc, siteID, "layout.main", "Layout", "src-layout-1")
+	shaLayout, err := repo.CommitOnBranch(ctx, "site-two", "dev", "add layout", map[string][]byte{
+		"components/layout.main/source.tsx": []byte("src-layout-1"),
+	})
+	if err != nil {
+		t.Fatalf("commit 2: %v", err)
+	}
 	if shaCard == shaLayout {
-		t.Fatal("distinct definitions must produce distinct shas")
+		t.Fatal("distinct commits must produce distinct shas")
 	}
 
-	files, err := svc.CheckoutVersion(context.Background(), siteID, shaCard)
+	files, err := repo.ReadFiles(ctx, "site-two", shaCard)
 	if err != nil {
-		t.Fatalf("checkout: %v", err)
+		t.Fatalf("read files: %v", err)
 	}
-	for _, name := range []string{gitapp.FileDefinition, gitapp.FileSchema, gitapp.FileMetadata} {
-		if _, ok := files[name]; !ok {
-			t.Fatalf("commit must contain %s, got %v", name, files)
-		}
+	if string(files["components/card/source.tsx"]) != "src-card-1" {
+		t.Fatalf("card source = %q, want src-card-1", files["components/card/source.tsx"])
 	}
-	if string(files[gitapp.FileDefinition]) != "src-card-1" {
-		t.Fatalf("definition source = %q", files[gitapp.FileDefinition])
+	if _, ok := files["components/layout.main/source.tsx"]; ok {
+		t.Fatal("commit 1 must not contain the layout file (immutable history)")
 	}
 }
 
-func TestGitRepoListVersionsChronological(t *testing.T) {
-	repo, _, svc := gitRepo(t)
-	siteID := "site-vers"
-	if err := repo.Init(context.Background(), siteID); err != nil {
-		t.Fatal(err)
-	}
-	gitRelease(t, svc, siteID, "card", "Card", "v1")
-	gitRelease(t, svc, siteID, "card", "Card", "v2")
-
-	shas, err := repo.ListVersions(context.Background(), siteID, "card")
-	if err != nil {
-		t.Fatalf("list versions: %v", err)
-	}
-	if len(shas) != 2 {
-		t.Fatalf("want 2 versions, got %d", len(shas))
-	}
-	if shas[0] == "" {
-		t.Fatal("first sha must be non-empty")
-	}
-	if shas[0] == shas[1] {
-		t.Fatal("versions must differ")
-	}
-}
-
-func TestGitRepoCheckoutByVersion(t *testing.T) {
-	repo, _, svc := gitRepo(t)
-	siteID := "site-checkout"
-	if err := repo.Init(context.Background(), siteID); err != nil {
-		t.Fatal(err)
-	}
-	v1 := gitRelease(t, svc, siteID, "card", "Card", "v1-src")
-	gitRelease(t, svc, siteID, "card", "Card", "v2-src")
-
-	files, err := repo.Checkout(context.Background(), siteID, v1)
-	if err != nil {
-		t.Fatalf("checkout: %v", err)
-	}
-	if string(files[gitapp.FileDefinition]) != "v1-src" {
-		t.Fatalf("checkout returned %q, want v1-src (honest checkout by version)", files[gitapp.FileDefinition])
-	}
-}
-
-func TestGitRepoReleasedSchemaValid(t *testing.T) {
-	_, _, svc := gitRepo(t)
-	siteID := "site-schema"
-	v := gitRelease(t, svc, siteID, "card", "Card", "v1-src")
-
-	files, err := svc.CheckoutVersion(context.Background(), siteID, v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var defSchema map[string]any
-	if err := json.Unmarshal(files[gitapp.FileSchema], &defSchema); err != nil {
-		t.Fatalf("schema file is not json: %v", err)
-	}
-	if err := schema.ValidateSchema(defSchema); err != nil {
-		t.Fatalf("committed schema invalid: %v", err)
-	}
-}
-
-func TestGitRepoRollbackHistoryGrows(t *testing.T) {
-	repo, mem, svc := gitRepo(t)
-	siteID := "site-rollback"
-
-	base := domain.ComponentDefinition{SiteID: siteID, ID: "card", Name: "Card", Kind: "component", Source: "v1-src"}
-	base.Schema = map[string]any{"type": "object"}
-	base.Metadata = map[string]any{"label": "Card"}
-	if err := mem.Save(context.Background(), &base); err != nil {
-		t.Fatal(err)
-	}
-
-	v1 := gitRelease(t, svc, siteID, "card", "Card", "v1-src")
-	gitRelease(t, svc, siteID, "card", "Card", "v2-src")
-
-	if err := svc.Rollback(context.Background(), siteID, "card", v1); err != nil {
-		t.Fatalf("rollback: %v", err)
-	}
-
-	stored, err := mem.Get(context.Background(), siteID, "card")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.Source != "v1-src" {
-		t.Fatalf("registry after rollback = %q, want v1-src", stored.Source)
-	}
-	if stored.CurrentSHA == v1 {
-		t.Fatal("rollback must create a NEW commit, not reuse the old sha")
-	}
-	history, err := repo.ListVersions(context.Background(), siteID, "card")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(history) != 3 {
-		t.Fatalf("history after rollback = %d commits, want 3 (grows, never truncated)", len(history))
-	}
-}
-
-func TestGitRepoCheckoutUnknownSha(t *testing.T) {
-	repo, _, _ := gitRepo(t)
-	siteID := "site-unknown"
-	if err := repo.Init(context.Background(), siteID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.Checkout(context.Background(), siteID, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"); !errors.Is(err, domain.ErrVersionNotFound) {
+func TestReadFilesUnknownSha(t *testing.T) {
+	repo := testRepo(t, "site-unknown")
+	if _, err := repo.ReadFiles(context.Background(), "site-unknown", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"); !errors.Is(err, domain.ErrVersionNotFound) {
 		t.Fatalf("want ErrVersionNotFound, got %v", err)
 	}
 }
 
-func TestGitRepoDeleteKeepsHistory(t *testing.T) {
-	repo, mem, svc := gitRepo(t)
-	siteID := "site-delete"
-
-	card := domain.ComponentDefinition{SiteID: siteID, ID: "card", Name: "Card", Kind: "component", Source: "v1-src", Schema: schemaObject()}
-	if err := mem.Save(context.Background(), &card); err != nil {
-		t.Fatal(err)
+func TestCommitsNewestFirst(t *testing.T) {
+	repo := testRepo(t, "site-vers")
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		msg := map[int]string{0: "zero", 1: "one", 2: "two"}[i]
+		if _, err := repo.CommitOnBranch(ctx, "site-vers", "dev", msg, map[string][]byte{
+			"pages/p.json": []byte(`{"n":"` + itoa(i) + `"}`),
+		}); err != nil {
+			t.Fatalf("commit %d: %v", i, err)
+		}
 	}
-	gitRelease(t, svc, siteID, "card", "Card", "v1-src")
-	gitRelease(t, svc, siteID, "card", "Card", "v2-src")
-
-	if err := mem.Delete(context.Background(), siteID, "card"); err != nil {
-		t.Fatal(err)
-	}
-	history, err := repo.ListVersions(context.Background(), siteID, "card")
+	commits, err := repo.Commits(ctx, "site-vers", "dev", 10)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("commits: %v", err)
 	}
-	if len(history) != 2 {
-		t.Fatalf("git history must survive registry Delete, got %d commits", len(history))
+	if len(commits) != 4 { // empty initial commit + 3
+		t.Fatalf("history = %d commits, want 4", len(commits))
 	}
-	if _, err := mem.Get(context.Background(), siteID, "card"); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("registry entry must be gone, got %v", err)
+	if commits[0].Message != "two" || commits[1].Message != "one" || commits[2].Message != "zero" {
+		t.Fatalf("order = [%s %s %s], want newest first", commits[0].Message, commits[1].Message, commits[2].Message)
+	}
+	limited, err := repo.Commits(ctx, "site-vers", "dev", 2)
+	if err != nil {
+		t.Fatalf("commits limited: %v", err)
+	}
+	if len(limited) != 2 {
+		t.Fatalf("limit 2 returned %d commits", len(limited))
 	}
 }
 
-func TestGitRepoPageTreeStaysStableAcrossReleases(t *testing.T) {
-	repo, mem, svc := gitRepo(t)
-	siteID := "site-page"
+func TestRebaseReplaysDevOntoMain(t *testing.T) {
+	repo := testRepo(t, "site-rebase")
+	ctx := context.Background()
 
-	if err := repo.Init(context.Background(), siteID); err != nil {
-		t.Fatal(err)
+	// published state on main
+	if _, err := repo.CommitOnBranch(ctx, "site-rebase", "main", "initial publish", map[string][]byte{
+		"site.json": []byte(`{"name":"S","slug":"s"}`),
+	}); err != nil {
+		t.Fatalf("main commit: %v", err)
 	}
-	card := domain.ComponentDefinition{SiteID: siteID, ID: "card", Name: "Card", Kind: "component", Source: "v1-src", Schema: schemaObject()}
-	if err := mem.Save(context.Background(), &card); err != nil {
-		t.Fatal(err)
+	// dev history diverges
+	if _, err := repo.CommitOnBranch(ctx, "site-rebase", "dev", "work 1", map[string][]byte{
+		"pages/a.json": []byte(`{"a":1}`),
+	}); err != nil {
+		t.Fatalf("dev work 1: %v", err)
 	}
-	if err := mem.CreateSite(context.Background(), domain.Site{ID: siteID, Slug: "site-page"}); err != nil {
-		t.Fatal(err)
+	if _, err := repo.CommitOnBranch(ctx, "site-rebase", "dev", "work 2", map[string][]byte{
+		"pages/b.json": []byte(`{"b":2}`),
+	}); err != nil {
+		t.Fatalf("dev work 2: %v", err)
 	}
-	gitRelease(t, svc, siteID, "card", "Card", "v1-src")
+	// main moves forward independently
+	if _, err := repo.CommitOnBranch(ctx, "site-rebase", "main", "prod fix", map[string][]byte{
+		"site.json": []byte(`{"name":"S","slug":"s","hosts":["x"]}`),
+	}); err != nil {
+		t.Fatalf("main fix: %v", err)
+	}
 
-	pageSvc := page.NewService(mem, mem, mem, page.Settings{InitialVersion: 1, MaxDepth: 32, MaxChildren: 100})
-
-	root := domain.ComponentNode{
-		InstanceID:   "root",
-		DefinitionID: "card",
-		Props:        map[string]any{"title": "Hello"},
-	}
-	p, err := pageSvc.Create(context.Background(), siteID, "Home", "home", root)
-	if err != nil {
-		t.Fatalf("create page: %v", err)
+	if err := repo.Rebase(ctx, "site-rebase", "dev", "main"); err != nil {
+		t.Fatalf("rebase: %v", err)
 	}
 
-	// Release the next version: the stored page tree must stay exactly as
-	// created (reference + props, version-agnostic).
-	gitRelease(t, svc, siteID, "card", "Card", "v2-src")
-
-	stored, err := pageSvc.Get(context.Background(), p.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !jsonEqual(stored.Root, root) {
-		t.Fatalf("page tree changed after component release:\n got %+v\nwant %+v", stored.Root, root)
-	}
-	history, err := repo.ListVersions(context.Background(), siteID, "card")
+	devSHA, _ := repo.HeadSHA(ctx, "site-rebase", "dev")
+	mainSHA, _ := repo.HeadSHA(ctx, "site-rebase", "main")
+	mainFiles, err := repo.ReadFiles(ctx, "site-rebase", mainSHA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(history) != 2 {
-		t.Fatalf("history = %d, want 2 (v1 still retriable)", len(history))
+	if string(mainFiles["site.json"]) != `{"name":"S","slug":"s","hosts":["x"]}` {
+		t.Fatalf("prod fix lost on main: %s", mainFiles["site.json"])
+	}
+	devFiles, err := repo.ReadFiles(ctx, "site-rebase", devSHA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"site.json", "pages/a.json", "pages/b.json"} {
+		if _, ok := devFiles[name]; !ok {
+			t.Fatalf("rebased dev HEAD missing %s: %v", name, devFiles)
+		}
+	}
+	if string(devFiles["site.json"]) != string(mainFiles["site.json"]) {
+		t.Fatal("rebase must keep dev a descendant of main (site.json identical)")
+	}
+
+	// idempotent
+	if err := repo.Rebase(ctx, "site-rebase", "dev", "main"); err != nil {
+		t.Fatalf("repeat rebase: %v", err)
 	}
 }
 
-func TestGitRepoServiceLevelFlowRollbackCanonical(t *testing.T) {
-	repo, mem, svc := gitRepo(t)
-	siteID := "site-flow"
+func TestMergeFastForwardAndReject(t *testing.T) {
+	repo := testRepo(t, "site-merge")
+	ctx := context.Background()
 
-	compSvc := component.NewService(mem, svc)
-	card := componentDefinitionInt(siteID, "card")
-	card.Source = "v1-src"
-	v1, err := compSvc.Define(context.Background(), card)
-	if err != nil {
-		t.Fatalf("define card: %v", err)
-	}
-	if v1.ID == "" {
-		t.Fatal("define must return the release sha")
-	}
-	card.Source = "v2-src"
-	if _, err := compSvc.Update(context.Background(), card); err != nil {
-		t.Fatalf("update card: %v", err)
-	}
-	layout := componentDefinitionInt(siteID, "layout.main")
-	if _, err := compSvc.Define(context.Background(), layout); err != nil {
-		t.Fatalf("define layout.main: %v", err)
-	}
-
-	if err := svc.Rollback(context.Background(), siteID, "card", v1.ID); err != nil {
-		t.Fatalf("rollback: %v", err)
-	}
-
-	stored, err := mem.Get(context.Background(), siteID, "card")
-	if err != nil {
+	if _, err := repo.CommitOnBranch(ctx, "site-merge", "dev", "work", map[string][]byte{
+		"pages/a.json": []byte(`{"a":1}`),
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if stored.Source != "v1-src" {
-		t.Fatalf("final card source = %q, want v1-src (v1 canonical)", stored.Source)
-	}
-	history, err := repo.ListVersions(context.Background(), siteID, "card")
+	mainSHA, err := repo.Merge(ctx, "site-merge", "dev", "main")
 	if err != nil {
+		t.Fatalf("ff merge: %v", err)
+	}
+	devSHA, _ := repo.HeadSHA(ctx, "site-merge", "dev")
+	if mainSHA != devSHA {
+		t.Fatalf("main after ff merge = %s, want dev %s", mainSHA, devSHA)
+	}
+	if _, err := repo.HeadSHA(ctx, "site-merge", "dev"); err != nil {
 		t.Fatal(err)
 	}
-	if len(history) != 3 {
-		t.Fatalf("final card history = %d, want 3 ([define, update, rollback], canonical)", len(history))
-	}
-	layoutHistory, err := repo.ListVersions(context.Background(), siteID, "layout.main")
-	if err != nil {
+
+	// main now ahead of dev by one commit -> merge must reject (non-FF)
+	if _, err := repo.CommitOnBranch(ctx, "site-merge", "main", "ahead", map[string][]byte{
+		"site.json": []byte(`{"x":1}`),
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(layoutHistory) != 1 {
-		t.Fatalf("layout.main history = %d, want 1 (untouched by card rollback)", len(layoutHistory))
+	if _, err := repo.Merge(ctx, "site-merge", "dev", "main"); !errors.Is(err, domain.ErrNotFastForward) {
+		t.Fatalf("want ErrNotFastForward, got %v", err)
 	}
 }
 
-func componentDefinitionInt(siteID, id string) domain.ComponentDefinition {
-	return domain.ComponentDefinition{
-		SiteID:   siteID,
-		ID:       id,
-		Name:     id,
-		Kind:     "component",
-		Source:   "export default () => <div/>",
-		Schema:   map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}},
-		Metadata: map[string]any{"label": id},
+func TestHeadSHAAndTypeErrors(t *testing.T) {
+	repo := gitrepo.NewRepo(t.TempDir())
+	ctx := context.Background()
+	if _, err := repo.HeadSHA(ctx, "no-such-site", "main"); !errors.Is(err, domain.ErrRepoNotInitialized) {
+		t.Fatalf("want ErrRepoNotInitialized, got %v", err)
 	}
-}
-
-func schemaObject() map[string]any {
-	return map[string]any{"type": "object"}
-}
-
-func jsonEqual(a, b any) bool {
-	aj, err := json.Marshal(a)
-	if err != nil {
-		return false
+	if _, err := repo.ReadFiles(ctx, "no-such-site", "abc"); !errors.Is(err, domain.ErrRepoNotInitialized) {
+		t.Fatalf("want ErrRepoNotInitialized, got %v", err)
 	}
-	bj, err := json.Marshal(b)
-	if err != nil {
-		return false
-	}
-	return string(aj) == string(bj)
 }

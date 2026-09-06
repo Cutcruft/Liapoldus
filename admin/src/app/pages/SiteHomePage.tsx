@@ -7,7 +7,7 @@ import { ConfirmButton } from '../components/ConfirmButton';
 
 const SECTIONS: Array<{
   to: string;
-  labelKey: 'nav.pages' | 'nav.contents' | 'nav.assets' | 'nav.routes' | 'nav.forms' | 'nav.builds';
+  labelKey: 'nav.pages' | 'nav.contents' | 'nav.assets' | 'nav.routes' | 'nav.forms' | 'nav.builds' | 'nav.git';
 }> = [
   { to: 'pages', labelKey: 'nav.pages' },
   { to: 'contents', labelKey: 'nav.contents' },
@@ -15,6 +15,7 @@ const SECTIONS: Array<{
   { to: 'routes', labelKey: 'nav.routes' },
   { to: 'forms', labelKey: 'nav.forms' },
   { to: 'builds', labelKey: 'nav.builds' },
+  { to: 'git', labelKey: 'nav.git' },
 ];
 
 export function SiteHomePage() {

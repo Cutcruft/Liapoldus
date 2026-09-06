@@ -96,35 +96,3 @@ func (h *ComponentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
-func (h *ComponentHandler) Versions(w http.ResponseWriter, r *http.Request) {
-	result, err := h.components.Versions(r.Context(), siteID(r), r.PathValue("componentID"))
-	if err != nil {
-		httpapi.RespondError(w, err)
-		return
-	}
-	httpapi.RespondJSON(w, http.StatusOK, result)
-}
-
-func (h *ComponentHandler) CheckoutVersion(w http.ResponseWriter, r *http.Request) {
-	files, err := h.components.CheckoutVersion(r.Context(), siteID(r), r.PathValue("sha"))
-	if err != nil {
-		httpapi.RespondError(w, err)
-		return
-	}
-	httpapi.RespondJSON(w, http.StatusOK, files)
-}
-
-func (h *ComponentHandler) Rollback(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		SHA string `json:"sha"`
-	}
-	if !httpapi.DecodeJSON(r, &req, w) {
-		return
-	}
-	if err := h.components.Rollback(r.Context(), siteID(r), r.PathValue("componentID"), req.SHA); err != nil {
-		httpapi.RespondError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}

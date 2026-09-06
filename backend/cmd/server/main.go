@@ -84,18 +84,19 @@ func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (dom
 
 func serve(ctx context.Context, cfg config.Config, services *application.Services, logger *slog.Logger) error {
 	adminHandler := admin.NewRouter(admin.App{
-		Sites:      services.Sites,
-		Pages:      services.Pages,
-		Contents:   services.Contents,
-		Assets:     services.Assets,
-		Routes:     services.Routes,
-		Forms:      services.Forms,
-		Snapshots:  services.Snapshots,
-		Components: services.Components,
-		Builds:     services.Builds,
-		Deps:       services.Deps,
-		Logger:     logger,
-		AdminToken: cfg.AdminToken,
+		Sites:       services.Sites,
+		Pages:       services.Pages,
+		Contents:    services.Contents,
+		Assets:      services.Assets,
+		Routes:      services.Routes,
+		Forms:       services.Forms,
+		Snapshots:   services.Snapshots,
+		Components:  services.Components,
+		Git:         services.GitSnapshots,
+		Builds:      services.Builds,
+		Deps:        services.Deps,
+		Logger:      logger,
+		AdminToken:  cfg.AdminToken,
 		BuildEvents: services.BuildEvents,
 	})
 	clientHandler := client.NewRouter(&client.App{

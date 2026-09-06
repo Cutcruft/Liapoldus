@@ -8,28 +8,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liapoldus/liapoldus/backend/internal/application/git"
+	"github.com/liapoldus/liapoldus/backend/internal/application/id"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/schema"
 )
 
-// idRe keeps definition ids safe as file paths inside the site repository.
-// Dots are allowed so hierarchies like "layout.main" work.
+// idRe keeps definition ids safe as identifiers and asset paths. Dots are
+// allowed so hierarchies like "layout.main" work.
 var idRe = regexp.MustCompile(`^[a-z][a-z0-9_.-]*$`)
 
 type Service struct {
 	defs domain.ComponentDefinitionRepository
-	git  *git.Service
 	now  func() time.Time
 }
 
-func NewService(defs domain.ComponentDefinitionRepository, g *git.Service) *Service {
-	return &Service{defs: defs, git: g, now: time.Now}
+func NewService(defs domain.ComponentDefinitionRepository) *Service {
+	return &Service{defs: defs, now: time.Now}
 }
 
-// Define registers a new component definition and records its first Version as
-// a git commit. All validation happens before any write, so a rejected define
-// leaves neither a commit nor registry entry behind.
+// Define registers a new component definition and records its first Version.
+// All validation happens before any write, so a rejected define leaves the
+// registry untouched.
 func (s *Service) Define(ctx context.Context, d domain.ComponentDefinition) (domain.ComponentVersion, error) {
 	if err := validate(d); err != nil {
 		return domain.ComponentVersion{}, err
@@ -39,7 +38,7 @@ func (s *Service) Define(ctx context.Context, d domain.ComponentDefinition) (dom
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		return domain.ComponentVersion{}, err
 	}
-	return s.release(ctx, d)
+	return s.saveNewVersion(ctx, d, "initial version")
 }
 
 // Update overwrites name/source/schema/metadata of an existing definition and
@@ -59,7 +58,7 @@ func (s *Service) Update(ctx context.Context, d domain.ComponentDefinition) (dom
 	if d.Kind == "" {
 		d.Kind = prior.Kind
 	}
-	return s.release(ctx, d)
+	return s.saveNewVersion(ctx, d, "updated version")
 }
 
 func (s *Service) Get(ctx context.Context, siteID, id string) (*domain.ComponentDefinition, error) {
@@ -77,8 +76,8 @@ func (s *Service) List(ctx context.Context, siteID string) ([]domain.ComponentDe
 	return s.defs.List(ctx, siteID)
 }
 
-// Delete removes the definition from the registry but leaves git history
-// intact (source of truth is the repo, R5).
+// Delete removes the definition from the registry. History lives in the
+// site-wide snapshot git history and is unaffected.
 func (s *Service) Delete(ctx context.Context, siteID, id string) error {
 	if _, err := s.Get(ctx, siteID, id); err != nil {
 		return err
@@ -86,30 +85,15 @@ func (s *Service) Delete(ctx context.Context, siteID, id string) error {
 	return s.defs.Delete(ctx, siteID, id)
 }
 
-// Versions lists the git releases of one definition in chronological order.
-func (s *Service) Versions(ctx context.Context, siteID, id string) ([]domain.ComponentVersion, error) {
-	return s.git.Releases(ctx, siteID, id)
-}
-
-// CheckoutVersion returns the file set of one release commit by sha.
-func (s *Service) CheckoutVersion(ctx context.Context, siteID, sha string) (map[string][]byte, error) {
-	return s.git.CheckoutVersion(ctx, siteID, sha)
-}
-
-// Rollback rewinds a definition to a released sha and rewrites the registry.
-func (s *Service) Rollback(ctx context.Context, siteID, id, sha string) error {
-	return s.git.Rollback(ctx, siteID, id, sha)
-}
-
-// release writes a new version: commits the definition files, then stores the
-// registry entry pointing at the new sha.
-func (s *Service) release(ctx context.Context, d domain.ComponentDefinition) (domain.ComponentVersion, error) {
-	ver, err := s.git.Release(ctx, d.SiteID, d.ID, d.Name, d.Source, d.Schema, d.Metadata)
+// saveNewVersion assigns a generated version id, persists the definition and
+// returns the version record.
+func (s *Service) saveNewVersion(ctx context.Context, d domain.ComponentDefinition, message string) (domain.ComponentVersion, error) {
+	versionID, err := id.New(id.ComponentVer)
 	if err != nil {
 		return domain.ComponentVersion{}, err
 	}
 	now := s.now()
-	d.CurrentSHA = ver.ID
+	d.CurrentSHA = versionID
 	d.UpdatedAt = now
 	if d.CreatedAt.IsZero() {
 		d.CreatedAt = now
@@ -117,8 +101,13 @@ func (s *Service) release(ctx context.Context, d domain.ComponentDefinition) (do
 	if err := s.defs.Save(ctx, &d); err != nil {
 		return domain.ComponentVersion{}, err
 	}
-	ver.CreatedAt = now
-	return ver, nil
+	return domain.ComponentVersion{
+		ID:           versionID,
+		SiteID:       d.SiteID,
+		DefinitionID: d.ID,
+		Message:      message,
+		CreatedAt:    now,
+	}, nil
 }
 
 func validate(d domain.ComponentDefinition) error {

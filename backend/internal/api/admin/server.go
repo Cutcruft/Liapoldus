@@ -11,6 +11,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
@@ -26,6 +27,7 @@ type App struct {
 	Forms      *form.Service
 	Snapshots  *snapshot.Service
 	Components *component.Service
+	Git        *gitsnapshot.Service
 	Builds     *buildapp.Service
 	Deps       *deps.Service
 	Logger     *slog.Logger
@@ -47,6 +49,11 @@ func NewRouter(app App) http.Handler {
 	componentHandler := NewComponentHandler(app.Components)
 	buildHandler := NewBuildHandler(app.Builds)
 	depsHandler := NewDepsHandler(app.Deps)
+
+	var gitHandler *GitHandler
+	if app.Git != nil {
+		gitHandler = NewGitHandler(app.Git)
+	}
 
 	// Health stays public (pre-auth).
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -127,13 +134,18 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}", componentHandler.Get)
 	protected.HandleFunc("PUT /api/sites/{siteID}/components/{componentID}", componentHandler.Update)
 	protected.HandleFunc("DELETE /api/sites/{siteID}/components/{componentID}", componentHandler.Delete)
-	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/versions", componentHandler.Versions)
-	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/versions/{sha}", componentHandler.CheckoutVersion)
-	protected.HandleFunc("POST /api/sites/{siteID}/components/{componentID}/rollback", componentHandler.Rollback)
 
 	protected.HandleFunc("POST /api/sites/{siteID}/builds", buildHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/builds", buildHandler.List)
 	protected.HandleFunc("GET /api/builds/{buildID}", buildHandler.Get)
+
+	if gitHandler != nil {
+		protected.HandleFunc("GET /api/sites/{siteID}/git", gitHandler.Overview)
+		protected.HandleFunc("POST /api/sites/{siteID}/git/commit", gitHandler.Commit)
+		protected.HandleFunc("POST /api/sites/{siteID}/git/publish", gitHandler.Publish)
+		protected.HandleFunc("POST /api/sites/{siteID}/git/restore", gitHandler.Restore)
+		protected.HandleFunc("POST /api/sites/{siteID}/git/rollback", gitHandler.Rollback)
+	}
 
 	protected.HandleFunc("GET /api/sites/{siteID}/dependencies", depsHandler.List)
 	protected.HandleFunc("POST /api/sites/{siteID}/dependencies", depsHandler.Create)

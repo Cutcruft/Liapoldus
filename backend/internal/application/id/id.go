@@ -9,16 +9,17 @@ import (
 // Prefixes are part of the public API contract (tests and docs assert the
 // `<entity>_<hex>` shape), so they are constants rather than configuration.
 const (
-	Site       = "site"
-	Page       = "page"
-	PageVer    = "pagever"
-	Snapshot   = "snapshot"
-	Content    = "content"
-	Asset      = "asset"
-	Route      = "route"
-	Form       = "form"
-	Submission = "submission"
-	Build      = "build"
+	Site         = "site"
+	Page         = "page"
+	PageVer      = "pagever"
+	Snapshot     = "snapshot"
+	Content      = "content"
+	Asset        = "asset"
+	Route        = "route"
+	Form         = "form"
+	Submission   = "submission"
+	Build        = "build"
+	ComponentVer = "componentver"
 )
 
 func New(prefix string) (string, error) {

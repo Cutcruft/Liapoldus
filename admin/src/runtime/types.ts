@@ -123,6 +123,7 @@ export type Snapshot = {
   id: string;
   siteId: string;
   name: string;
+  gitSha?: string;
   createdAt?: string;
 };
 
@@ -168,4 +169,34 @@ export type RuntimeStatus = {
   siteId: string;
   version: number;
   onClientReady: boolean;
+};
+
+/** Один коммит в истории сайта (git). */
+export type GitCommitInfo = {
+  sha: string;
+  message: string;
+  author: string;
+  time: string;
+};
+
+/** Головная позиция ветки site-git. */
+export type GitBranchStatus = {
+  existing: boolean;
+  sha?: string;
+  head?: GitCommitInfo | null;
+};
+
+/** Статус site-git: ветки dev/main + признак «БД отличается от dev HEAD». */
+export type GitStatus = {
+  siteId: string;
+  branches: string[];
+  dev: GitBranchStatus;
+  main: GitBranchStatus;
+  dirty: boolean;
+};
+
+/** Ответ `GET /api/sites/{siteId}/git`: статус + история dev. */
+export type GitOverview = {
+  status: GitStatus;
+  commits: GitCommitInfo[];
 };

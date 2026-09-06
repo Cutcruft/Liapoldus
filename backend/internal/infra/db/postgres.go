@@ -295,9 +295,9 @@ func (p *Postgres) CreateSnapshot(ctx context.Context, snapshot domain.Snapshot)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO snapshots (id, site_id, name, deps_lock, created_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, snapshot.ID, snapshot.SiteID, snapshot.Name, lock, snapshot.CreatedAt); err != nil {
+		INSERT INTO snapshots (id, site_id, name, deps_lock, git_sha, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, snapshot.ID, snapshot.SiteID, snapshot.Name, lock, snapshot.GitSHA, snapshot.CreatedAt); err != nil {
 		return fmt.Errorf("insert snapshot: %w", err)
 	}
 	for _, page := range snapshot.Pages {
@@ -317,8 +317,8 @@ func (p *Postgres) CreateSnapshot(ctx context.Context, snapshot domain.Snapshot)
 func (p *Postgres) GetSnapshot(ctx context.Context, id string) (domain.Snapshot, error) {
 	var snapshot domain.Snapshot
 	var lock []byte
-	if err := p.pool.QueryRow(ctx, `SELECT id, site_id, name, COALESCE(deps_lock, '{}'), created_at FROM snapshots WHERE id = $1`, id).
-		Scan(&snapshot.ID, &snapshot.SiteID, &snapshot.Name, &lock, &snapshot.CreatedAt); err != nil {
+	if err := p.pool.QueryRow(ctx, `SELECT id, site_id, name, COALESCE(deps_lock, '{}'), COALESCE(git_sha, ''), created_at FROM snapshots WHERE id = $1`, id).
+		Scan(&snapshot.ID, &snapshot.SiteID, &snapshot.Name, &lock, &snapshot.GitSHA, &snapshot.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Snapshot{}, domain.ErrNotFound
 		}
@@ -356,7 +356,7 @@ func (p *Postgres) snapshotPages(ctx context.Context, snapshotID string) ([]doma
 }
 
 func (p *Postgres) ListSnapshotsBySite(ctx context.Context, siteID string) ([]domain.Snapshot, error) {
-	rows, err := p.pool.Query(ctx, `SELECT id, site_id, name, COALESCE(deps_lock, '{}'), created_at FROM snapshots WHERE site_id = $1 ORDER BY created_at, id`, siteID)
+	rows, err := p.pool.Query(ctx, `SELECT id, site_id, name, COALESCE(deps_lock, '{}'), COALESCE(git_sha, ''), created_at FROM snapshots WHERE site_id = $1 ORDER BY created_at, id`, siteID)
 	if err != nil {
 		return nil, fmt.Errorf("list snapshots: %w", err)
 	}
@@ -365,7 +365,7 @@ func (p *Postgres) ListSnapshotsBySite(ctx context.Context, siteID string) ([]do
 	for rows.Next() {
 		var snapshot domain.Snapshot
 		var lock []byte
-		if err := rows.Scan(&snapshot.ID, &snapshot.SiteID, &snapshot.Name, &lock, &snapshot.CreatedAt); err != nil {
+		if err := rows.Scan(&snapshot.ID, &snapshot.SiteID, &snapshot.Name, &lock, &snapshot.GitSHA, &snapshot.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan snapshot: %w", err)
 		}
 		if err := json.Unmarshal(lock, &snapshot.DepsLock); err != nil {
