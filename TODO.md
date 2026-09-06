@@ -22,9 +22,12 @@
 > Тест-контракт: `docs/backend/components-test-spec.md`.
 > Срез согласован: component-модель (ComponentDefinition + schema + bindings) + базовый git-сервис (внутренний bare).
 > Внешние remote/автопикинг и Dependency-сервис (R9) — отдельные заходы.
-- [ ] Компонент-модель: ComponentDefinition (id, schema JSON Schema, metadata), ComponentNode → `definitionId` + `bindings`, валидация дерева против реестра.
-- [ ] Git-сервис: репо на сайт (bare, go-git), init репо, `ComponentVersion` = коммит (`src/definition.tsx` + `schema.json` + `metadata.json`).
-- [ ] fetch/checkout по версии, rollback (checkout коммита), история версий.
+- [x] Компонент-модель: ComponentDefinition (id, schema JSON Schema, metadata), ComponentNode → `definitionId` + `bindings`, валидация дерева против реестра.
+- [x] Git-сервис: репо на сайт (bare, go-git), init репо, `ComponentVersion` = коммит (`src/definition.tsx` + `schema.json` + `metadata.json`).
+- [x] fetch/checkout по версии, rollback (checkout коммита), история версий.
+
+> Итог Этапа 2: unit §1–§3 (registry/validation/assembly), §4 git-service (мок), §5 git-repo (реальный go-git, bare), admin API компонентов, e2e зелёный.
+> go-git в `internal/infra/git`, порт `internal/application/git` (коммиты `5f496d4`…`a37b156`).
 
 ## Этап 3 — Сборщик в Go (esbuild)
 - [ ] Materializer workspace: `entry.tsx` + `definitions/*.tsx` из checkout снапшота + `manifest.json`.

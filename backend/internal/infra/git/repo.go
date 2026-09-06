@@ -1,8 +1,7 @@
-// Package git abstracts the per-site git repository that backs component
-// versioning (R5/R6/R7 in docs/design/frontend.md). Repository is the
-// interface consumed by application services; Repo implements it with go-git
-// against one bare repository per site (see §4/§5 of
-// docs/backend/components-test-spec.md).
+// Package git implements the application/git.Repository port with go-git
+// against one bare repository per site (R5/R6/R7 in docs/design/frontend.md;
+// §4/§5 of docs/backend/components-test-spec.md). It is infrastructure: the
+// application layer only sees the repository interface.
 package git
 
 import (

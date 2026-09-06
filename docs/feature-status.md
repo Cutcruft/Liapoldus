@@ -14,6 +14,8 @@
 | Page | Реализовано | Создание, чтение, список, update tree, версии страницы |
 | Component tree | Реализовано | `Container`, `Text`, `Image`, `Button`, props и children |
 | Component validation | Реализовано | ID, тип компонента, глубина дерева |
+| ComponentDefinition | Реализовано | Реестр по сайту: id, schema (JSON Schema), metadata; дерево ссылается на `definitionId` и валидируется жёстко по schema (R4) |
+| Component versioning (git) | Реализовано | Bare-репо на сайт (go-git, `internal/infra/git`); `Release` = коммит (`src/definition.tsx` + `schema.json` + `metadata.json`); история версий, checkout по sha, rollback |
 | Page versioning | Реализовано | Новая версия при обновлении дерева |
 | Snapshot | Реализовано | Фиксация актуальной версии каждой страницы, чтение, версии, удаление |
 | Content | Реализовано | Поля + переводы по locale, merge на стороне клиента, batch, коллекция `strings` |
@@ -26,9 +28,8 @@
 
 ## Пока не реализовано
 
-- ComponentDefinition, metadata и schema как отдельные объекты;
+- Binding и runtime data sources (props ← контент/route/query/операция);
 - Theme;
-- Binding и runtime data sources;
 - Operation, Provider и frontend SDK;
 - прямые HTTP/GraphQL-интеграции из frontend;
 - server-only operations;

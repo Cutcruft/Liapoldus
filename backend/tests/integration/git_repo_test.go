@@ -9,22 +9,23 @@ import (
 	"testing"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
-	"github.com/liapoldus/liapoldus/backend/internal/application/git"
+	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 	"github.com/liapoldus/liapoldus/backend/internal/schema"
 )
 
-func gitRepo(t *testing.T) (*git.Repo, *storage.Memory, *git.Service) {
+func gitRepo(t *testing.T) (*gitrepo.Repo, *storage.Memory, *gitapp.Service) {
 	t.Helper()
 	mem := storage.NewMemory()
-	repo := git.NewRepo(t.TempDir())
-	return repo, mem, git.NewService(repo, mem)
+	repo := gitrepo.NewRepo(t.TempDir())
+	return repo, mem, gitapp.NewService(repo, mem)
 }
 
 // release commits a component through the service and returns its sha.
-func gitRelease(t *testing.T, svc *git.Service, siteID, id, name, source string) string {
+func gitRelease(t *testing.T, svc *gitapp.Service, siteID, id, name, source string) string {
 	t.Helper()
 	v, err := svc.Release(context.Background(), siteID, id, name, source,
 		map[string]any{"type": "object"},
@@ -71,13 +72,13 @@ func TestGitRepoTwoComponentsTwoCommits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("checkout: %v", err)
 	}
-	for _, name := range []string{git.FileDefinition, git.FileSchema, git.FileMetadata} {
+	for _, name := range []string{gitapp.FileDefinition, gitapp.FileSchema, gitapp.FileMetadata} {
 		if _, ok := files[name]; !ok {
 			t.Fatalf("commit must contain %s, got %v", name, files)
 		}
 	}
-	if string(files[git.FileDefinition]) != "src-card-1" {
-		t.Fatalf("definition source = %q", files[git.FileDefinition])
+	if string(files[gitapp.FileDefinition]) != "src-card-1" {
+		t.Fatalf("definition source = %q", files[gitapp.FileDefinition])
 	}
 }
 
@@ -118,8 +119,8 @@ func TestGitRepoCheckoutByVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("checkout: %v", err)
 	}
-	if string(files[git.FileDefinition]) != "v1-src" {
-		t.Fatalf("checkout returned %q, want v1-src (honest checkout by version)", files[git.FileDefinition])
+	if string(files[gitapp.FileDefinition]) != "v1-src" {
+		t.Fatalf("checkout returned %q, want v1-src (honest checkout by version)", files[gitapp.FileDefinition])
 	}
 }
 
@@ -133,7 +134,7 @@ func TestGitRepoReleasedSchemaValid(t *testing.T) {
 		t.Fatal(err)
 	}
 	var defSchema map[string]any
-	if err := json.Unmarshal(files[git.FileSchema], &defSchema); err != nil {
+	if err := json.Unmarshal(files[gitapp.FileSchema], &defSchema); err != nil {
 		t.Fatalf("schema file is not json: %v", err)
 	}
 	if err := schema.ValidateSchema(defSchema); err != nil {

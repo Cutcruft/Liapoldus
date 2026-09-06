@@ -5,13 +5,14 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
-	"github.com/liapoldus/liapoldus/backend/internal/application/git"
+	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 )
 
 // Services bundles all aggregate services wired to one storage and the
@@ -36,8 +37,8 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 	for _, status := range cfg.RedirectAllowedStatuses {
 		redirectAllowed[status] = true
 	}
-	gitRepo := git.NewRepo(cfg.LocalGitDir)
-	comps := component.NewService(storage, git.NewService(gitRepo, storage))
+	gitRepo := gitrepo.NewRepo(cfg.LocalGitDir)
+	comps := component.NewService(storage, gitapp.NewService(gitRepo, storage))
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),

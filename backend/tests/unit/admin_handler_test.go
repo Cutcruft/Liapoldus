@@ -18,12 +18,13 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
-	"github.com/liapoldus/liapoldus/backend/internal/application/git"
+	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
 
@@ -59,7 +60,7 @@ func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 			Allowed:       map[int]bool{301: true, 302: true},
 		}),
 		Forms:      form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
-		Components: component.NewService(db, git.NewService(git.NewRepo(t.TempDir()), db)),
+		Components: component.NewService(db, gitapp.NewService(gitrepo.NewRepo(t.TempDir()), db)),
 		Logger:     slog.Default(),
 	}, db
 }

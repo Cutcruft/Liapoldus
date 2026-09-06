@@ -1,7 +1,8 @@
-// Package git abstracts the per-site git repository that backs component
-// versioning (R5/R6/R7 in docs/design/frontend.md). Repository is the
-// interface consumed by application services; the go-git implementation lives
-// in the same package (see §4/§5 of docs/backend/components-test-spec.md).
+// Package git defines the Repository port (application boundary) used by
+// component versioning (R5/R6/R7 in docs/design/frontend.md; §4/§5 of
+// docs/backend/components-test-spec.md). The go-git implementation lives in
+// internal/infra/git; this package contains only the interface and the
+// application-level Service built on it.
 package git
 
 import "context"
