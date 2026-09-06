@@ -26,6 +26,7 @@ export type OperationKind =
   | 'getAsset'
   | 'deleteAsset'
   | 'listRoutes'
+  | 'getRoute'
   | 'createRoute'
   | 'updateRoute'
   | 'deleteRoute'
@@ -268,6 +269,14 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     method: 'GET',
     route: (args) => `/api/sites/{siteId}/routes`,
     detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
+  },
+
+  getRoute: {
+    kind: 'getRoute',
+    labelKey: 'op.getRoute',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/routes/{routeId}`,
+    detail: () => 'OK',
   },
 
   createRoute: {

@@ -5,6 +5,7 @@ import { SitesPage } from './pages/SitesPage';
 import { SiteHomePage } from './pages/SiteHomePage';
 import { SitePagesPage } from './pages/SitePagesPage';
 import { SiteRoutesPage } from './pages/SiteRoutesPage';
+import { RouteEditorPage } from './pages/RouteEditorPage';
 import { SiteContentsPage } from './pages/SiteContentsPage';
 import { ContentEditorPage } from './pages/ContentEditorPage';
 import { SiteAssetsPage } from './pages/SiteAssetsPage';
@@ -26,6 +27,7 @@ export const appRoutes: RouteObject[] = [
       { path: 'sites/:siteId/contents/:contentId', element: <ContentEditorPage /> },
       { path: 'sites/:siteId/assets', element: <SiteAssetsPage /> },
       { path: 'sites/:siteId/routes', element: <SiteRoutesPage /> },
+      { path: 'sites/:siteId/routes/:routeId', element: <RouteEditorPage /> },
       { path: 'sites/:siteId/forms', element: <SiteFormsPage /> },
       { path: 'sites/:siteId/forms/:formId', element: <FormEditorPage /> },
       { path: 'sites/:siteId/snapshots', element: <Placeholder titleKey="nav.snapshots" scope="—" /> },

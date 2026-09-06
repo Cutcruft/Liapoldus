@@ -216,6 +216,43 @@ describe('runOperation', () => {
   });
 });
 
+describe('runOperation: роуты', () => {
+  it('getRoute: GET по routeId', async () => {
+    const api = fixtureApi(async (url) => {
+      expect(url).toBe('/api/sites/s1/routes/r1');
+      return json(200, {
+        id: 'r1',
+        siteId: 's1',
+        matcher: '/about',
+        priority: 1,
+        action: { type: 'redirect', target: '/o-nas', status: 308, keepQuery: true },
+      });
+    });
+    const res = await runOperation(api, 'getRoute', { siteId: 's1', routeId: 'r1' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+    expect(res.data).toMatchObject({ matcher: '/about' });
+  });
+
+  it('updateRoute: PUT → тело patch (matcher+action)', async () => {
+    const action = { type: 'redirect', target: '/o-nas', status: 302, keepQuery: false };
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/routes/r1');
+      expect(init.method).toBe('PUT');
+      expect(JSON.parse(init.body as string)).toEqual({ matcher: '/o-nas', priority: 2, action });
+      return json(200, { id: 'r1', siteId: 's1', matcher: '/o-nas', priority: 2, action });
+    });
+    const res = await runOperation(
+      api,
+      'updateRoute',
+      { siteId: 's1', routeId: 'r1', patch: { matcher: '/o-nas', priority: 2, action } },
+      t,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.data).toMatchObject({ matcher: '/o-nas' });
+  });
+});
+
 describe('runOperation: формы', () => {
   it('getForm: GET → name в detail', async () => {
     const api = fixtureApi(async (url) => {
