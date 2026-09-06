@@ -21,10 +21,12 @@ import (
 //	components/{componentID}/source.tsx
 //	components/{componentID}/schema.json
 //	components/{componentID}/metadata.json
-//	deps-lock.json             — {deps: [...]} (frozen dependency graph)
+//	tokens.json               — {colors, typography, spacing, …}
+//	deps-lock.json            — {deps: [...]} (frozen dependency graph)
 const (
 	depsLockPath = "deps-lock.json"
 	sitePath     = "site.json"
+	tokensPath   = "tokens.json"
 )
 
 type siteFile struct {
@@ -154,6 +156,18 @@ func (s *Service) serializeSansDeps(ctx context.Context, siteID string) (map[str
 			files["components/"+c.ID+"/metadata.json"] = mustJSON(c.Metadata)
 		}
 	}
+
+	tokens, err := s.tokens.GetTokens(ctx, siteID)
+	if err != nil {
+		return nil, fmt.Errorf("get tokens: %w", err)
+	}
+	if tokens == nil {
+		tokens = &domain.TokenSet{}
+	}
+	if tokens.Colors == nil {
+		tokens.Colors = []domain.ColorToken{}
+	}
+	files[tokensPath] = mustJSON(tokens)
 	return files, nil
 }
 

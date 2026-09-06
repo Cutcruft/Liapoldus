@@ -28,6 +28,7 @@ type Memory struct {
 	allowlist   map[string]map[string]struct{}
 	cacheConfig map[string]domain.SiteCacheConfig
 	tarballAcc  map[string]domain.TarballAccess
+	tokens      map[string]*domain.TokenSet
 }
 
 var _ domain.Storage = (*Memory)(nil)
@@ -50,6 +51,7 @@ func NewMemory() *Memory {
 		allowlist:   make(map[string]map[string]struct{}),
 		cacheConfig: make(map[string]domain.SiteCacheConfig),
 		tarballAcc:  make(map[string]domain.TarballAccess),
+		tokens:      make(map[string]*domain.TokenSet),
 	}
 }
 
@@ -156,6 +158,7 @@ func (m *Memory) DeleteSite(_ context.Context, id string) error {
 			delete(m.deps, k)
 		}
 	}
+	delete(m.tokens, id)
 	return nil
 }
 
@@ -804,6 +807,23 @@ func (m *Memory) CreateDepPackage(_ context.Context, pkg domain.DepPackage) erro
 		return nil
 	}
 	m.pkgCache[key] = clone(pkg)
+	return nil
+}
+
+func (m *Memory) GetTokens(_ context.Context, siteID string) (*domain.TokenSet, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	tokens, ok := m.tokens[siteID]
+	if !ok {
+		return nil, nil
+	}
+	return clone(tokens), nil
+}
+
+func (m *Memory) UpsertTokens(_ context.Context, siteID string, tokens *domain.TokenSet) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tokens[siteID] = clone(tokens)
 	return nil
 }
 

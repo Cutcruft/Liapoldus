@@ -38,6 +38,7 @@ type Service struct {
 	forms      domain.FormRepository
 	components domain.ComponentDefinitionRepository
 	snapshots  domain.SnapshotRepository
+	tokens     domain.TokenRepository
 	deps       LockResolver
 	now        func() time.Time
 }
@@ -51,6 +52,7 @@ func NewService(
 	forms domain.FormRepository,
 	components domain.ComponentDefinitionRepository,
 	snapshots domain.SnapshotRepository,
+	tokens domain.TokenRepository,
 	deps LockResolver,
 ) *Service {
 	return &Service{
@@ -62,6 +64,7 @@ func NewService(
 		forms:      forms,
 		components: components,
 		snapshots:  snapshots,
+		tokens:     tokens,
 		deps:       deps,
 		now:        time.Now,
 	}

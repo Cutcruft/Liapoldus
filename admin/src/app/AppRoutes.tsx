@@ -13,6 +13,7 @@ import { SiteFormsPage } from './pages/SiteFormsPage';
 import { FormEditorPage } from './pages/FormEditorPage';
 import { SiteBuildsPage } from './pages/SiteBuildsPage';
 import { SiteCommitsPage } from './pages/SiteCommitsPage';
+import { SiteTokensPage } from './pages/SiteTokensPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
@@ -42,6 +43,7 @@ export const appRoutes: RouteObject[] = [
       { path: 'sites/:siteId/forms/:formId', element: <FormEditorPage /> },
       { path: 'sites/:siteId/builds', element: <SiteBuildsPage /> },
       { path: 'sites/:siteId/git', element: <SiteCommitsPage /> },
+      { path: 'sites/:siteId/tokens', element: <SiteTokensPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
   },

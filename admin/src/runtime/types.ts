@@ -247,3 +247,45 @@ export type Settings = {
   defaultLocale: string;
   redirectDefaultStatus: number;
 };
+
+/** Режим цвета токена: светлый/тёмный. */
+export type ColorMode = 'light' | 'dark';
+
+/** Один цветовой токен: роль + значение для каждого режима. */
+export type ColorToken = {
+  name: string;
+  value: Record<ColorMode, string>;
+};
+
+/** Имена скалярных групп токенов (порядок = порядок в UI/JSON). */
+export const TOKEN_GROUPS = [
+  'typography',
+  'spacing',
+  'shadows',
+  'borders',
+  'breakpoints',
+  'zIndex',
+  'opacity',
+  'transitions',
+  'custom',
+] as const;
+
+export type TokenGroup = (typeof TOKEN_GROUPS)[number];
+
+/**
+ * Набор дизайн-токенов сайта (полная замена через GET/PUT /api/sites/{id}/tokens).
+ * colors всегда массив (может быть пустым); скалярные группы — опциональные
+ * map «имя токена → CSS-значение» ("2rem", "0 2px 4px rgba(0,0,0,.1)").
+ */
+export type TokenSet = {
+  colors: ColorToken[];
+  typography?: Record<string, string>;
+  spacing?: Record<string, string>;
+  shadows?: Record<string, string>;
+  borders?: Record<string, string>;
+  breakpoints?: Record<string, string>;
+  zIndex?: Record<string, string>;
+  opacity?: Record<string, string>;
+  transitions?: Record<string, string>;
+  custom?: Record<string, string>;
+};

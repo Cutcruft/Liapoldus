@@ -3,7 +3,7 @@
 Цель: довести проект до рабочего MVP с полной функциональностью.
 `make dev` запускает всё.
 
-**Текущий статус:** M0–M2 + M3-slice 1 (Builds), слайсы 5 (Docker), 1 (Git), 2 (Auth+Dashboard+Settings) — выполнены (`cb5899e`).
+**Текущий статус:** M0–M2 + M3-slice 1 (Builds), слайсы 5 (Docker), 1 (Git), 2 (Auth+Dashboard+Settings), 3 (Token Editor) — выполнены.
 Осталось: слайсы 3 (Tokens), 4 (Deps UI), 6 (Cleanup).
 
 **Порядок слайсов:** 5 (Docker) → 1 (Git) → 2 (Auth) → 3 (Tokens) → 4 (Deps) → 6 (Cleanup)
@@ -956,11 +956,11 @@ VITE_CLIENT_URL=http://localhost:18080
 - [x] Все unit-тесты проходят
 
 ### Слайс 3: Token Editor
-- [ ] Страница «Токены»: categories sidebar, editor, live preview iframe
-- [ ] ColorPicker: HSV picker + hex input + RGB sliders
-- [ ] TokenPreview: полноценная страница-пример с CSS custom properties
-- [ ] Сохранение токенов в БД (nested JSON)
-- [ ] Все unit-тесты проходят
+- [x] Страница «Токены»: categories sidebar, editor, live preview iframe
+- [x] ColorPicker: react-colorful (HSV picker + hex input)
+- [x] TokenPreview: полноценная страница-пример с CSS custom properties
+- [x] Сохранение токенов в БД (nested JSON)
+- [x] Все unit-тесты проходят
 
 ### Слайс 4: Dependencies UI
 - [ ] Страница «Зависимости»: npm-подобный список, add/remove/resolve

@@ -17,6 +17,7 @@ import (
 //   - site patch
 //   - pages / contents / routes / forms upserted, orphans deleted
 //   - component definitions upserted, orphans deleted
+//   - design tokens upserted (absent file resets to the empty set)
 //   - deps-lock.json returned so callers can persist it on a Snapshot.
 //
 // It returns the loaded page files (for snapshot page refs) and the lock.
@@ -141,6 +142,19 @@ func (s *Service) loadState(ctx context.Context, siteID string, files map[string
 
 	if err := s.loadComponents(ctx, siteID, files); err != nil {
 		return nil, domain.SnapshotLock{}, err
+	}
+
+	tokens := &domain.TokenSet{}
+	if raw, ok := files[tokensPath]; ok {
+		if err := parseJSON(raw, tokens); err != nil {
+			return nil, domain.SnapshotLock{}, fmt.Errorf("%w: tokens.json: %v", domain.ErrInvalidRequest, err)
+		}
+	}
+	if tokens.Colors == nil {
+		tokens.Colors = []domain.ColorToken{}
+	}
+	if err := s.tokens.UpsertTokens(ctx, siteID, tokens); err != nil {
+		return nil, domain.SnapshotLock{}, fmt.Errorf("save tokens: %w", err)
 	}
 
 	lock := domain.SnapshotLock{}

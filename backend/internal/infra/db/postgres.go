@@ -16,7 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -1283,6 +1283,40 @@ func (p *Postgres) CreateDepPackage(ctx context.Context, pkg domain.DepPackage) 
 		ON CONFLICT (name, version) DO NOTHING
 	`, pkg.Name, pkg.Version, pkg.Integrity, pkg.TarballURL, depsJSON, pkg.FetchedAt); err != nil {
 		return fmt.Errorf("create dep package: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) GetTokens(ctx context.Context, siteID string) (*domain.TokenSet, error) {
+	var raw []byte
+	err := p.pool.QueryRow(ctx, `
+		SELECT tokens FROM site_tokens WHERE site_id = $1
+	`, siteID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get tokens: %w", err)
+	}
+	var tokens domain.TokenSet
+	if err := json.Unmarshal(raw, &tokens); err != nil {
+		return nil, fmt.Errorf("unmarshal tokens: %w", err)
+	}
+	return &tokens, nil
+}
+
+func (p *Postgres) UpsertTokens(ctx context.Context, siteID string, tokens *domain.TokenSet) error {
+	raw, err := json.Marshal(tokens)
+	if err != nil {
+		return fmt.Errorf("marshal tokens: %w", err)
+	}
+	now := time.Now().UTC()
+	if _, err := p.pool.Exec(ctx, `
+		INSERT INTO site_tokens (site_id, tokens, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (site_id) DO UPDATE SET tokens = EXCLUDED.tokens, updated_at = EXCLUDED.updated_at
+	`, siteID, raw, now); err != nil {
+		return fmt.Errorf("upsert tokens: %w", err)
 	}
 	return nil
 }

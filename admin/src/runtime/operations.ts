@@ -49,7 +49,9 @@ export type OperationKind =
   | 'restoreGit'
   | 'rollbackGit'
   | 'getDashboard'
-  | 'getSettings';
+  | 'getSettings'
+  | 'getTokens'
+  | 'updateTokens';
 
 export interface OperationSpec<TArgs extends Record<string, unknown> = Record<string, unknown>> {
   kind: OperationKind;
@@ -513,6 +515,29 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     labelKey: 'op.getSettings',
     method: 'GET',
     route: () => '/api/settings',
+    detail: () => 'OK',
+  },
+
+  getTokens: {
+    kind: 'getTokens',
+    labelKey: 'op.getTokens',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/tokens`,
+    detail: (b, t) => {
+      const count =
+        typeof b === 'object' && b !== null && Array.isArray((b as { colors?: unknown }).colors)
+          ? (b as { colors: unknown[] }).colors.length
+          : 0;
+      return t('result.count', { n: count });
+    },
+  },
+
+  updateTokens: {
+    kind: 'updateTokens',
+    labelKey: 'op.updateTokens',
+    method: 'PUT',
+    route: (args) => `/api/sites/{siteId}/tokens`,
+    body: (args) => args.tokens ?? { colors: [] },
     detail: () => 'OK',
   },
 };

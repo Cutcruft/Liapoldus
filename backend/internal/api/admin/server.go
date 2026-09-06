@@ -16,6 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
+	"github.com/liapoldus/liapoldus/backend/internal/application/token"
 )
 
 type App struct {
@@ -30,6 +31,7 @@ type App struct {
 	Git        *gitsnapshot.Service
 	Builds     *buildapp.Service
 	Deps       *deps.Service
+	Tokens     *token.Service
 	Logger     *slog.Logger
 	AdminToken string
 	// DefaultLocale and RedirectDefaultStatus mirror server configuration so
@@ -60,6 +62,10 @@ func NewRouter(app App) http.Handler {
 	var gitHandler *GitHandler
 	if app.Git != nil {
 		gitHandler = NewGitHandler(app.Git)
+	}
+	var tokensHandler *TokensHandler
+	if app.Tokens != nil {
+		tokensHandler = NewTokensHandler(app.Tokens)
 	}
 
 	// Health stays public (pre-auth).
@@ -170,6 +176,11 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/sites/{siteID}/cache-config", depsHandler.GetCacheConfig)
 	protected.HandleFunc("PUT /api/sites/{siteID}/cache-config", depsHandler.PutCacheConfig)
 	protected.HandleFunc("POST /api/sites/{siteID}/cache-config/evict", depsHandler.EvictCacheConfig)
+
+	if tokensHandler != nil {
+		protected.HandleFunc("GET /api/sites/{siteID}/tokens", tokensHandler.Get)
+		protected.HandleFunc("PUT /api/sites/{siteID}/tokens", tokensHandler.Put)
+	}
 
 	mux.Handle("/", httpapi.BearerAuth(app.AdminToken, httpapi.WithCORS(protected)))
 

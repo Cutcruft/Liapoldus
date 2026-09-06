@@ -18,6 +18,7 @@ type Storage interface {
 	BuildRepository
 	DependencyRepository
 	DepPackageRepository
+	TokenRepository
 }
 
 type SiteRepository interface {
@@ -127,4 +128,12 @@ type DependencyRepository interface {
 type DepPackageRepository interface {
 	GetDepPackage(context.Context, string, string) (DepPackage, error)
 	CreateDepPackage(context.Context, DepPackage) error
+}
+
+// TokenRepository persists one per-site design-token set. GetTokens returns a
+// nil set when the site has no stored tokens (the empty set is the default);
+// UpsertTokens replaces the entire set.
+type TokenRepository interface {
+	GetTokens(context.Context, string) (*TokenSet, error)
+	UpsertTokens(context.Context, string, *TokenSet) error
 }

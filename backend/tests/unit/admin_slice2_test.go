@@ -18,6 +18,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
+	tokenapp "github.com/liapoldus/liapoldus/backend/internal/application/token"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/git"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
@@ -58,9 +59,10 @@ func slice2TestApp(t *testing.T, adminToken string) (admin.App, *storage.Memory)
 			&fakeBuilder{}, &fakeRunner{}, &fakeArtifacts{}),
 		Git: gitsnapshot.NewService(
 			git.NewRepo(filepath.Join(t.TempDir(), "git")),
-			db, db, db, db, db, db, db,
+			db, db, db, db, db, db, db, db,
 			deps.NewService(db, db, &fakeRegistry{}),
 		),
+		Tokens:     tokenapp.NewService(db, db),
 		Logger:     slog.Default(),
 		AdminToken: adminToken,
 	}, db

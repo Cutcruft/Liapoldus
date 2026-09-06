@@ -15,6 +15,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/runtime"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
+	"github.com/liapoldus/liapoldus/backend/internal/application/token"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/artifactstore"
@@ -44,6 +45,7 @@ type Services struct {
 	Builds       *buildapp.Service
 	Runtime      *runtime.Service
 	Deps         *deps.Service
+	Tokens       *token.Service
 	// BuildEvents relays build lifecycle events to admin WS subscribers.
 	BuildEvents buildapp.DevEventHub
 }
@@ -80,7 +82,8 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Allowed:       redirectAllowed,
 	})
 	depsSvc := deps.NewService(storage, storage, registryAdapter{client: reg}).WithTarballCache(depsStore)
-	gitSnaps := gitapp.NewService(gitRepo, storage, storage, storage, storage, storage, storage, storage, depsSvc)
+	tokensSvc := token.NewService(storage, storage)
+	gitSnaps := gitapp.NewService(gitRepo, storage, storage, storage, storage, storage, storage, storage, storage, depsSvc)
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
@@ -104,6 +107,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Routes: routes,
 		Forms:  form.NewService(storage, storage, form.Settings{EmailPattern: cfg.EmailPattern}),
 		Deps:   depsSvc,
+		Tokens: tokensSvc,
 	}
 }
 

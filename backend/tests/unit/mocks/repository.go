@@ -576,6 +576,21 @@ func (mr *MockStorageMockRecorder) GetSnapshot(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSnapshot", reflect.TypeOf((*MockStorage)(nil).GetSnapshot), arg0, arg1)
 }
 
+// GetTokens mocks base method.
+func (m *MockStorage) GetTokens(arg0 context.Context, arg1 string) (*domain.TokenSet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTokens", arg0, arg1)
+	ret0, _ := ret[0].(*domain.TokenSet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTokens indicates an expected call of GetTokens.
+func (mr *MockStorageMockRecorder) GetTokens(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTokens", reflect.TypeOf((*MockStorage)(nil).GetTokens), arg0, arg1)
+}
+
 // List mocks base method.
 func (m *MockStorage) List(arg0 context.Context, arg1 string) ([]domain.ComponentDefinition, error) {
 	m.ctrl.T.Helper()
@@ -606,21 +621,6 @@ func (mr *MockStorageMockRecorder) ListAllowlist(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllowlist", reflect.TypeOf((*MockStorage)(nil).ListAllowlist), arg0, arg1)
 }
 
-// ListCacheConfigs mocks base method.
-func (m *MockStorage) ListCacheConfigs(arg0 context.Context) ([]domain.SiteCacheConfig, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListCacheConfigs", arg0)
-	ret0, _ := ret[0].([]domain.SiteCacheConfig)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListCacheConfigs indicates an expected call of ListCacheConfigs.
-func (mr *MockStorageMockRecorder) ListCacheConfigs(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCacheConfigs", reflect.TypeOf((*MockStorage)(nil).ListCacheConfigs), arg0)
-}
-
 // ListAssetsBySite mocks base method.
 func (m *MockStorage) ListAssetsBySite(arg0 context.Context, arg1 string) ([]domain.Asset, error) {
 	m.ctrl.T.Helper()
@@ -649,6 +649,21 @@ func (m *MockStorage) ListBuildsBySite(arg0 context.Context, arg1 string) ([]dom
 func (mr *MockStorageMockRecorder) ListBuildsBySite(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBuildsBySite", reflect.TypeOf((*MockStorage)(nil).ListBuildsBySite), arg0, arg1)
+}
+
+// ListCacheConfigs mocks base method.
+func (m *MockStorage) ListCacheConfigs(arg0 context.Context) ([]domain.SiteCacheConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCacheConfigs", arg0)
+	ret0, _ := ret[0].([]domain.SiteCacheConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCacheConfigs indicates an expected call of ListCacheConfigs.
+func (mr *MockStorageMockRecorder) ListCacheConfigs(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCacheConfigs", reflect.TypeOf((*MockStorage)(nil).ListCacheConfigs), arg0)
 }
 
 // ListContentsBySite mocks base method.
@@ -953,6 +968,20 @@ func (m *MockStorage) UpdateSite(arg0 context.Context, arg1 domain.Site) error {
 func (mr *MockStorageMockRecorder) UpdateSite(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSite", reflect.TypeOf((*MockStorage)(nil).UpdateSite), arg0, arg1)
+}
+
+// UpsertTokens mocks base method.
+func (m *MockStorage) UpsertTokens(arg0 context.Context, arg1 string, arg2 *domain.TokenSet) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertTokens", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertTokens indicates an expected call of UpsertTokens.
+func (mr *MockStorageMockRecorder) UpsertTokens(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertTokens", reflect.TypeOf((*MockStorage)(nil).UpsertTokens), arg0, arg1, arg2)
 }
 
 // MockSiteRepository is a mock of SiteRepository interface.
@@ -1891,6 +1920,20 @@ func (m *MockDependencyRepository) EXPECT() *MockDependencyRepositoryMockRecorde
 	return m.recorder
 }
 
+// AddAllowlist mocks base method.
+func (m *MockDependencyRepository) AddAllowlist(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddAllowlist", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddAllowlist indicates an expected call of AddAllowlist.
+func (mr *MockDependencyRepositoryMockRecorder) AddAllowlist(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAllowlist", reflect.TypeOf((*MockDependencyRepository)(nil).AddAllowlist), arg0, arg1, arg2)
+}
+
 // CreateDependency mocks base method.
 func (m *MockDependencyRepository) CreateDependency(arg0 context.Context, arg1 domain.Dependency) error {
 	m.ctrl.T.Helper()
@@ -1919,6 +1962,22 @@ func (mr *MockDependencyRepositoryMockRecorder) DeleteDependency(arg0, arg1, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDependency", reflect.TypeOf((*MockDependencyRepository)(nil).DeleteDependency), arg0, arg1, arg2)
 }
 
+// GetCacheConfig mocks base method.
+func (m *MockDependencyRepository) GetCacheConfig(arg0 context.Context, arg1 string) (domain.SiteCacheConfig, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCacheConfig", arg0, arg1)
+	ret0, _ := ret[0].(domain.SiteCacheConfig)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetCacheConfig indicates an expected call of GetCacheConfig.
+func (mr *MockDependencyRepositoryMockRecorder) GetCacheConfig(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCacheConfig", reflect.TypeOf((*MockDependencyRepository)(nil).GetCacheConfig), arg0, arg1)
+}
+
 // GetDependency mocks base method.
 func (m *MockDependencyRepository) GetDependency(arg0 context.Context, arg1, arg2 string) (domain.Dependency, error) {
 	m.ctrl.T.Helper()
@@ -1934,6 +1993,36 @@ func (mr *MockDependencyRepositoryMockRecorder) GetDependency(arg0, arg1, arg2 a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDependency", reflect.TypeOf((*MockDependencyRepository)(nil).GetDependency), arg0, arg1, arg2)
 }
 
+// ListAllowlist mocks base method.
+func (m *MockDependencyRepository) ListAllowlist(arg0 context.Context, arg1 string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAllowlist", arg0, arg1)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAllowlist indicates an expected call of ListAllowlist.
+func (mr *MockDependencyRepositoryMockRecorder) ListAllowlist(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllowlist", reflect.TypeOf((*MockDependencyRepository)(nil).ListAllowlist), arg0, arg1)
+}
+
+// ListCacheConfigs mocks base method.
+func (m *MockDependencyRepository) ListCacheConfigs(arg0 context.Context) ([]domain.SiteCacheConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCacheConfigs", arg0)
+	ret0, _ := ret[0].([]domain.SiteCacheConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCacheConfigs indicates an expected call of ListCacheConfigs.
+func (mr *MockDependencyRepositoryMockRecorder) ListCacheConfigs(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCacheConfigs", reflect.TypeOf((*MockDependencyRepository)(nil).ListCacheConfigs), arg0)
+}
+
 // ListDependenciesBySite mocks base method.
 func (m *MockDependencyRepository) ListDependenciesBySite(arg0 context.Context, arg1 string) ([]domain.Dependency, error) {
 	m.ctrl.T.Helper()
@@ -1947,6 +2036,63 @@ func (m *MockDependencyRepository) ListDependenciesBySite(arg0 context.Context, 
 func (mr *MockDependencyRepositoryMockRecorder) ListDependenciesBySite(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDependenciesBySite", reflect.TypeOf((*MockDependencyRepository)(nil).ListDependenciesBySite), arg0, arg1)
+}
+
+// ListTarballAccess mocks base method.
+func (m *MockDependencyRepository) ListTarballAccess(arg0 context.Context) ([]domain.TarballAccess, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTarballAccess", arg0)
+	ret0, _ := ret[0].([]domain.TarballAccess)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTarballAccess indicates an expected call of ListTarballAccess.
+func (mr *MockDependencyRepositoryMockRecorder) ListTarballAccess(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTarballAccess", reflect.TypeOf((*MockDependencyRepository)(nil).ListTarballAccess), arg0)
+}
+
+// RemoveAllowlist mocks base method.
+func (m *MockDependencyRepository) RemoveAllowlist(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveAllowlist", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveAllowlist indicates an expected call of RemoveAllowlist.
+func (mr *MockDependencyRepositoryMockRecorder) RemoveAllowlist(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAllowlist", reflect.TypeOf((*MockDependencyRepository)(nil).RemoveAllowlist), arg0, arg1, arg2)
+}
+
+// SetCacheConfig mocks base method.
+func (m *MockDependencyRepository) SetCacheConfig(arg0 context.Context, arg1 domain.SiteCacheConfig) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetCacheConfig", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetCacheConfig indicates an expected call of SetCacheConfig.
+func (mr *MockDependencyRepositoryMockRecorder) SetCacheConfig(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCacheConfig", reflect.TypeOf((*MockDependencyRepository)(nil).SetCacheConfig), arg0, arg1)
+}
+
+// TouchTarballAccess mocks base method.
+func (m *MockDependencyRepository) TouchTarballAccess(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TouchTarballAccess", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// TouchTarballAccess indicates an expected call of TouchTarballAccess.
+func (mr *MockDependencyRepositoryMockRecorder) TouchTarballAccess(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TouchTarballAccess", reflect.TypeOf((*MockDependencyRepository)(nil).TouchTarballAccess), arg0, arg1, arg2)
 }
 
 // UpdateDependency mocks base method.
@@ -2014,4 +2160,57 @@ func (m *MockDepPackageRepository) GetDepPackage(arg0 context.Context, arg1, arg
 func (mr *MockDepPackageRepositoryMockRecorder) GetDepPackage(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDepPackage", reflect.TypeOf((*MockDepPackageRepository)(nil).GetDepPackage), arg0, arg1, arg2)
+}
+
+// MockTokenRepository is a mock of TokenRepository interface.
+type MockTokenRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockTokenRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockTokenRepositoryMockRecorder is the mock recorder for MockTokenRepository.
+type MockTokenRepositoryMockRecorder struct {
+	mock *MockTokenRepository
+}
+
+// NewMockTokenRepository creates a new mock instance.
+func NewMockTokenRepository(ctrl *gomock.Controller) *MockTokenRepository {
+	mock := &MockTokenRepository{ctrl: ctrl}
+	mock.recorder = &MockTokenRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTokenRepository) EXPECT() *MockTokenRepositoryMockRecorder {
+	return m.recorder
+}
+
+// GetTokens mocks base method.
+func (m *MockTokenRepository) GetTokens(arg0 context.Context, arg1 string) (*domain.TokenSet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTokens", arg0, arg1)
+	ret0, _ := ret[0].(*domain.TokenSet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTokens indicates an expected call of GetTokens.
+func (mr *MockTokenRepositoryMockRecorder) GetTokens(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTokens", reflect.TypeOf((*MockTokenRepository)(nil).GetTokens), arg0, arg1)
+}
+
+// UpsertTokens mocks base method.
+func (m *MockTokenRepository) UpsertTokens(arg0 context.Context, arg1 string, arg2 *domain.TokenSet) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertTokens", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertTokens indicates an expected call of UpsertTokens.
+func (mr *MockTokenRepositoryMockRecorder) UpsertTokens(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertTokens", reflect.TypeOf((*MockTokenRepository)(nil).UpsertTokens), arg0, arg1, arg2)
 }

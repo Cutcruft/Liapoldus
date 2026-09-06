@@ -45,7 +45,7 @@ func seedSnapshotSite(t *testing.T, db *storage.Memory, siteID string) {
 func newSnapshotService(t *testing.T, db *storage.Memory) (*gitsnapshot.Service, *gitrepo.Repo) {
 	t.Helper()
 	repo := gitrepo.NewRepo(t.TempDir())
-	return gitsnapshot.NewService(repo, db, db, db, db, db, db, db, nil), repo
+	return gitsnapshot.NewService(repo, db, db, db, db, db, db, db, db, nil), repo
 }
 
 func snapshotList(t *testing.T, db *storage.Memory, siteID string) []domain.Snapshot {
@@ -193,5 +193,70 @@ func TestSnapshotErrors(t *testing.T) {
 	}
 	if _, err := svc.Publish(ctx, "ghost", "x"); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("publish of ghost site: want ErrNotFound, got %v", err)
+	}
+}
+
+func TestSnapshotTokensRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	db := storage.NewMemory()
+	svc, _ := newSnapshotService(t, db)
+	siteID := "tokens-site"
+	seedSnapshotSite(t, db, siteID)
+
+	tokens := &domain.TokenSet{
+		Colors: []domain.ColorToken{
+			{Name: "accent", Value: map[domain.ColorMode]string{domain.ColorModeLight: "#0b2e4f", domain.ColorModeDark: "#7fd0ff"}},
+		},
+		Spacing: map[string]string{"pad": "1rem"},
+	}
+	if err := db.UpsertTokens(ctx, siteID, tokens); err != nil {
+		t.Fatalf("upsert tokens: %v", err)
+	}
+
+	sha, err := svc.Commit(ctx, siteID, "tokens v1")
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	// Mutate the DB state: colors change, spacing is dropped.
+	mutated := &domain.TokenSet{
+		Colors: []domain.ColorToken{
+			{Name: "accent", Value: map[domain.ColorMode]string{domain.ColorModeLight: "#cc0000", domain.ColorModeDark: "#00ff00"}},
+		},
+	}
+	if err := db.UpsertTokens(ctx, siteID, mutated); err != nil {
+		t.Fatalf("upsert tokens 2: %v", err)
+	}
+
+	// Restore rewinds the design tokens to the committed tree.
+	if _, err := svc.Restore(ctx, siteID, sha, "restore tokens"); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	restored, err := db.GetTokens(ctx, siteID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored == nil || len(restored.Colors) != 1 || restored.Colors[0].Name != "accent" {
+		t.Fatalf("restored colors = %#v, want [accent]", restored)
+	}
+	if restored.Colors[0].Value[domain.ColorModeDark] != "#7fd0ff" {
+		t.Fatalf("restored accent dark = %q, want #7fd0ff", restored.Colors[0].Value[domain.ColorModeDark])
+	}
+	if restored.Spacing["pad"] != "1rem" {
+		t.Fatalf("restored spacing = %v, want pad:1rem", restored.Spacing)
+	}
+
+	// Publish carries the dev tree — which after Restore holds the safety
+	// commit of the pre-restore (mutated) state — so the mutated colors come
+	// back, demonstrating nothing is lost on restore.
+	if _, err := svc.Publish(ctx, siteID, "publish tokens"); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	published, err := db.GetTokens(ctx, siteID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(published.Colors) != 1 || published.Colors[0].Value[domain.ColorModeLight] != "#cc0000" {
+		t.Fatalf("published colors = %#v, want mutated accent", published.Colors)
 	}
 }

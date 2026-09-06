@@ -95,6 +95,7 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 		Git:         services.GitSnapshots,
 		Builds:      services.Builds,
 		Deps:        services.Deps,
+		Tokens:      services.Tokens,
 		Logger:      logger,
 		AdminToken:  cfg.AdminToken,
 		BuildEvents: services.BuildEvents,
