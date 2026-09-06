@@ -24,6 +24,7 @@ type Memory struct {
 	builds      map[string]domain.Build
 	deps        map[string]domain.Dependency
 	pkgCache    map[string]domain.DepPackage
+	allowlist   map[string]map[string]struct{}
 }
 
 var _ domain.Storage = (*Memory)(nil)
@@ -43,6 +44,7 @@ func NewMemory() *Memory {
 		builds:      make(map[string]domain.Build),
 		deps:        make(map[string]domain.Dependency),
 		pkgCache:    make(map[string]domain.DepPackage),
+		allowlist:   make(map[string]map[string]struct{}),
 	}
 }
 
@@ -676,6 +678,53 @@ func (m *Memory) DeleteDependency(_ context.Context, siteID, name string) error 
 		return domain.ErrNotFound
 	}
 	delete(m.deps, key)
+	return nil
+}
+
+func (m *Memory) ListAllowlist(_ context.Context, siteID string) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	entries, ok := m.allowlist[siteID]
+	if !ok {
+		return []string{}, nil
+	}
+	result := make([]string, 0, len(entries))
+	for entry := range entries {
+		result = append(result, entry)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func (m *Memory) AddAllowlist(_ context.Context, siteID, entry string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entries, ok := m.allowlist[siteID]
+	if !ok {
+		entries = make(map[string]struct{})
+		m.allowlist[siteID] = entries
+	}
+	if _, exists := entries[entry]; exists {
+		return domain.ErrAlreadyExists
+	}
+	entries[entry] = struct{}{}
+	return nil
+}
+
+func (m *Memory) RemoveAllowlist(_ context.Context, siteID, entry string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entries, ok := m.allowlist[siteID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if _, exists := entries[entry]; !exists {
+		return domain.ErrNotFound
+	}
+	delete(entries, entry)
+	if len(entries) == 0 {
+		delete(m.allowlist, siteID)
+	}
 	return nil
 }
 

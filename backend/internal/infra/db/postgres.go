@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -15,7 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -1119,6 +1120,52 @@ func (p *Postgres) DeleteDependency(ctx context.Context, siteID, name string) er
 	`, siteID, name)
 	if err != nil {
 		return fmt.Errorf("delete dependency: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (p *Postgres) ListAllowlist(ctx context.Context, siteID string) ([]string, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT entry FROM site_dependency_allowlist WHERE site_id = $1 ORDER BY entry
+	`, siteID)
+	if err != nil {
+		return nil, fmt.Errorf("list allowlist: %w", err)
+	}
+	defer rows.Close()
+	result := make([]string, 0)
+	for rows.Next() {
+		var entry string
+		if err := rows.Scan(&entry); err != nil {
+			return nil, fmt.Errorf("scan allowlist entry: %w", err)
+		}
+		result = append(result, entry)
+	}
+	return result, rows.Err()
+}
+
+func (p *Postgres) AddAllowlist(ctx context.Context, siteID, entry string) error {
+	_, err := p.pool.Exec(ctx, `
+		INSERT INTO site_dependency_allowlist (site_id, entry, created_at)
+		VALUES ($1, $2, $3)
+	`, siteID, entry, time.Now().UTC())
+	if err != nil {
+		if isUniqueViolation(err) {
+			return domain.ErrAlreadyExists
+		}
+		return fmt.Errorf("add allowlist entry: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) RemoveAllowlist(ctx context.Context, siteID, entry string) error {
+	tag, err := p.pool.Exec(ctx, `
+		DELETE FROM site_dependency_allowlist WHERE site_id = $1 AND entry = $2
+	`, siteID, entry)
+	if err != nil {
+		return fmt.Errorf("remove allowlist entry: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return domain.ErrNotFound

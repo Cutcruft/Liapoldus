@@ -74,6 +74,9 @@ func (s *Service) Add(ctx context.Context, siteID, name, spec string) (ResolvedV
 
 	var resolved ResolvedVersion
 	if probe, err := s.registry.Resolve(ctx, name, spec); err == nil {
+		if err := s.assertAllowed(ctx, siteID, name); err != nil {
+			return ResolvedVersion{}, err
+		}
 		resolved = probe
 		s.cachePackage(ctx, probe)
 	} else if isUserError(err) {
@@ -115,6 +118,29 @@ func (s *Service) List(ctx context.Context, siteID string) ([]domain.Dependency,
 	return s.deps.ListDependenciesBySite(ctx, siteID)
 }
 
+// AddAllowlist persists one normalized allowlist entry for the site. Entries
+// are trimmed, lowercased and validated — an npm name, a scoped package, a
+// scope wildcard ("@scope/*") or the catch-all "*" (allowlist policy, spec §5).
+// A duplicate entry fails with ErrAlreadyExists.
+func (s *Service) AddAllowlist(ctx context.Context, siteID, entry string) error {
+	entry = strings.ToLower(strings.TrimSpace(entry))
+	if !domain.ValidAllowlistEntry(entry) {
+		return fmt.Errorf("%w: %q (use an npm name, a scoped package, \"@scope/*\" or \"*\")", domain.ErrInvalidAllowlistEntry, entry)
+	}
+	return s.deps.AddAllowlist(ctx, siteID, entry)
+}
+
+// RemoveAllowlist deletes one allowlist entry (case-insensitive against the
+// normalized stored value); unknown entries fail with ErrNotFound.
+func (s *Service) RemoveAllowlist(ctx context.Context, siteID, entry string) error {
+	return s.deps.RemoveAllowlist(ctx, siteID, strings.ToLower(strings.TrimSpace(entry)))
+}
+
+// ListAllowlist returns the site's allowlist entries, sorted.
+func (s *Service) ListAllowlist(ctx context.Context, siteID string) ([]string, error) {
+	return s.deps.ListAllowlist(ctx, siteID)
+}
+
 // ResolveLock resolves the site's top-level declarations and every transitive
 // dependency into the frozen instance graph of a snapshot (nested-versioned
 // layout, spec §5). One instance per (name, version) is emitted; the first
@@ -134,6 +160,11 @@ func (s *Service) List(ctx context.Context, siteID string) ([]domain.Dependency,
 // unsatisfiable peer fails lock creation with ErrUnsatisfiedPeer and names the
 // consumer plus the offending range, so a snapshot never freezes a graph whose
 // peers resolve wrong at build time.
+//
+// The allowlist policy (spec §5) runs over the whole graph: when the site has
+// at least one allowlist entry, every package that would enter the lock —
+// top-level or transitive — must match one of them, otherwise lock creation
+// fails with ErrDepNotAllowed. An empty allowlist authorizes everything.
 func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.SnapshotLock, error) {
 	s.resolveMu.Lock()
 	defer s.resolveMu.Unlock()
@@ -144,6 +175,10 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 	}
 	if len(top) == 0 {
 		return domain.SnapshotLock{Deps: []domain.LockedDep{}}, nil
+	}
+	allowlist, err := s.deps.ListAllowlist(ctx, siteID)
+	if err != nil {
+		return domain.SnapshotLock{}, err
 	}
 	sort.Slice(top, func(i, j int) bool { return top[i].Name < top[j].Name })
 
@@ -161,6 +196,11 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
+
+		if !depsAllowed(current.name, allowlist) {
+			return domain.SnapshotLock{}, fmt.Errorf("%w: %q matches none of the site's allowlist entries: %s",
+				domain.ErrDepNotAllowed, current.name, strings.Join(allowlist, ", "))
+		}
 
 		// Reuse an existing instance whose version already satisfies this
 		// range (the hoisted one is always first in creation order); record
@@ -235,6 +275,37 @@ func (s *Service) cachePackage(ctx context.Context, resolved ResolvedVersion) {
 		FetchedAt:            time.Now().UTC(),
 	}
 	_ = s.packages.CreateDepPackage(ctx, pkg) // immutable cache: no-op on duplicates
+}
+
+// assertAllowed early-rejects a top-level declaration when the site's allowlist
+// is active and the package matches none of its entries (allowlist policy,
+// spec §5). Called from Add after a successful probe; the authoritative check
+// still happens on ResolveLock, which also covers transitives.
+func (s *Service) assertAllowed(ctx context.Context, siteID, name string) error {
+	entries, err := s.deps.ListAllowlist(ctx, siteID)
+	if err != nil {
+		return err
+	}
+	if depsAllowed(name, entries) {
+		return nil
+	}
+	return fmt.Errorf("%w: %q matches none of the site's allowlist entries: %s",
+		domain.ErrDepNotAllowed, name, strings.Join(entries, ", "))
+}
+
+// depsAllowed applies the allowlist to a single package name. An empty entry
+// list authorizes everything (backward compatible); otherwise the name must
+// match at least one entry.
+func depsAllowed(name string, entries []string) bool {
+	if len(entries) == 0 {
+		return true
+	}
+	for _, entry := range entries {
+		if domain.AllowlistEntryMatches(entry, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkPeers enforces the peer policy (spec §5, peer-fail). It walks the full

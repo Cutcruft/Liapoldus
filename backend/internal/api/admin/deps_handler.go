@@ -68,3 +68,42 @@ func (h *DepsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// ListAllowlist returns the site's allowlist entries (allowlist policy, spec
+// §5). An empty array means the site allows every package.
+func (h *DepsHandler) ListAllowlist(w http.ResponseWriter, r *http.Request) {
+	entries, err := h.deps.ListAllowlist(r.Context(), siteID(r))
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, entries)
+}
+
+type allowlistRequest struct {
+	Entry string `json:"entry"`
+}
+
+// AddAllowlist persists one allowlist entry. Entries are validated and
+// normalized (trimmed, lowercased) by the service.
+func (h *DepsHandler) AddAllowlist(w http.ResponseWriter, r *http.Request) {
+	var req allowlistRequest
+	if !httpapi.DecodeJSON(r, &req, w) {
+		return
+	}
+	if err := h.deps.AddAllowlist(r.Context(), siteID(r), req.Entry); err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusCreated, map[string]string{"entry": req.Entry})
+}
+
+// RemoveAllowlist deletes one allowlist entry. Unknown entries are a 404.
+func (h *DepsHandler) RemoveAllowlist(w http.ResponseWriter, r *http.Request) {
+	entry := r.PathValue("entry")
+	if err := h.deps.RemoveAllowlist(r.Context(), siteID(r), entry); err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

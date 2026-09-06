@@ -100,12 +100,18 @@ type BuildRepository interface {
 
 // DependencyRepository persists top-level, per-site npm dependencies. The
 // (site_id, name) pair is unique; re-declaring a dependency updates its spec.
+// It also stores the per-site allowlist entries (allowlist policy, spec §5):
+// an empty allowlist authorizes everything, once a site has entries every
+// resolved package must match one of them.
 type DependencyRepository interface {
 	CreateDependency(context.Context, Dependency) error
 	GetDependency(context.Context, string, string) (Dependency, error)
 	ListDependenciesBySite(context.Context, string) ([]Dependency, error)
 	UpdateDependency(context.Context, Dependency) error
 	DeleteDependency(context.Context, string, string) error
+	ListAllowlist(context.Context, string) ([]string, error)
+	AddAllowlist(context.Context, string, string) error
+	RemoveAllowlist(context.Context, string, string) error
 }
 
 // DepPackageRepository is the immutable content-addressed cache of registry

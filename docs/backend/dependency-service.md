@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; осталось: allowlist scopes, кэш-лимиты/эвикция**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; allowlist scopes (фаза 2, слайс 6) — реализованы; осталось: кэш-лимиты/эвикция**.
 
 ## 1. Цель и принципы
 
@@ -109,6 +109,16 @@ storage (новые tables `005_dependencies.sql`):
   потребителя оставляет walk-up вложенного layout. Optional-peer не требуем: «тихий»
   неверный резолв (напр. peer react@^17 при shared 18.3.1) теперь падает на создании
   снапшота, а не уходит в браузер.
+- **Allowlist scopes (слайс 6)**. Per-site allowlist хранится в БД
+  (`site_dependency_allowlist`), управляется через admin API (см. §8): `GET/POST
+  /api/sites/{id}/dependencies/allowlist`, `DELETE …/allowlist/{entry}`. Записи — имя /
+  скоуп-пакет / wildcard, без версий: `"lodash"`, `"@acme/core"`, `"@acme/*"`, `"*"`.
+  Пустой allowlist сайта = **allow-all** (обратная совместимость); при ≥1 записи —
+  только совпавшие. Политика покрывает **весь граф** (вершинные + транзитивные):
+  проверка в `ResolveLock` (`ERR_DEP_NOT_ALLOWED`, 422) на каждом edge до резолва; при
+  успешном probe на POST `Add` — ранняя отбраковка (тем же 422), но транзиентные ошибки
+  probe скипаются (enforcement на снапшоте). Нормализация: TrimSpace + ToLower;
+  невалидная запись — 400, дубль — 409, удаление отсутствующей — 404.
 
 ## 6. Бандл deps (Go esbuild)
 
@@ -176,8 +186,12 @@ storage (новые tables `005_dependencies.sql`):
 
 - Admin: `GET /api/sites/{id}/dependencies`, `POST /api/sites/{id}/dependencies {name, spec}`,
   `DELETE /api/sites/{id}/dependencies/{name}`. Порт `deps.DomainService`; хендлер в admin api.
+- Allowlist (слайс 6): `GET /api/sites/{id}/dependencies/allowlist`,
+  `POST …/allowlist {entry}`, `DELETE …/allowlist/{entry}` (scoped-записи — URL-encode `%2F`).
 - Ошибки: неизвестный пакет → 404; нерезолвящийся диапазон → 422 `{error, detail|hint}`;
   неудовлетворённый peer (peer-политика §5) → 422;
+  пакет вне allowlist (allowlist-политика §5) → 422;
+  невалидная allowlist-запись → 400; дубль-запись → 409; удаление отсутствующей → 404;
   конфликт версий → 422 (legacy-контракт; при вложенном layout резолв больше не падает — см. §5);
   `latest`/тег-спек → 400.
 - Резолв **не** в POST: объявление зависимости валидирует форму/пакетный синтаксис, а сам резолв
@@ -191,8 +205,9 @@ storage (новые tables `005_dependencies.sql`):
 - Версии immutable → кэш бессрочен; «оффлайн» бьёт только по новым резолвам.
 - Никаких `latest`/тегов; публикация = явный snapshor (admin меняет диапазон/версию).
 - SBOM (`deps_lock` со всеми integrity) — часть снапшота, доступна в API снапшота.
-- Опционально (фаза 2): allowlist scopes. Публичные маршруты не открываются: зависимости не
-  содержат секретов/токенов админа.
+- Allowlist scopes (слайс 6): per-site allowlist в БД + admin API; ограничивает, какие
+  пакеты (включая транзитивные) могут попасть в lock сайта. Публичные маршруты не
+  открываются: зависимости не содержат секретов/токенов админа.
 - Rate-limit/backoff к registry + таймауты; ретраи с экспоненциальной задержкой.
 
 ## 10. Замена shared-сборки (полный zero-node)
@@ -253,7 +268,17 @@ unit-тесты трёх путей + e2e `TestDependencyBuildCSSArtifacts`).
 обязательный peer удовлетворяется экземпляром графа или фиксированным shared external,
 иначе `ErrUnsatisfiedPeer` (422), optional/self exempt; lock фиксирует peer-метаданные;
 unit: 6 кейсов политики + парсинг packument, integration `TestDependencyPeerPolicy`).
-Осталось: allowlist scopes, кэш-лимиты/эвикция.
+✅ allowlist scopes (слайс 6: per-site allowlist в БД —
+`site_dependency_allowlist(site_id, entry)`, миграция 006; admin API
+`GET/POST …/dependencies/allowlist`, `DELETE …/allowlist/{entry}`; записи без версий:
+имя / `@scope/pkg` / `@scope/*` / `*`; пустой allowlist = allow-all (обратная
+совместимость); политика покрывает весь граф — проверка каждого edge в `ResolveLock`
+(`ErrDepNotAllowed`, 422) + ранняя отбраковка на POST `Add` после успешного probe
+(транзиентный probe скипается); нормализация TrimSpace+ToLower, невалидная → 400,
+дубль → 409, удаление отсутствующей → 404; unit: матчер/валидация, policy (vertex/
+transitive/star/empty/scope), admin CRUD + 422 на create, integration
+`TestDependencyAllowlist`).
+Осталось: кэш-лимиты/эвикция (слайс 7).
 
 **Фаза 3:** `cmd/dependency-build` (замена `scripts/build-shared`, npm больше нигде не упоминается),
 ликвидация shell-обёрток, SBOM/audit-экспорт.

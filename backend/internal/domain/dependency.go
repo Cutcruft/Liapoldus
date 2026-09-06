@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -23,14 +24,51 @@ var (
 	// shared external satisfies (peer policy, spec §5). Optional peers and
 	// self-references are exempt.
 	ErrUnsatisfiedPeer = errors.New("unsatisfied peer dependency")
+	// ErrDepNotAllowed means a package that would enter the site`s dependency
+	// graph matches none of the site's allowlist entries (allowlist policy,
+	// spec §5). The check runs over the whole graph — top-level and transitive.
+	ErrDepNotAllowed = errors.New("dependency is not allowed by the site allowlist")
+	// ErrInvalidAllowlistEntry means the submitted allowlist entry is not a
+	// legal npm name, scoped package or scope wildcard ("@scope/*", "*").
+	ErrInvalidAllowlistEntry = errors.New("invalid allowlist entry")
 )
 
 var depNamePattern = regexp.MustCompile(`^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$`)
+var scopeNamePattern = regexp.MustCompile(`^[a-z0-9-~][a-z0-9-._~]*$`)
 
 // ValidDependencyName reports whether name is a legal npm package name
 // (optionally scoped). Tags/aliases are not names and are rejected upstream.
 func ValidDependencyName(name string) bool {
 	return len(name) > 0 && depNamePattern.MatchString(name)
+}
+
+// ValidAllowlistEntry reports whether an entry is a legal allowlist rule. The
+// grammar is a subset of npm naming rules plus two wildcards: an exact package
+// name ("lodash"), an exact scoped package ("@acme/core"), a scope wildcard
+// ("@acme/*", matching every package in that scope) or the catch-all "*".
+// Entries are normalized (trimmed, lowercased) by the application layer before
+// validation, so callers must pass a normalized value.
+func ValidAllowlistEntry(entry string) bool {
+	if entry == "*" {
+		return true
+	}
+	if strings.HasPrefix(entry, "@") && strings.HasSuffix(entry, "/*") {
+		return scopeNamePattern.MatchString(strings.TrimSuffix(strings.TrimPrefix(entry, "@"), "/*"))
+	}
+	return depNamePattern.MatchString(entry)
+}
+
+// AllowlistEntryMatches reports whether an allowlist entry covers a package
+// name. "*" covers everything; "@scope/*" covers every package in that scope;
+// anything else must match the name exactly. name must be a valid package name.
+func AllowlistEntryMatches(entry, name string) bool {
+	if entry == "*" {
+		return true
+	}
+	if strings.HasSuffix(entry, "/*") {
+		return strings.HasPrefix(name, strings.TrimSuffix(entry, "/*")+"/")
+	}
+	return entry == name
 }
 
 // Dependency is a top-level npm dependency declared by an admin for a site.

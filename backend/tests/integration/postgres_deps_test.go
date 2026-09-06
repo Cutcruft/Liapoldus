@@ -310,3 +310,118 @@ func TestDependencyPeerPolicy(t *testing.T) {
 		t.Fatalf("create snapshot with unsatisfied peer error = %v, want ErrUnsatisfiedPeer", err)
 	}
 }
+
+func TestDependencyAllowlist(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		var versions map[string]registryFixtureVersion
+		switch name {
+		case "a":
+			v := registryFixtureVersion{Name: name, Version: "1.0.0", Dependencies: map[string]string{"b": "^1"}}
+			v.Dist.Integrity = "sha512-a"
+			v.Dist.Tarball = "https://r.example/t/a/1.0.0.tgz"
+			versions = map[string]registryFixtureVersion{"1.0.0": v}
+		case "b":
+			v := registryFixtureVersion{Name: name, Version: "1.0.0"}
+			v.Dist.Integrity = "sha512-b"
+			v.Dist.Tarball = "https://r.example/t/b/1.0.0.tgz"
+			versions = map[string]registryFixtureVersion{"1.0.0": v}
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		doc := struct {
+			Versions map[string]registryFixtureVersion `json:"versions"`
+		}{Versions: versions}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(doc)
+	}))
+	t.Cleanup(server.Close)
+
+	blobs, err := storage.NewDiskBlobStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{
+		DefaultLocale:           "ru",
+		RedirectDefaultStatus:   301,
+		RedirectAllowedStatuses: []int{301, 302},
+		ComponentMaxDepth:       5,
+		ComponentTypes:          []string{"Container", "Text"},
+		PageInitialVersion:      1,
+		LocalGitDir:             t.TempDir(),
+		MasterVariantName:       "master",
+		AssetFallbackName:       "asset",
+		AssetFallbackMime:       "application/octet-stream",
+		AssetFileURLTemplate:    "/api/assets/{id}/file",
+		AssetCacheMaxAgeSeconds: 31536000,
+		MaxUploadBytes:          10485760,
+		NPMRegistryURL:          server.URL,
+	}
+	services := application.New(storage.NewMemory(), blobs, cfg)
+
+	site, err := services.Sites.Create(ctx, "Allow", "allow", "ru", []string{"allow.test"})
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	t.Cleanup(func() { _ = services.Store.DeleteSite(ctx, site.ID) })
+
+	// Empty allowlist: backward compatible, allows everything.
+	if _, err := services.Deps.Add(ctx, site.ID, "a", "^1"); err != nil {
+		t.Fatal(err)
+	}
+	lock, err := services.Deps.ResolveLock(ctx, site.ID)
+	if err != nil {
+		t.Fatalf("ResolveLock(empty allowlist): %v", err)
+	}
+	if len(lock.Deps) != 2 { // a + transitive b
+		t.Fatalf("lock.Deps = %+v, want a + b", lock.Deps)
+	}
+
+	// "*" entry: explicitly allows everything.
+	if err := services.Deps.AddAllowlist(ctx, site.ID, "*"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := services.Deps.ResolveLock(ctx, site.ID); err != nil {
+		t.Fatalf("ResolveLock(\"*\") = %v", err)
+	}
+
+	// Reduce to ["a"]: the transitive "b" is no longer allowed → lock must fail.
+	_ = services.Deps.RemoveAllowlist(ctx, site.ID, "*")
+	if err := services.Deps.AddAllowlist(ctx, site.ID, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := services.Deps.ResolveLock(ctx, site.ID); !errors.Is(err, domain.ErrDepNotAllowed) {
+		t.Fatalf("ResolveLock(a only) error = %v, want ErrDepNotAllowed on transitive", err)
+	}
+
+	// Adding "b" back to the allowlist restores the lock.
+	if err := services.Deps.AddAllowlist(ctx, site.ID, "b"); err != nil {
+		t.Fatal(err)
+	}
+	lock, err = services.Deps.ResolveLock(ctx, site.ID)
+	if err != nil {
+		t.Fatalf("ResolveLock([a,b]): %v", err)
+	}
+	if len(lock.Deps) != 2 {
+		t.Errorf("lock.Deps = %+v, want a + b", lock.Deps)
+	}
+
+	// Snapshot should succeed when the lock resolves cleanly.
+	if _, err := services.Snapshots.Create(ctx, site.ID, "v1"); err != nil {
+		t.Fatalf("snapshot with allowlist: %v", err)
+	}
+
+	// Removing the last allowed entry → back to allow-all.
+	if err := services.Deps.RemoveAllowlist(ctx, site.ID, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := services.Deps.RemoveAllowlist(ctx, site.ID, "b"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := services.Deps.ResolveLock(ctx, site.ID); err != nil {
+		t.Fatalf("ResolveLock(after clearing allowlist): %v", err)
+	}
+}

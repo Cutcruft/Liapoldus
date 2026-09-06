@@ -41,6 +41,20 @@ func (m *MockStorage) EXPECT() *MockStorageMockRecorder {
 	return m.recorder
 }
 
+// AddAllowlist mocks base method.
+func (m *MockStorage) AddAllowlist(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddAllowlist", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddAllowlist indicates an expected call of AddAllowlist.
+func (mr *MockStorageMockRecorder) AddAllowlist(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAllowlist", reflect.TypeOf((*MockStorage)(nil).AddAllowlist), arg0, arg1, arg2)
+}
+
 // CreateAsset mocks base method.
 func (m *MockStorage) CreateAsset(arg0 context.Context, arg1 domain.Asset) error {
 	m.ctrl.T.Helper()
@@ -561,6 +575,21 @@ func (mr *MockStorageMockRecorder) List(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockStorage)(nil).List), arg0, arg1)
 }
 
+// ListAllowlist mocks base method.
+func (m *MockStorage) ListAllowlist(arg0 context.Context, arg1 string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAllowlist", arg0, arg1)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAllowlist indicates an expected call of ListAllowlist.
+func (mr *MockStorageMockRecorder) ListAllowlist(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllowlist", reflect.TypeOf((*MockStorage)(nil).ListAllowlist), arg0, arg1)
+}
+
 // ListAssetsBySite mocks base method.
 func (m *MockStorage) ListAssetsBySite(arg0 context.Context, arg1 string) ([]domain.Asset, error) {
 	m.ctrl.T.Helper()
@@ -724,6 +753,20 @@ func (m *MockStorage) ListSubmissionsByForm(arg0 context.Context, arg1, arg2 str
 func (mr *MockStorageMockRecorder) ListSubmissionsByForm(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSubmissionsByForm", reflect.TypeOf((*MockStorage)(nil).ListSubmissionsByForm), arg0, arg1, arg2)
+}
+
+// RemoveAllowlist mocks base method.
+func (m *MockStorage) RemoveAllowlist(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveAllowlist", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveAllowlist indicates an expected call of RemoveAllowlist.
+func (mr *MockStorageMockRecorder) RemoveAllowlist(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAllowlist", reflect.TypeOf((*MockStorage)(nil).RemoveAllowlist), arg0, arg1, arg2)
 }
 
 // Save mocks base method.
