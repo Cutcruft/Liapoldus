@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { useSelector } from '@liapoldus/ui-runtime';
 import type { JSONSchema } from './schemas';
 import { builtinFieldSchema } from './schemas';
@@ -7,6 +8,11 @@ import { findSelected } from './TreePanel';
 import { AssetFieldControl } from '../assets/AssetFieldControl';
 import type { EditorStore, EditorActions } from './page-store';
 import type { AdminStringKey, Translate } from '../../runtime';
+
+// Tiptap/ProseMirror — отдельный chunk, грузится только при инспекции текстового узла.
+const RichTextEditor = lazy(() =>
+  import('../rich-text/RichTextEditor').then((m) => ({ default: m.RichTextEditor })),
+);
 
 const BINDING_LABEL: Record<BindingSourceName, AdminStringKey> = {
   literal: 'editor.binding.literal',
@@ -67,6 +73,11 @@ export function Inspector({
           onBindingChange={(field, binding) => actions.setBinding(node.id, field, binding)}
           renderAssetField={(value, onChange) => (
             <AssetFieldControl siteId={siteId} value={value} onChange={(id) => onChange(id)} />
+          )}
+          renderRichTextField={(value, onChange) => (
+            <Suspense fallback={<div className="h-24 rounded border border-neutral-200 bg-neutral-50" />}>
+              <RichTextEditor siteId={siteId} value={String(value ?? '')} onChange={(html) => onChange(html)} />
+            </Suspense>
           )}
         />
       )}

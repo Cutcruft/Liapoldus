@@ -46,6 +46,7 @@ export function SchemaForm({
   onChange,
   onBindingChange,
   renderAssetField,
+  renderRichTextField,
 }: {
   schema: JSONSchema;
   values: Record<string, unknown>;
@@ -57,6 +58,8 @@ export function SchemaForm({
   onBindingChange: (field: string, binding: BindingSource) => void;
   /** Поле с format:'asset' рендерится переданным контролом (asset-picker). */
   renderAssetField?: (value: unknown, onChange: (value: unknown) => void) => React.ReactNode;
+  /** Поле с format:'richtext' рендерится переданным Tiptap-контролом. */
+  renderRichTextField?: (value: unknown, onChange: (value: unknown) => void) => React.ReactNode;
 }) {
   const fields = Object.entries(schema.properties);
 
@@ -104,6 +107,8 @@ export function SchemaForm({
               />
             ) : prop.format === 'asset' && renderAssetField ? (
               <div>{renderAssetField(literalValue, (v) => onChange(field, v))}</div>
+            ) : prop.format === 'richtext' && renderRichTextField ? (
+              <div>{renderRichTextField(literalValue, (v) => onChange(field, v))}</div>
             ) : (
               <LiteralInput prop={prop} value={literalValue} onChange={(v) => onChange(field, v)} />
             )}

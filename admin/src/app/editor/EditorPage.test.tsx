@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Page } from '../../runtime';
 import { jsonResponse, renderApp } from '../test-utils';
 import { setDevSocketFactory, type WsLike } from './dev-ws';
+import { __lastRichTextEditor } from '../rich-text/RichTextEditor';
 
 function inertSocket(): WsLike {
   return { onmessage: null, onopen: null, onclose: null, onerror: null, close: () => {} };
@@ -57,15 +58,18 @@ describe('EditorPage', () => {
     const { calls } = await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
 
     fireEvent.click(await screen.findByText('· Привет'));
-    const input = screen.getByDisplayValue('Привет');
-    fireEvent.change(input, { target: { value: 'Новый заголовок' } });
+    await waitFor(() => expect(__lastRichTextEditor()).toBeTruthy());
+    const editor = __lastRichTextEditor();
+    expect(editor).toBeTruthy();
+    editor?.chain().focus().selectAll().deleteSelection().insertContent('Новый заголовок').run();
 
     await waitFor(
       () => {
         const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree');
         expect(save).toBeTruthy();
         const body = JSON.parse(String(save?.init.body)) as { root: Page['root'] };
-        expect(body.root.children?.[0]?.props?.['text']).toBe('Новый заголовок');
+        expect(String(body.root.children?.[0]?.props?.['text'])).toContain('Новый заголовок');
+        expect(String(body.root.children?.[0]?.props?.['text'])).toMatch(/^<p>/);
       },
       { timeout: 3000 },
     );
@@ -238,7 +242,8 @@ describe('EditorPage', () => {
     });
 
     fireEvent.click(await screen.findByText('· Привет'));
-    fireEvent.change(screen.getByDisplayValue('Привет'), { target: { value: 'Заголовок' } });
+    await waitFor(() => expect(__lastRichTextEditor()).toBeTruthy());
+    __lastRichTextEditor()?.chain().focus().selectAll().deleteSelection().insertContent('Заголовок').run();
     await waitFor(
       () => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree')).toBe(true),
       { timeout: 3000 },

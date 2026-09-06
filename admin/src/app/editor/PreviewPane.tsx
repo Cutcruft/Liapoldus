@@ -29,20 +29,22 @@ function RenderNode({ node, t }: { node: ComponentNode; t: Translate }) {
     }
     case 'Text': {
       const textBinding = bound('text');
+      if (textBinding && textBinding.source !== 'literal') {
+        return <span data-node={node.type}>{`{{${textBinding.source}:${textBinding.path ?? ''}}}`}</span>;
+      }
+      const html = String(props['text'] ?? '');
       return (
         <span
           data-node={node.type}
+          // Дизайн-превью: html рендерится как есть (без санитизации).
+          dangerouslySetInnerHTML={{ __html: html }}
           className="whitespace-pre-wrap"
           style={{
             fontSize: SIZE[String(props['size'])] ?? 16,
             textAlign: String(props['align'] ?? 'left') as React.CSSProperties['textAlign'],
             color: String(props['color'] ?? ''),
           }}
-        >
-          {textBinding && textBinding.source !== 'literal'
-            ? `{{${textBinding.source}:${textBinding.path ?? ''}}}`
-            : String(props['text'] ?? '')}
-        </span>
+        />
       );
     }
     case 'Image': {

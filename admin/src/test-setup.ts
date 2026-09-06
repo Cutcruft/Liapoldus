@@ -42,3 +42,20 @@ if (typeof w.matchMedia !== 'function') {
       dispatchEvent: () => false,
     }) as unknown as MediaQueryList;
 }
+
+// ProseMirror/Tiptap в jsdom: Range.getBoundingClientRect/getClientRects не реализованы.
+if (typeof Range !== 'undefined') {
+  if (typeof Range.prototype.getBoundingClientRect !== 'function') {
+    Range.prototype.getBoundingClientRect = () => ({
+      x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0,
+      toJSON: () => ({}),
+    });
+  }
+  if (typeof Range.prototype.getClientRects !== 'function') {
+    Range.prototype.getClientRects = () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] });
+  }
+}
+const textProto = Text.prototype as unknown as { getClientRects?: () => unknown };
+if (typeof textProto.getClientRects !== 'function') {
+  textProto.getClientRects = () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] });
+}
