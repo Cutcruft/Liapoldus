@@ -890,24 +890,24 @@ VITE_CLIENT_URL=http://localhost:18080
 ## Порядок выполнения слайсов
 
 ```
-1. Docker + Dev Environment  ✓ ВЫПОЛНЕНО
-   docker-compose, Makefile, air, .env.example,
-   vite proxy env vars
-
-2. Git + Snapshot Unification  ✓ ВЫПОЛНЕНО
+1. Git + Snapshot Unification  ✓ ВЫПОЛНЕНО
    пересоздание bare repo (dev/main), gitsnapshot service,
    serialize, restore, admin API, model updates,
    git page, tests
 
-3. Auth + Dashboard + Settings  ✓ ВЫПОЛНЕНО
+2. Auth + Dashboard + Settings  ✓ ВЫПОЛНЕНО
    login, dashboard, settings, site edit, logout, tests
 
-4. Token Editor  ← СЛЕДУЮЩИЙ
+3. Token Editor  ✓ ВЫПОЛНЕНО
    token service, DB, API, editor page, color picker,
    preview iframe (srcdoc), tests
 
-5. Dependencies UI  ← НЕЗАВИСИМ
+4. Dependencies UI  ← СЛЕДУЮЩИЙ
    deps page, allowlist page, resolve tree, tests
+
+5. Docker + Dev Environment  ✓ ВЫПОЛНЕНО
+   docker-compose, Makefile, air, .env.example,
+   vite proxy env vars
 
 6. Doc + Code Cleanup  ← ФИНАЛЬНЫЙ
    delete dead code, extract hardcodes, update docs,
@@ -937,15 +937,15 @@ VITE_CLIENT_URL=http://localhost:18080
 ## Acceptance Criteria
 
 ### Слайс 1: Git + Snapshot
-- [ ] `POST /api/sites/{id}/git/commit` создаёт коммит с полным состоянием сайта
-- [ ] `POST /api/sites/{id}/git/restore` восстанавливает из SHA (с safety-snapshot)
-- [ ] `POST /api/sites/{id}/git/publish` rebase+merge dev→main
-- [ ] `POST /api/sites/{id}/git/rollback` main→dev, snapshot→main
-- [ ] `GET /api/sites/{id}/git/commits` возвращает историю
-- [ ] `GET /api/sites/{id}/git/status` возвращает статус веток
-- [ ] Страница «Git» в админке: коммиты, статус, publish/restore/rollback
-- [ ] Все unit-тесты проходят
-- [ ] `go build ./...` чисто
+- [x] `POST /api/sites/{id}/git/commit` создаёт коммит с полным состоянием сайта
+- [x] `POST /api/sites/{id}/git/restore` восстанавливает из SHA (с safety-snapshot)
+- [x] `POST /api/sites/{id}/git/publish` rebase+merge dev→main
+- [x] `POST /api/sites/{id}/git/rollback` main→dev, snapshot→main
+- [x] `GET /api/sites/{id}/git/commits` возвращает историю
+- [x] `GET /api/sites/{id}/git/status` возвращает статус веток
+- [x] Страница «Git» в админке: коммиты, статус, publish/restore/rollback
+- [x] Все unit-тесты проходят
+- [x] `go build ./...` чисто
 
 ### Слайс 2: Auth + Dashboard + Settings
 - [x] `/login` — ввод токена → validate → localStorage → redirect
@@ -970,11 +970,11 @@ VITE_CLIENT_URL=http://localhost:18080
 - [ ] Все unit-тесты проходят
 
 ### Слайс 5: Docker + Dev
-- [ ] `make dev` запускает postgres + backend (hot-reload) + frontend
-- [ ] `make build` собирает всё
-- [ ] `make test` запускает все тесты
-- [ ] docker-compose up работает из коробки
-- [ ] .env.example файлы на месте
+- [x] `make dev` запускает postgres + backend (hot-reload) + frontend
+- [x] `make build` собирает всё
+- [x] `make test` запускает все тесты
+- [x] docker-compose up работает из коробки
+- [x] .env.example файлы на месте
 
 ### Слайс 6: Doc + Code Cleanup
 - [ ] Удалён мёртвый код (Head, label.tsx, Placeholder, dev-ws)
