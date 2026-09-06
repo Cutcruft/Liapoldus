@@ -4,7 +4,7 @@ import { RequireAuth } from './RequireAuth';
 import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
-import { SiteTabPlaceholder } from './SiteTabPlaceholder';
+import { SiteTab } from './SiteTab';
 // Старые site-страницы (перенесём на R3–R8): в проде маршруты удалены сразу,
 // в dev остаются для регрессионных тестов и ручной проверки (R0).
 import { SitesPage } from './pages/SitesPage';
@@ -27,7 +27,7 @@ import { EditorPage } from './editor/EditorPage';
 /** Новые маршруты каркаса (слайс R1). Старые site-роуты — только в dev. */
 const CORE_ROUTES: RouteObject[] = [
   { index: true, element: <HomePage /> },
-  { path: 'sites/:siteId', element: <SiteTabPlaceholder /> },
+  { path: 'sites/:siteId', element: <SiteTab /> },
   { path: 'settings', element: <SettingsPage /> },
 ];
 

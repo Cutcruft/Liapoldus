@@ -56,7 +56,7 @@ describe('DashboardPage', () => {
     await renderPage(<DashboardPage />, { handler: () => jsonResponse(200, DASHBOARD) });
 
     expect(await screen.findByRole('heading', { name: 'Обзор' })).toBeTruthy();
-    expect(screen.getByText('требует внимания')).toBeTruthy();
+    expect(await screen.findByText('требует внимания')).toBeTruthy();
 
     expect(screen.getAllByText('Первый').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Второй').length).toBeGreaterThanOrEqual(1);

@@ -29,6 +29,7 @@ export function AppShell() {
   const pathname = location.pathname;
   const tabs = useSelector(getTabsStore(), (s) => s.tabs);
   const activeKey = activeTabKey(pathname);
+  const activeView = new URLSearchParams(location.search).get('view');
 
   // Восстановление вкладки при прямом переходе по URL (deep-link/рефреш).
   useEffect(() => {
@@ -86,7 +87,14 @@ export function AppShell() {
                     active ? 'font-medium' : ''
                   }`}
                 >
-                  {tab.kind === 'settings' ? t('tab.settings') : tab.label}
+                  <span className="flex items-center gap-1.5">
+                    {tab.kind === 'settings' ? t('tab.settings') : tab.label}
+                    {active && tab.kind === 'site' && activeView === 'editor' && (
+                      <span className="rounded bg-blue-100 px-1 text-[10px] font-medium uppercase text-blue-700">
+                        {t('view.editor')}
+                      </span>
+                    )}
+                  </span>
                 </button>
                 <button
                   type="button"

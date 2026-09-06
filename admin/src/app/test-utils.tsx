@@ -51,7 +51,7 @@ export async function renderApp(opts: RenderAppOptions) {
       <RouterProvider router={router} />
     </AdminProvider>,
   ) as ReturnType<typeof render> & { calls: MockCall[]; api: typeof api };
-  return { ...utils, calls, api, tokenStore };
+  return { ...utils, calls, api, tokenStore, router };
 }
 
 /**
@@ -80,5 +80,5 @@ export function renderPage(
       <RouterProvider router={router} />
     </AdminProvider>,
   ) as ReturnType<typeof render> & { calls: MockCall[]; api: typeof api };
-  return { ...utils, calls, api, tokenStore };
+  return { ...utils, calls, api, tokenStore, router };
 }

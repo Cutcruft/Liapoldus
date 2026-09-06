@@ -23,7 +23,7 @@ describe('RouteEditorPage', () => {
     });
 
     expect(await screen.findByText('К списку роутов')).toBeTruthy();
-    expect(screen.getByDisplayValue('/old')).toBeTruthy();
+    expect(await screen.findByDisplayValue('/old')).toBeTruthy();
     expect(screen.getByDisplayValue('/new')).toBeTruthy();
     expect(screen.getByDisplayValue('302')).toBeTruthy();
     expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
