@@ -344,6 +344,218 @@ func TestDependencyBuildFullCycle(t *testing.T) {
 	}
 }
 
+func TestDependencyBuildNestedVersions(t *testing.T) {
+	ctx := context.Background()
+	reg := newFakeRegistry()
+	regClient := reg.start(t)
+
+	// Two top-level packages pin incompatible ranges of the same transitive
+	// "b": the lock keeps both versions — b@1.0.0 hoisted to the site root,
+	// b@2.0.0 nested under the package that requires it. esbuild resolves each
+	// bundle to its own physical version.
+	_, b1SRI := reg.add(t, "b", "1.0.0", map[string]string{
+		"package.json": `{"name":"b","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export const bMarker = \"b-hoisted-1\";\n",
+	})
+	_, b2SRI := reg.add(t, "b", "2.0.0", map[string]string{
+		"package.json": `{"name":"b","version":"2.0.0","main":"index.js"}`,
+		"index.js":     "export const bMarker = \"b-nested-2\";\n",
+	})
+	_, agentSRI := reg.add(t, "agent", "1.0.0", map[string]string{
+		"package.json": `{"name":"agent","version":"1.0.0","main":"index.js","dependencies":{"b":"^1.0.0"}}`,
+		"index.js": `import { bMarker } from "b";
+export const agentName = "agent-one-" + bMarker;
+export default agentName;
+`,
+	})
+	_, agent2SRI := reg.add(t, "agent2", "1.0.0", map[string]string{
+		"package.json": `{"name":"agent2","version":"1.0.0","main":"index.js","dependencies":{"b":"^2.0.0"}}`,
+		"index.js": `import { bMarker } from "b";
+export const agent2Name = "agent-two-" + bMarker;
+export default agent2Name;
+`,
+	})
+
+	mem := storage.NewMemory()
+	site := seedBuildSiteInMemory(t, mem, "site_dep_nested")
+	seedDefinitionSource(t, mem, site.ID, "text",
+		"import { agentName } from \"agent\";\nimport { agent2Name } from \"agent2\";\nexport default (props) => props?.title ?? agentName + \":\" + agent2Name;\n")
+
+	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "text"}
+	page := domain.Page{ID: "page_dep_nested", SiteID: site.ID, Name: "Home", Root: root, Version: 1,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_dep_nested", PageID: "page_dep_nested", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	if err := mem.CreatePage(ctx, page, version); err != nil {
+		t.Fatal(err)
+	}
+	lock := domain.SnapshotLock{Deps: []domain.LockedDep{
+		{Name: "agent", Spec: "^1.0.0", Version: "1.0.0", Integrity: agentSRI, Hoisted: true, RequestedBy: []string{"site"}},
+		{Name: "agent2", Spec: "^1.0.0", Version: "1.0.0", Integrity: agent2SRI, Hoisted: true, RequestedBy: []string{"site"}},
+		{Name: "b", Spec: "^1.0.0", Version: "1.0.0", Integrity: b1SRI, Hoisted: true, RequestedBy: []string{"agent@1.0.0"}},
+		{Name: "b", Spec: "^2.0.0", Version: "2.0.0", Integrity: b2SRI, RequestedBy: []string{"agent2@1.0.0"}},
+	}}
+	snapshot := domain.Snapshot{ID: "snapshot_dep_nested", SiteID: site.ID,
+		Pages:    []domain.SnapshotPage{{PageID: "page_dep_nested", VersionID: "pagever_dep_nested", Version: 1}},
+		DepsLock: lock, CreatedAt: time.Now().UTC()}
+	if err := mem.CreateSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	// agent + agent2 are declared; b stays transitive-only so its two versions
+	// must be bundled inline instead of materialized as _deps artifacts.
+	for _, name := range []string{"agent", "agent2"} {
+		if err := mem.CreateDependency(ctx, domain.Dependency{
+			SiteID: site.ID, Name: name, Spec: "^1.0.0",
+			CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, locked := range lock.Deps {
+		if err := mem.CreateDepPackage(ctx, domain.DepPackage{
+			Name: locked.Name, Version: locked.Version, Integrity: locked.Integrity,
+			TarballURL: reg.baseURL + reg.URLFor(locked.Name, locked.Version),
+			FetchedAt:  time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	depsLayout := layout.New(layout.LayoutOptions{
+		Packages: mem,
+		Store:    store.New(t.TempDir()),
+		Fetch:    tarballFetcherAdapter{client: regClient},
+	})
+	artifacts := artifactstore.New(t.TempDir())
+	builds := build.NewService(mem, mem, mem,
+		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout),
+		builder.New(), artifacts)
+
+	result, err := builds.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment)
+	if err != nil {
+		t.Fatalf("build.Create: %v", err)
+	}
+	if result.Status != domain.BuildStatusReady {
+		t.Fatalf("status = %s, log = %#v", result.Status, result.Log)
+	}
+	artifactRoot := artifacts.DirFor(site.ID, domain.EnvironmentDevelopment, snapshot.ID)
+
+	// node_modules is ephemeral build state (only dist/ is published), but the
+	// version each bundle inlines proves esbuild resolved the right physical
+	// instance: hoisted b@1.0.0 for agent, nested b@2.0.0 for agent2.
+	agentBundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist/_deps", "agent@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent bundle: %v", err)
+	}
+	if !strings.Contains(string(agentBundle), "b-hoisted-1") || strings.Contains(string(agentBundle), "b-nested-2") {
+		t.Fatalf("agent bundle must inline b@1.0.0 only:\n%s", agentBundle)
+	}
+	agent2Bundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist/_deps", "agent2@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read agent2 bundle: %v", err)
+	}
+	if !strings.Contains(string(agent2Bundle), "b-nested-2") || strings.Contains(string(agent2Bundle), "b-hoisted-1") {
+		t.Fatalf("agent2 bundle must inline b@2.0.0 only:\n%s", agent2Bundle)
+	}
+
+	manifestData, err := os.ReadFile(filepath.Join(artifactRoot, "manifest.json"))
+	if err != nil {
+		t.Fatalf("published manifest: %v", err)
+	}
+	var manifest build.Manifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("manifest decode: %v", err)
+	}
+	if _, ok := manifest.Deps["agent"]; !ok {
+		t.Fatalf("manifest deps missing agent: %#v", manifest.Deps)
+	}
+	if _, ok := manifest.Deps["agent2"]; !ok {
+		t.Fatalf("manifest deps missing agent2: %#v", manifest.Deps)
+	}
+	// b is transitive-only: no manifest entry, no _deps artifact.
+	for _, key := range []string{"b", "b@2.0.0"} {
+		if _, ok := manifest.Deps[key]; ok {
+			t.Fatalf("transitive b must not be in the manifest: %#v", manifest.Deps)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(artifactRoot, "dist/_deps", "b@1.0.0.js")); statErr == nil {
+		t.Fatalf("transitive b must not get a _deps artifact")
+	}
+}
+
+// legacy flat lock (no hoist markers) renders every single-version package at
+// the site root; the new instance graph must read such locks back unchanged.
+func TestDependencyBuildLegacyFlatLockStillWorks(t *testing.T) {
+	ctx := context.Background()
+	reg := newFakeRegistry()
+	regClient := reg.start(t)
+	_, legacySRI := reg.add(t, "legacy", "1.0.0", map[string]string{
+		"package.json": `{"name":"legacy","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export const lMarker = \"legacy-flat\";\n",
+	})
+
+	mem := storage.NewMemory()
+	site := seedBuildSiteInMemory(t, mem, "site_dep_legacy")
+	seedDefinitionSource(t, mem, site.ID, "text",
+		"import { lMarker } from \"legacy\";\nexport default (props) => props?.title ?? lMarker;\n")
+	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "text"}
+	page := domain.Page{ID: "page_dep_legacy", SiteID: site.ID, Name: "Home", Root: root, Version: 1,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_dep_legacy", PageID: "page_dep_legacy", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	if err := mem.CreatePage(ctx, page, version); err != nil {
+		t.Fatal(err)
+	}
+	lock := domain.SnapshotLock{Deps: []domain.LockedDep{
+		{Name: "legacy", Spec: "^1.0.0", Version: "1.0.0", Integrity: legacySRI},
+	}}
+	snapshot := domain.Snapshot{ID: "snapshot_dep_legacy", SiteID: site.ID,
+		Pages:    []domain.SnapshotPage{{PageID: "page_dep_legacy", VersionID: "pagever_dep_legacy", Version: 1}},
+		DepsLock: lock, CreatedAt: time.Now().UTC()}
+	if err := mem.CreateSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if err := mem.CreateDependency(ctx, domain.Dependency{
+		SiteID: site.ID, Name: "legacy", Spec: "^1.0.0",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, locked := range lock.Deps {
+		if err := mem.CreateDepPackage(ctx, domain.DepPackage{
+			Name: locked.Name, Version: locked.Version, Integrity: locked.Integrity,
+			TarballURL: reg.baseURL + reg.URLFor(locked.Name, locked.Version),
+			FetchedAt:  time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	depsLayout := layout.New(layout.LayoutOptions{
+		Packages: mem,
+		Store:    store.New(t.TempDir()),
+		Fetch:    tarballFetcherAdapter{client: regClient},
+	})
+	artifacts := artifactstore.New(t.TempDir())
+	builds := build.NewService(mem, mem, mem,
+		materializer.New(mem, mem, mem, mem, shared.NewResolver(), depsLayout),
+		builder.New(), artifacts)
+
+	result, err := builds.Create(ctx, site.ID, snapshot.ID, domain.EnvironmentDevelopment)
+	if err != nil {
+		t.Fatalf("build.Create: %v", err)
+	}
+	if result.Status != domain.BuildStatusReady {
+		t.Fatalf("status = %s, log = %#v", result.Status, result.Log)
+	}
+	artifactRoot := artifacts.DirFor(site.ID, domain.EnvironmentDevelopment, snapshot.ID)
+	legacyBundle, err := os.ReadFile(filepath.Join(artifactRoot, "dist/_deps", "legacy@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read legacy bundle: %v", err)
+	}
+	if !strings.Contains(string(legacyBundle), "legacy-flat") {
+		t.Fatalf("legacy bundle must inline the package:\n%s", legacyBundle)
+	}
+}
+
 func TestDependencyBuildFailsOnNodeBuiltin(t *testing.T) {
 	ctx := context.Background()
 	reg := newFakeRegistry()

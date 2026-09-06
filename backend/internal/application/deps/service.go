@@ -113,9 +113,15 @@ func (s *Service) List(ctx context.Context, siteID string) ([]domain.Dependency,
 }
 
 // ResolveLock resolves the site's top-level declarations and every transitive
-// dependency into a flat frozen lock (one version per package). Two packages
-// pinning the same name to incompatible versions fail with ErrVersionConflict;
-// nested versioned layouts arrive in phase 2.
+// dependency into the frozen instance graph of a snapshot (nested-versioned
+// layout, spec §5). One instance per (name, version) is emitted; the first
+// instance created for a name is hoisted to node_modules/<name>, and a second
+// instance of the same name — when a parent's range is not satisfied by any
+// existing version — is nested under every parent instance that requires it
+// (RequestedBy keeps those parent edges). The emission order is a
+// deterministic BFS (parents before children) so the layout reproduces the
+// same physical placement at build time. An edge whose range no published
+// version satisfies still fails with ErrUnresolvableSpec.
 func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.SnapshotLock, error) {
 	s.resolveMu.Lock()
 	defer s.resolveMu.Unlock()
@@ -124,12 +130,17 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 	if err != nil {
 		return domain.SnapshotLock{}, err
 	}
-	lock := domain.SnapshotLock{Deps: []domain.LockedDep{}}
 	if len(top) == 0 {
-		return lock, nil
+		return domain.SnapshotLock{Deps: []domain.LockedDep{}}, nil
 	}
+	sort.Slice(top, func(i, j int) bool { return top[i].Name < top[j].Name })
 
-	frozen := make(map[string]domain.LockedDep, len(top))
+	// instances keyed by name@version; perName keeps the deterministic
+	// creation order per package (the first is the hoisted candidate).
+	instances := make(map[string]domain.LockedDep, len(top))
+	perName := make(map[string][]string, len(top))
+	order := make([]string, 0, len(top)+8)
+
 	queue := make([]edge, 0, len(top))
 	for _, dep := range top {
 		queue = append(queue, edge{name: dep.Name, spec: dep.Spec, requestedBy: "site"})
@@ -139,8 +150,21 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 		current := queue[0]
 		queue = queue[1:]
 
-		if existing, ok := frozen[current.name]; ok && versionSatisfies(existing.Version, current.spec) {
-			continue // already frozen and compatible, reuse
+		// Reuse an existing instance whose version already satisfies this
+		// range (the hoisted one is always first in creation order); record
+		// the new parent edge. Otherwise resolve a new version for the range
+		// and nest it under the requesting parent.
+		reused := false
+		for _, key := range perName[current.name] {
+			if instance, ok := instances[key]; ok && versionSatisfies(instance.Version, current.spec) {
+				instance.RequestedBy = appendUnique(instance.RequestedBy, current.requestedBy)
+				instances[key] = instance
+				reused = true
+				break
+			}
+		}
+		if reused {
+			continue
 		}
 
 		resolved, err := s.registry.Resolve(ctx, current.name, current.spec)
@@ -149,13 +173,18 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 		}
 		s.cachePackage(ctx, resolved)
 
-		if existing, ok := frozen[current.name]; ok && existing.Version != resolved.Version {
-			return domain.SnapshotLock{}, fmt.Errorf(
-				"%w: %s requires %s@%s but the graph already pins %s@%s",
-				domain.ErrVersionConflict, current.requestedBy, current.name, current.spec, current.name, existing.Version)
+		key := current.name + "@" + resolved.Version
+		dep := domain.LockedDep{
+			Name:        current.name,
+			Spec:        current.spec,
+			Version:     resolved.Version,
+			Integrity:   resolved.Integrity,
+			Hoisted:     len(perName[current.name]) == 0,
+			RequestedBy: []string{current.requestedBy},
 		}
-		next := domain.LockedDep{Name: current.name, Spec: current.spec, Version: resolved.Version, Integrity: resolved.Integrity}
-		frozen[current.name] = next
+		instances[key] = dep
+		perName[current.name] = append(perName[current.name], key)
+		order = append(order, key)
 
 		names := make([]string, 0, len(resolved.Dependencies))
 		for dep := range resolved.Dependencies {
@@ -163,12 +192,17 @@ func (s *Service) ResolveLock(ctx context.Context, siteID string) (domain.Snapsh
 		}
 		sort.Strings(names)
 		for _, dep := range names {
-			queue = append(queue, edge{name: dep, spec: resolved.Dependencies[dep], requestedBy: current.name})
+			queue = append(queue, edge{name: dep, spec: resolved.Dependencies[dep], requestedBy: key})
 		}
 	}
 
-	lock.Deps = lockList(frozen)
-	return lock, nil
+	deps := make([]domain.LockedDep, 0, len(order))
+	for _, key := range order {
+		dep := instances[key]
+		sort.Strings(dep.RequestedBy)
+		deps = append(deps, dep)
+	}
+	return domain.SnapshotLock{Deps: deps}, nil
 }
 
 func (s *Service) cachePackage(ctx context.Context, resolved ResolvedVersion) {
@@ -217,11 +251,11 @@ func versionSatisfies(version, spec string) bool {
 	return false
 }
 
-func lockList(frozen map[string]domain.LockedDep) []domain.LockedDep {
-	list := make([]domain.LockedDep, 0, len(frozen))
-	for _, locked := range frozen {
-		list = append(list, locked)
+func appendUnique(items []string, value string) []string {
+	for _, item := range items {
+		if item == value {
+			return items
+		}
 	}
-	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
-	return list
+	return append(items, value)
 }

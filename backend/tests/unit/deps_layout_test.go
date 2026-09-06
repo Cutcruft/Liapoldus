@@ -359,6 +359,233 @@ func TestLayoutDiskCacheSkipsFetchAndMetadata(t *testing.T) {
 	}
 }
 
+// versionedFetcher serves tarballs keyed by name@version so a test can host
+// two versions of the same package (the nested-versioned layout case).
+type versionedFetcher struct {
+	data  map[string][]byte
+	calls []string
+}
+
+func (f *versionedFetcher) Tarball(_ context.Context, name, version, _, _ string) ([]byte, error) {
+	key := name + "@" + version
+	f.calls = append(f.calls, key)
+	data, ok := f.data[key]
+	if !ok {
+		return nil, domain.ErrPackageNotFound
+	}
+	return data, nil
+}
+
+// layoutHarnessVersioned wires a layout whose registry serves distinct
+// tarballs per name@version, including cache metadata for each.
+func layoutHarnessVersioned(t *testing.T, tarballs map[string][]byte, sri map[string]string) (*layout.Layout, *versionedFetcher, string) {
+	t.Helper()
+	fetcher := &versionedFetcher{data: tarballs}
+	blobs := store.New(t.TempDir())
+	pkgs := make(map[string]domain.DepPackage, len(tarballs))
+	for key := range tarballs {
+		name, version, _ := strings.Cut(key, "@")
+		pkgs[key] = domain.DepPackage{
+			Name: name, Version: version, Integrity: sri[key],
+			TarballURL: "https://registry.test/" + name + "/-/" + name + "-" + version + ".tgz",
+		}
+	}
+	lay := layout.New(layout.LayoutOptions{
+		Packages: pkgRepoStub{pkgs: pkgs},
+		Store:    blobs,
+		Fetch:    fetcher,
+	})
+	return lay, fetcher, blobs.Root()
+}
+
+func TestLayoutNestedVersionsPlaceAndResolve(t *testing.T) {
+	b1Data, b1SRI := tarball(t, map[string]string{
+		"package.json": `{"name":"b","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export const bMarker = \"b-ver-1\";\n",
+	})
+	b2Data, b2SRI := tarball(t, map[string]string{
+		"package.json": `{"name":"b","version":"2.0.0","main":"index.js"}`,
+		"index.js":     "export const bMarker = \"b-ver-2\";\n",
+	})
+	t1Data, t1SRI := tarball(t, map[string]string{
+		"package.json": `{"name":"t1","version":"1.0.0","main":"index.js","dependencies":{"b":"^1.0.0"}}`,
+		"index.js": `import { bMarker } from "b";
+export const t1ID = "t1-" + bMarker;
+export default t1ID;
+`,
+	})
+	t2Data, t2SRI := tarball(t, map[string]string{
+		"package.json": `{"name":"t2","version":"1.0.0","main":"index.js","dependencies":{"b":"^2.0.0"}}`,
+		"index.js": `import { bMarker } from "b";
+export const t2ID = "t2-" + bMarker;
+export default t2ID;
+`,
+	})
+	lay, fetcher, root := layoutHarnessVersioned(t, map[string][]byte{
+		"t1@1.0.0": t1Data, "t2@1.0.0": t2Data, "b@1.0.0": b1Data, "b@2.0.0": b2Data,
+	}, map[string]string{
+		"t1@1.0.0": t1SRI, "t2@1.0.0": t2SRI, "b@1.0.0": b1SRI, "b@2.0.0": b2SRI,
+	})
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "t1", Spec: "^1.0.0", Version: "1.0.0", Integrity: t1SRI, Hoisted: true, RequestedBy: []string{"site"}},
+			{Name: "t2", Spec: "^1.0.0", Version: "1.0.0", Integrity: t2SRI, Hoisted: true, RequestedBy: []string{"site"}},
+			{Name: "b", Spec: "^1.0.0", Version: "1.0.0", Integrity: b1SRI, Hoisted: true, RequestedBy: []string{"t1@1.0.0"}},
+			{Name: "b", Spec: "^2.0.0", Version: "2.0.0", Integrity: b2SRI, RequestedBy: []string{"t2@1.0.0"}},
+		}},
+		TopLevel: []string{"t1", "t2"},
+	})
+	if err != nil {
+		t.Fatalf("materialize deps: %v", err)
+	}
+
+	// The hoisted b@1.0.0 sits at the root; b@2.0.0 nests under its requester.
+	rootB, err := os.ReadFile(filepath.Join(root, "node_modules", "b", "index.js"))
+	if err != nil {
+		t.Fatalf("read hoisted b: %v", err)
+	}
+	if !strings.Contains(string(rootB), "b-ver-1") {
+		t.Fatalf("hoisted node_modules/b must be version 1:\n%s", rootB)
+	}
+	nestedB, err := os.ReadFile(filepath.Join(root, "node_modules", "t2", "node_modules", "b", "index.js"))
+	if err != nil {
+		t.Fatalf("read nested b under t2: %v", err)
+	}
+	if !strings.Contains(string(nestedB), "b-ver-2") {
+		t.Fatalf("node_modules/t2/node_modules/b must be version 2:\n%s", nestedB)
+	}
+	if _, err := os.Stat(filepath.Join(root, "node_modules", "t1", "node_modules", "b", "index.js")); err == nil {
+		t.Fatalf("t1 must not get its own nested b (it reuses the hoisted v1)")
+	}
+
+	// esbuild resolves each bundle to the version whose physical path is
+	// closest — the right version per consumer.
+	t1Bundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "t1@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read t1 bundle: %v", err)
+	}
+	if !strings.Contains(string(t1Bundle), "b-ver-1") || strings.Contains(string(t1Bundle), "b-ver-2") {
+		t.Fatalf("t1 bundle must inline b@1.0.0 only:\n%s", t1Bundle)
+	}
+	t2Bundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "t2@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read t2 bundle: %v", err)
+	}
+	if !strings.Contains(string(t2Bundle), "b-ver-2") || strings.Contains(string(t2Bundle), "b-ver-1") {
+		t.Fatalf("t2 bundle must inline b@2.0.0 only:\n%s", t2Bundle)
+	}
+
+	wantCalls := []string{"t1@1.0.0", "t2@1.0.0", "b@1.0.0", "b@2.0.0"}
+	for _, want := range wantCalls {
+		found := false
+		for _, got := range fetcher.calls {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing fetch for %s in %#v", want, fetcher.calls)
+		}
+	}
+}
+
+func TestLayoutNestedInstanceWithUnknownParentFails(t *testing.T) {
+	lay, _, root := layoutHarnessVersioned(t, nil, nil)
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "t1", Spec: "^1.0.0", Version: "1.0.0", Hoisted: true, RequestedBy: []string{"site"}},
+			{Name: "b", Spec: "^1.0.0", Version: "1.0.0", RequestedBy: []string{"ghost@1.0.0"}},
+		}},
+		TopLevel: []string{"t1"},
+	})
+	var depErr *build.DepBuildError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected *build.DepBuildError for unknown parent, got %T: %v", err, err)
+	}
+	if depErr.Pkg != "b" || !strings.Contains(depErr.Hint, "ghost@1.0.0") {
+		t.Fatalf("dep error = %#v", depErr)
+	}
+}
+
+func TestLayoutNestedInstanceRequestedBySiteFails(t *testing.T) {
+	lay, _, root := layoutHarnessVersioned(t, nil, nil)
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "t1", Spec: "^1.0.0", Version: "1.0.0", Hoisted: true, RequestedBy: []string{"site"}},
+			{Name: "b", Spec: "^1.0.0", Version: "1.0.0", RequestedBy: []string{"site"}},
+		}},
+		TopLevel: []string{"t1"},
+	})
+	var depErr *build.DepBuildError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected *build.DepBuildError for site-requested nested instance, got %T: %v", err, err)
+	}
+	if depErr.Pkg != "b" || !strings.Contains(depErr.Hint, "hoisted") {
+		t.Fatalf("dep error = %#v", depErr)
+	}
+}
+
+func TestLayoutSoleNestedInstanceNotMisplacedTowardsRoot(t *testing.T) {
+	// A package whose only version in the whole graph is nested (a grandchild
+	// dependency nobody else shares) must NOT be treated as hoisted just
+	// because it is the sole instance of its name.
+	bData, bSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"b","version":"1.0.0","main":"index.js"}`,
+		"index.js":     "export const bMarker = \"deep-b\";\n",
+	})
+	aData, aSRI := tarball(t, map[string]string{
+		"package.json": `{"name":"a","version":"1.0.0","main":"index.js","dependencies":{"b":"^1.0.0"}}`,
+		"index.js": `import { bMarker } from "b";
+export const aID = "a-" + bMarker;
+export default aID;
+`,
+	})
+	t1Data, t1SRI := tarball(t, map[string]string{
+		"package.json": `{"name":"t1","version":"1.0.0","main":"index.js","dependencies":{"a":"^1.0.0"}}`,
+		"index.js": `import { aID } from "a";
+export default aID;
+`,
+	})
+	lay, _, root := layoutHarnessVersioned(t, map[string][]byte{
+		"t1@1.0.0": t1Data, "a@1.0.0": aData, "b@1.0.0": bData,
+	}, map[string]string{
+		"t1@1.0.0": t1SRI, "a@1.0.0": aSRI, "b@1.0.0": bSRI,
+	})
+	_, err := lay.MaterializeDeps(context.Background(), build.DepLayoutRequest{
+		Dir: root,
+		Lock: domain.SnapshotLock{Deps: []domain.LockedDep{
+			{Name: "t1", Spec: "^1.0.0", Version: "1.0.0", Integrity: t1SRI, Hoisted: true, RequestedBy: []string{"site"}},
+			{Name: "a", Spec: "^1.0.0", Version: "1.0.0", Integrity: aSRI, Hoisted: true, RequestedBy: []string{"t1@1.0.0"}},
+			{Name: "b", Spec: "^1.0.0", Version: "1.0.0", Integrity: bSRI, RequestedBy: []string{"a@1.0.0"}},
+		}},
+		TopLevel: []string{"t1"},
+	})
+	if err != nil {
+		t.Fatalf("materialize deps: %v", err)
+	}
+	nestedB, err := os.ReadFile(filepath.Join(root, "node_modules", "a", "node_modules", "b", "index.js"))
+	if err != nil {
+		t.Fatalf("b must nest under a despite being the sole instance: %v", err)
+	}
+	if !strings.Contains(string(nestedB), "deep-b") {
+		t.Fatalf("nested b content wrong:\n%s", nestedB)
+	}
+	if _, err := os.Stat(filepath.Join(root, "node_modules", "b", "index.js")); err == nil {
+		t.Fatalf("sole nested b must not be hoisted to the root")
+	}
+	bundle, err := os.ReadFile(filepath.Join(root, "dist/_deps", "t1@1.0.0.js"))
+	if err != nil {
+		t.Fatalf("read t1 bundle: %v", err)
+	}
+	if !strings.Contains(string(bundle), "deep-b") {
+		t.Fatalf("t1 bundle must inline the deeply nested b:\n%s", bundle)
+	}
+}
+
 // subpathFixture returns an agent tarball whose package entry imports ./lib/util.js
 // (relative, inlined into the main bundle) and whose lib/util.js exposes only a
 // named export — so the subpath artifact exercises the named-only fallback.

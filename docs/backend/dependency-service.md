@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; осталось: коллизии/вложенный версионный layout, CSS/ассеты**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; осталось: CSS/ассеты, peer-политика, allowlist scopes**.
 
 ## 1. Цель и принципы
 
@@ -58,8 +58,12 @@ node/npm; CI и dev-машина работают чисто на Go.
 ```
 domain:
   Dependency   { SiteID, Name, Spec, ResolvedVersion, Integrity }   // вершинные, на сайт
-  ResolvedGraph: FlatResolve → map[pkg]ResolvedPackage               // lock снапшота
-  SnapshotLock { SnapshotID, Deps []LockedDep{Name, Version, Integrity} }
+  ResolvedGraph: ResolveLock → экземплярный граф                // lock снапшота
+  SnapshotLock { SnapshotID, Deps []LockedDep{Name, Version, Integrity, Hoisted, RequestedBy} }
+    LockedDep.RequestedBy []string — родительские экземпляры «name@version» (или "site" для вершинных);
+    LockedDep.Hoisted — экземпляр раскладывается в корневой node_modules/<name>. Слайс «вложенные
+    версионные layout»: один пакет может встречаться несколько раз (по версии), порядок Deps = BFS
+    (родители раньше детей) → раскладка детерминирована.
 
 storage (новые tables `005_dependencies.sql`):
   dependencies(site_id, name, spec, resolved_version, integrity, updated_at)   // вершинные
@@ -73,16 +77,28 @@ storage (новые tables `005_dependencies.sql`):
 
 ## 5. Резолв и раскладка графа
 
-- **Flat-граф с одной версией на пакет** (Решение фазы 1): резолвим вершинные spec'ы, затем
-  транзитивные (семверно, тем же методом). Если два пакета требуют **разные** версии одного
-  пакета (напр. react@17 и react@18) — `ErrVersionConflict` с понятным сообщением
-  («pkgA requires react@17, pkgB requires react@18»). Вложенные версионные layout — фаза 2.
-- **Раскладка**: при публикации распаковываем tarball'ы содержимое в локальный
-  `node_modules/<name>` (плоский layout, как npm hoisting). Всё из кэша по sha256.
-  Согласовано: точная версия+интегрити из снапшота (lock) → раскладка детерминирована и
-  пересборка (Этап 3 rebuilder) повторяема.
+- **Экземплярный граф (вложенный версионный layout, реализован)**. `deps.Service.ResolveLock`
+  обходит граф BFS-очередью граней `{name, spec, requestedBy}`; для каждой грани — reuse первого
+  (в порядке создания) экземпляра имени, чья версия удовлетворяет range; иначе резолвится новая
+  версия и создаётся экземпляр: `Hoisted = (это первый экземпляр имени)`, `RequestedBy` = родитель
+  («site» для вершинных). Вершинные имена уникальны (сортировка top-level по имени → BFS
+  детерминирован); дубликаты имени — только среди транзитивных, это норма, `ErrVersionConflict`
+  больше не эмитится (остаётся определённым для прежних контрактов, §11). Неуспех резолва range
+  — `ErrUnresolvableSpec` на грани.
+- **Раскладка** (materializer `internal/infra/deps/layout`): по записям lock в BFS-порядке
+  вычисляются физические пути и распаковываются tarball'ы (всё из дискового кэша по sha512):
+  hoisted-экземпляр → `node_modules/<name>`; несовместимый второй экземпляр → под каждым
+  родителем `node_modules/<parent>/node_modules/<name>`. Вложенный экземпляр без известного
+  родителя или запрошенный «site» → `DepBuildError` (битый lock). Полная детерминированность:
+  точные версии+интегрити из lock → пересборка (Этап 3 rebuilder) повторяема.
+- **Legacy flat-locks** (слайсы 1–2, без `hoisted`/`requestedBy`) читаются как прежде: единственный
+  экземпляр каждого имени раскладывается в корневой `node_modules/<name>`.
+- **Резолв на сборке**: esbuild стандартным node-резолвом (walk-up по `node_modules/`) находит для
+  каждого импортирующего файла ближайший физический экземпляр → каждый потребитель получает свою
+  версию. Вершинные имена уникальны → `dist/_deps/<name>@<ver>.js` и import-map не меняются;
+  дубликаты инлайнятся в бандлы потребителей.
 - peers: peerDependencies учитываем при резолве диапазона, но не инсталим отдельно, если
-  версия уже в графе (фаза 1). Неудовлетворённый peer → предупреждение в лог, не fail
+  версия уже в графе. Неудовлетворённый peer → предупреждение в лог, не fail
   (финальное ужесточение — фаза 2).
 
 ## 6. Бандл deps (Go esbuild)
@@ -100,7 +116,8 @@ storage (новые tables `005_dependencies.sql`):
   + запись `manifest.deps` (ключ = спецификатор) + `manifest.externals` += спецификатор.
   Потребляющий dep-бандл держит спецификатор external (shared import-map), транзитивные остаются
   инлайн. Subpath нерезолвится → `DepBuildError`; non-JS ассет (`.css` и др.) → fail с hint
-  (одинаково для site-кода и dep-кода). Экзотика (коллизии имён subpath между версиями) — фаза 2.
+  (одинаково для site-кода и dep-кода). Коллизии имён subpath между разными версиями одного
+  пакета резолвятся тем же физическим walk-up (§5): субпат-артефакт берётся из hoisted-экземпляра.
 - **CSS/не-JS ассеты** пакетов: фаза 2 (import-map для CSS-запросов и `<link>`, взятие из
   бандла и самостоятельная отдача). Фаза 1: пакет с CSS-импортами → fail с ясным сообщением,
   что ассеты не поддерживаются ещё.
@@ -112,7 +129,8 @@ storage (новые tables `005_dependencies.sql`):
 ## 7. Снапшот + lock + import-map
 
 - `CreateSnapshot` получает опциональные вершинные deps сайта (резолв на этом шаге; невалид →
-  ошибка снапшота). В снапшот пишется `deps_lock: LockedDep[]` (top-level + транзитивные, flat).
+  ошибка снапшота). В снапшот пишется `deps_lock: LockedDep[]` (top-level + транзитивные;
+   вложенный версионный layout — по BFS `name@version` с `hoisted`/`requestedBy`).
 - Артефакты публикации: `_deps/*.js` рядом с site bundle; **отдаются существующим FileServer**
   артефактов (`/build/<site>/<env>/<snapshot>/_deps/<file>`) — отдельного endpoint нет.
 - `manifest.json` пополняется:
@@ -130,7 +148,8 @@ storage (новые tables `005_dependencies.sql`):
 - Admin: `GET /api/sites/{id}/dependencies`, `POST /api/sites/{id}/dependencies {name, spec}`,
   `DELETE /api/sites/{id}/dependencies/{name}`. Порт `deps.DomainService`; хендлер в admin api.
 - Ошибки: неизвестный пакет → 404; нерезолвящийся диапазон → 422 `{error, detail|hint}`;
-  конфликт версий → 422; `latest`/тег-спек → 400.
+  конфликт версий → 422 (legacy-контракт; при вложенном layout резолв больше не падает — см. §5);
+  `latest`/тег-спек → 400.
 - Резолв **не** в POST: объявление зависимости валидирует форму/пакетный синтаксис, а сам резолв
   диапазона в пин-версию происходит на `CreateSnapshot` (Решение 3). Чтобы admin видел, что подтянет,
   POST отдаёт `resolvedVersion` информативно-пробно (best-effort) — но lock-источник только снапшот.
@@ -187,8 +206,14 @@ storage (новые tables `005_dependencies.sql`):
 `build.ScanImportSpecifiers` для layout+materializer, `scanDepSubpaths` по распакованным
 `node_modules/<dep>`, per-dep externals в бандле, shared-корни/react остаются external,
 транзитивные/self — инлайн, нерезолвящийся и non-JS subpath dep-кода → DepBuildError с hint).
-Осталось: вложенные версионные layout (конфликты), CSS/ассеты, peer-политика (fail по
-неудовлетворённым peers), allowlist scopes, кэш-лимиты/эвикция.
+✅ вложенные версионные layout (слайс 3: экземплярный граф в `ResolveLock` — BFS по граням,
+reuse-first-satisfying по порядку создания, `LockedDep{Hoisted,RequestedBy}`; раскладка
+hoisted → корневой `node_modules/<name>`, несовместимая версия → под каждым родителем;
+физический walk-up резолвит каждому потребителю свою версию; legacy flat-locks без маркеров
+читаются как прежде; `ErrVersionConflict` не эмитится; unit-тесты резолвера и layout + e2e
+двух вершинных deps с разными версиями транзитивного).
+Осталось: CSS/ассеты, peer-политика (fail по неудовлетворённым peers), allowlist scopes,
+кэш-лимиты/эвикция.
 
 **Фаза 3:** `cmd/dependency-build` (замена `scripts/build-shared`, npm больше нигде не упоминается),
 ликвидация shell-обёрток, SBOM/audit-экспорт.
@@ -197,6 +222,6 @@ storage (новые tables `005_dependencies.sql`):
 
 - Monorepo-/workspace-пакеты и git-спецификаторы npm (`user/repo#branch`) не поддерживаются
   (только registry-scoped).
-- Duplicate-версии — только фазой 2 (вложенный layout).
+- Duplicate-версии — поддержаны вложенным версионным layout (слайс 3); см. §5.
 - CSS/фонты пакетов — фаза 2; фаза 1 и subpath-слайсы честно падают с hint.
 - Один npm-источник публичный; mirror/registry-proxy — вне scope.

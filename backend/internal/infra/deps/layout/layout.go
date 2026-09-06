@@ -62,13 +62,44 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 		return build.DepLayout{Deps: map[string]build.DepRef{}, Externals: []string{}}, nil
 	}
 
-	// 1. Ensure every locked package is laid out into node_modules/.
-	byName := make(map[string]domain.LockedDep, len(req.Lock.Deps))
+	// 1. Compute the physical placement of every locked instance and lay it
+	// out: the hoisted instance of a package lives at node_modules/<name>,
+	// every conflicting second version is nested under each parent instance
+	// that requires it (node_modules/<parent>/node_modules/<name>, spec §5).
+	// Paths are computed in lock order — the resolver emits parents before
+	// children — so unwrapping is deterministic and esbuild's node resolution
+	// walks up from every importing file to the correct version.
+	instances, perName, err := indexInstances(req.Lock.Deps)
+	if err != nil {
+		return build.DepLayout{}, err
+	}
+	// A legacy flat lock carries no hoist markers at all; its sole instance
+	// per package goes to the root. In marker mode the Hoisted flag is
+	// authoritative (a package may resolve only a nested instance).
+	legacy := true
 	for _, dep := range req.Lock.Deps {
-		byName[dep.Name] = dep
-		if err := l.ensure(ctx, req.Dir, dep); err != nil {
-			return build.DepLayout{}, err
+		if dep.Hoisted || len(dep.RequestedBy) > 0 {
+			legacy = false
+			break
 		}
+	}
+	hoisted := func(name string) (string, bool) {
+		keys := perName[name]
+		if len(keys) == 0 {
+			return "", false
+		}
+		for _, key := range keys {
+			if instances[key].Hoisted {
+				return key, true
+			}
+		}
+		if legacy {
+			return keys[0], true
+		}
+		return "", false
+	}
+	if err := l.layOut(ctx, req.Dir, req.Lock.Deps, instances, hoisted, legacy); err != nil {
+		return build.DepLayout{}, err
 	}
 
 	topSet := make(map[string]bool, len(req.TopLevel))
@@ -102,12 +133,13 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 	result := build.DepLayout{Deps: map[string]build.DepRef{}}
 	externals := make([]string, 0, len(req.TopLevel)+len(req.Subpaths)+len(discovered))
 	for _, name := range req.TopLevel {
-		dep, ok := byName[name]
+		key, ok := hoisted(name)
 		if !ok {
 			return build.DepLayout{}, &build.DepBuildError{
 				Pkg: name, Hint: "declared dependency is absent from the snapshot lock (lock was frozen before the declaration)",
 			}
 		}
+		dep := instances[key]
 		ref, err := l.bundle(ctx, req.Dir, dep, "", perDepExternals[name]...)
 		if err != nil {
 			return build.DepLayout{}, err
@@ -137,13 +169,13 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 		if reason := unsupportedSubpath(rest); reason != "" {
 			return build.DepLayout{}, &build.DepBuildError{Pkg: top, Hint: reason}
 		}
-		dep, ok := byName[top]
+		key, ok := hoisted(top)
 		if !ok {
 			return build.DepLayout{}, &build.DepBuildError{
 				Pkg: top, Hint: fmt.Sprintf("subpath import %q names a package absent from the snapshot lock", spec),
 			}
 		}
-		ref, err := l.bundle(ctx, req.Dir, dep, rest)
+		ref, err := l.bundle(ctx, req.Dir, instances[key], rest)
 		if err != nil {
 			return build.DepLayout{}, err
 		}
@@ -156,8 +188,9 @@ func (l *Layout) MaterializeDeps(ctx context.Context, req build.DepLayoutRequest
 }
 
 // ensure fetches (if missing from the disk cache), verifies and unpacks one
-// locked package into node_modules/<name>.
-func (l *Layout) ensure(ctx context.Context, dir string, dep domain.LockedDep) error {
+// locked instance into relPath under dir (e.g. "node_modules/name" for hoisted
+// packages, "node_modules/parent/node_modules/name" for nested ones).
+func (l *Layout) ensure(ctx context.Context, dir string, dep domain.LockedDep, relPath string) error {
 	if dep.Integrity == "" {
 		return &build.DepBuildError{
 			Pkg: dep.Name, Version: dep.Version,
@@ -168,7 +201,79 @@ func (l *Layout) ensure(ctx context.Context, dir string, dep domain.LockedDep) e
 	if err != nil {
 		return err
 	}
-	return unpackTarball(data, filepath.Join(dir, "node_modules", dep.Name))
+	return unpackTarball(data, filepath.Join(dir, filepath.FromSlash(relPath)))
+}
+
+// indexInstances indexes a lock's instances by their graph-unique name@version
+// key and the deterministic per-package creation order. A duplicated key is a
+// corrupted lock, not a valid nested layout.
+func indexInstances(deps []domain.LockedDep) (map[string]domain.LockedDep, map[string][]string, error) {
+	instances := make(map[string]domain.LockedDep, len(deps))
+	perName := make(map[string][]string, len(deps))
+	for _, dep := range deps {
+		key := dep.InstanceKey()
+		if _, dup := instances[key]; dup {
+			return nil, nil, &build.DepBuildError{
+				Pkg: dep.Name, Version: dep.Version,
+				Hint: "duplicate lock entry for the same package instance (corrupted snapshot lock)",
+			}
+		}
+		instances[key] = dep
+		perName[dep.Name] = append(perName[dep.Name], key)
+	}
+	return instances, perName, nil
+}
+
+// layOut unpacks every instance of the lock at its physical path(s). Hoisted
+// instances go to node_modules/<name>; a nested instance is placed under the
+// path of every parent instance that requires it, so esbuild resolves each
+// consumer to the version that satisfies its requested range. The lock must
+// list parents before children (deterministic BFS order the resolver emits);
+// a nested instance whose parent path is not yet known is a broken lock. In
+// legacy (no markers) mode every bare instance unpacks at the root.
+func (l *Layout) layOut(ctx context.Context, dir string, deps []domain.LockedDep,
+	instances map[string]domain.LockedDep, hoisted func(string) (string, bool), legacy bool) error {
+	paths := make(map[string][]string, len(deps))
+	for _, dep := range deps {
+		key := dep.InstanceKey()
+		if hkey, _ := hoisted(dep.Name); hkey == key {
+			paths[key] = []string{filepath.Join("node_modules", dep.Name)}
+			continue
+		}
+		if legacy {
+			paths[key] = []string{filepath.Join("node_modules", dep.Name)}
+			continue
+		}
+		var own []string
+		for _, parent := range dep.RequestedBy {
+			if parent == "site" {
+				return &build.DepBuildError{
+					Pkg: dep.Name, Version: dep.Version,
+					Hint: "a nested instance may not be requested by the site; a top-level package must be hoisted",
+				}
+			}
+			parentPaths, ok := paths[parent]
+			if !ok {
+				return &build.DepBuildError{
+					Pkg: dep.Name, Version: dep.Version,
+					Hint: fmt.Sprintf("nested instance has unknown parent %q in the lock (parents must precede children)", parent),
+				}
+			}
+			for _, p := range parentPaths {
+				own = append(own, filepath.Join(p, "node_modules", dep.Name))
+			}
+		}
+		paths[key] = uniqueSorted(own)
+	}
+
+	for _, dep := range deps {
+		for _, relPath := range paths[dep.InstanceKey()] {
+			if err := l.ensure(ctx, dir, dep, relPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // blob returns verified tarball bytes for a locked package, using the disk

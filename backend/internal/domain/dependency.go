@@ -39,14 +39,26 @@ type Dependency struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// LockedDep is one frozen dependency of a snapshot: the exact version chosen
-// for a range plus its integrity (sha512), so the build is reproducible.
+// LockedDep is one frozen dependency instance of a snapshot: the exact version
+// chosen for a range plus its integrity (sha512), so the build is reproducible.
+// A package may appear several times under the same Name when two parts of the
+// graph pin incompatible ranges (nested-versioned layout, spec §5): the
+// Hoisted instance lives at node_modules/<name> and every other instance is
+// nested under each parent instance that requires it (RequestedBy lists the
+// parent instance keys "name@version"; the verbatim value "site" marks a
+// top-level declaration). Emission order is deterministic BFS (parents before
+// children) so the layout reproduces the same physical placement.
 type LockedDep struct {
-	Name      string `json:"name"`
-	Spec      string `json:"spec"`
-	Version   string `json:"version"`
-	Integrity string `json:"integrity"`
+	Name        string   `json:"name"`
+	Spec        string   `json:"spec"`
+	Version     string   `json:"version"`
+	Integrity   string   `json:"integrity"`
+	Hoisted     bool     `json:"hoisted,omitempty"`
+	RequestedBy []string `json:"requestedBy,omitempty"`
 }
+
+// InstanceKey returns the graph-unique key of a locked instance.
+func (l LockedDep) InstanceKey() string { return l.Name + "@" + l.Version }
 
 // SnapshotLock is the complete frozen dependency graph of a snapshot. It is a
 // flat list (one version per package) and acts as the snapshot's SBOM.

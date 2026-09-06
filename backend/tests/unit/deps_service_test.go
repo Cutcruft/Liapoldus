@@ -3,6 +3,7 @@ package unit
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
@@ -191,14 +192,14 @@ func TestResolveLockResolvesTransitives(t *testing.T) {
 		t.Fatalf("ResolveLock: %v", err)
 	}
 	want := []domain.LockedDep{
-		{Name: "a", Spec: "^1", Version: "1.0.0", Integrity: "sha512-a"},
-		{Name: "b", Spec: "^2", Version: "2.5.0", Integrity: "sha512-b"},
+		{Name: "a", Spec: "^1", Version: "1.0.0", Integrity: "sha512-a", Hoisted: true, RequestedBy: []string{"site"}},
+		{Name: "b", Spec: "^2", Version: "2.5.0", Integrity: "sha512-b", Hoisted: true, RequestedBy: []string{"a@1.0.0"}},
 	}
 	if len(lock.Deps) != len(want) {
 		t.Fatalf("lock.Deps = %+v, want %+v", lock.Deps, want)
 	}
 	for i := range want {
-		if lock.Deps[i] != want[i] {
+		if !reflect.DeepEqual(lock.Deps[i], want[i]) {
 			t.Errorf("lock.Deps[%d] = %+v, want %+v", i, lock.Deps[i], want[i])
 		}
 	}
@@ -242,7 +243,8 @@ func TestResolveLockReusesFrozenCompatibleVersion(t *testing.T) {
 	}
 }
 
-func TestResolveLockConflict(t *testing.T) {
+func TestResolveLockNestsConflictingVersions(t *testing.T) {
+	var resolvedB []string
 	reg := &fakeRegistry{resolve: func(_ context.Context, name, spec string) (deps.ResolvedVersion, error) {
 		switch {
 		case name == "c1":
@@ -250,8 +252,10 @@ func TestResolveLockConflict(t *testing.T) {
 		case name == "c2":
 			return deps.ResolvedVersion{Name: "c2", Version: "2.0.0", Dependencies: map[string]string{"b": "^2.0"}}, nil
 		case name == "b" && spec == "^1.0":
+			resolvedB = append(resolvedB, "1.4.0")
 			return deps.ResolvedVersion{Name: "b", Version: "1.4.0"}, nil
 		case name == "b" && spec == "^2.0":
+			resolvedB = append(resolvedB, "2.0.0")
 			return deps.ResolvedVersion{Name: "b", Version: "2.0.0"}, nil
 		}
 		return deps.ResolvedVersion{}, domain.ErrPackageNotFound
@@ -264,8 +268,84 @@ func TestResolveLockConflict(t *testing.T) {
 		}
 	}
 
-	if _, err := svc.ResolveLock(ctx, "site-1"); !errors.Is(err, domain.ErrVersionConflict) {
-		t.Fatalf("ResolveLock error = %v, want ErrVersionConflict", err)
+	// Unlike the flat layout, an incompatible transitive range no longer fails
+	// the whole graph: b resolves twice and the second version is nested under
+	// the parent that requires it (RequestedBy keeps the edge).
+	lock, err := svc.ResolveLock(ctx, "site-1")
+	if err != nil {
+		t.Fatalf("ResolveLock: %v", err)
+	}
+	want := []domain.LockedDep{
+		{Name: "c1", Spec: "^1", Version: "1.0.0", Hoisted: true, RequestedBy: []string{"site"}},
+		{Name: "c2", Spec: "^1", Version: "2.0.0", Hoisted: true, RequestedBy: []string{"site"}},
+		{Name: "b", Spec: "^1.0", Version: "1.4.0", Hoisted: true, RequestedBy: []string{"c1@1.0.0"}},
+		{Name: "b", Spec: "^2.0", Version: "2.0.0", Hoisted: false, RequestedBy: []string{"c2@2.0.0"}},
+	}
+	if len(lock.Deps) != len(want) {
+		t.Fatalf("lock.Deps = %+v, want %+v", lock.Deps, want)
+	}
+	for i := range want {
+		if !reflect.DeepEqual(lock.Deps[i], want[i]) {
+			t.Errorf("lock.Deps[%d] = %+v, want %+v", i, lock.Deps[i], want[i])
+		}
+	}
+	if got := len(resolvedB); got != 2 {
+		t.Errorf("b resolved %d times, want 2 (one per incompatible range)", got)
+	}
+}
+
+func TestResolveLockNestedInstanceResolvesItsOwnGraph(t *testing.T) {
+	var count int
+	reg := &fakeRegistry{resolve: func(_ context.Context, name, spec string) (deps.ResolvedVersion, error) {
+		count++
+		switch {
+		case name == "a":
+			return deps.ResolvedVersion{Name: "a", Version: "1.0.0", Dependencies: map[string]string{"b": "^1.0"}}, nil
+		case name == "b" && spec == "^1.0":
+			return deps.ResolvedVersion{Name: "b", Version: "1.0.0", Dependencies: map[string]string{"c": "^2"}}, nil
+		case name == "b" && spec == "^2.0":
+			return deps.ResolvedVersion{Name: "b", Version: "2.0.0", Dependencies: map[string]string{"c": "^2"}}, nil
+		case name == "c" && spec == "^1":
+			return deps.ResolvedVersion{Name: "c", Version: "1.0.0"}, nil
+		case name == "c" && spec == "^2":
+			return deps.ResolvedVersion{Name: "c", Version: "2.0.0"}, nil
+		}
+		return deps.ResolvedVersion{}, domain.ErrPackageNotFound
+	}}
+	svc, _ := newTestDepsService(t, reg)
+	ctx := context.Background()
+	// c@2 is required by both b instances; a site-level c@1 exists too, so the
+	// b@2 subtree resolves its own c@2 instance.
+	if _, err := svc.Add(ctx, "site-1", "a", "^1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Add(ctx, "site-1", "b", "^2.0"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Add(ctx, "site-1", "c", "^1"); err != nil {
+		t.Fatal(err)
+	}
+
+	lock, err := svc.ResolveLock(ctx, "site-1")
+	if err != nil {
+		t.Fatalf("ResolveLock: %v", err)
+	}
+	sawB2 := false
+	for _, dep := range lock.Deps {
+		if dep.Name == "b" && dep.Version == "2.0.0" {
+			sawB2 = true
+		}
+		if dep.Name == "a" {
+			if !reflect.DeepEqual(dep.RequestedBy, []string{"site"}) {
+				t.Errorf("a RequestedBy = %v, want [site]", dep.RequestedBy)
+			}
+		}
+	}
+	if !sawB2 {
+		t.Fatalf("lock.Deps missing the nested b@2.0.0 instance: %+v", lock.Deps)
+	}
+	if count != 8 {
+		t.Errorf("registry resolved %d times, want 8 (a, b@1, b@2 from site, c@1, c@2 once deduped, plus three Add probes)", count)
 	}
 }
 
