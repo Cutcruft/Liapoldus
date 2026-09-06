@@ -30,6 +30,8 @@ type App struct {
 	Deps       *deps.Service
 	Logger     *slog.Logger
 	AdminToken string
+	// BuildEvents is the hub the /api/builds/ws channel relays (optional).
+	BuildEvents BuildEventSource
 }
 
 func NewRouter(app App) http.Handler {
@@ -50,6 +52,13 @@ func NewRouter(app App) http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	// Live build events for the admin Builds page. Registered on the outer
+	// (pre-BearerAuth) mux because browsers can't send an Authorization header
+	// on WebSocket; the handler validates the token from the query instead.
+	if app.BuildEvents != nil {
+		mux.Handle("GET /api/builds/ws", http.HandlerFunc(NewBuildsWsHandler(app.BuildEvents, app.AdminToken, app.Logger).Serve))
+	}
 
 	// Everything else is behind the admin bearer token.
 	protected := http.NewServeMux()
@@ -123,6 +132,7 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("POST /api/sites/{siteID}/components/{componentID}/rollback", componentHandler.Rollback)
 
 	protected.HandleFunc("POST /api/sites/{siteID}/builds", buildHandler.Create)
+	protected.HandleFunc("GET /api/sites/{siteID}/builds", buildHandler.List)
 	protected.HandleFunc("GET /api/builds/{buildID}", buildHandler.Get)
 
 	protected.HandleFunc("GET /api/sites/{siteID}/dependencies", depsHandler.List)
@@ -133,6 +143,7 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("DELETE /api/sites/{siteID}/dependencies/allowlist/{entry}", depsHandler.RemoveAllowlist)
 	protected.HandleFunc("GET /api/sites/{siteID}/cache-config", depsHandler.GetCacheConfig)
 	protected.HandleFunc("PUT /api/sites/{siteID}/cache-config", depsHandler.PutCacheConfig)
+	protected.HandleFunc("POST /api/sites/{siteID}/cache-config/evict", depsHandler.EvictCacheConfig)
 
 	mux.Handle("/", httpapi.BearerAuth(app.AdminToken, httpapi.WithCORS(protected)))
 

@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; allowlist scopes (фаза 2, слайс 6) — реализованы; кэш-лимиты/эвикция (фаза 2, слайс 7) — реализованы; осталось: фаза 3 (cmd/dependency-build)**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; allowlist scopes (фаза 2, слайс 6) — реализованы; кэш-лимиты/эвикция (фаза 2, слайсы 7–7b) — реализованы; осталось: фаза 3 (cmd/dependency-build)**.
 
 ## 1. Цель и принципы
 
@@ -190,6 +190,9 @@ storage (новые tables `005_dependencies.sql`):
   `POST …/allowlist {entry}`, `DELETE …/allowlist/{entry}` (scoped-записи — URL-encode `%2F`).
 - Кэш-лимиты (слайс 7): `GET /api/sites/{id}/cache-config` → `{maxDepsBytes}` (0 = без своего
   лимита), `PUT …/cache-config {maxDepsBytes}`. Валидация: `0 < maxDepsBytes ≤ 8 GiB` → иначе 400.
+- Ручная эвикция (слайс 7b): `POST /api/sites/{id}/cache-config/evict` (body `{targetDepsBytes}`
+  опционален; 0/пропущен → до effective-лимита) → `{evicted, evictedBytes}`; удаляет только
+  `.tgz`-блобы, метаданные БД не трогает.
 - Ошибки: неизвестный пакет → 404; нерезолвящийся диапазон → 422 `{error, detail|hint}`;
   неудовлетворённый peer (peer-политика §5) → 422;
   пакет вне allowlist (allowlist-политика §5) → 422;
@@ -211,9 +214,11 @@ storage (новые tables `005_dependencies.sql`):
 - Allowlist scopes (слайс 6): per-site allowlist в БД + admin API; ограничивает, какие
   пакеты (включая транзитивные) могут попасть в lock сайта. Публичные маршруты не
   открываются: зависимости не содержат секретов/токенов админа.
-- Кэш-лимиты/эвикция (слайс 7): общий tarball-кэш под per-site бюджетом. Эвикция — LRU по
-  last-access (метки в БД, touch на чтении); удаляется только `.tgz`-блоб с диска, метаданные
-  (`dep_packages`, access-записи) сохраняются — блоб заново фетчится (иммутабельный кэш, §5).
+- Кэш-лимиты/эвикция (слайсы 7–7b): общий tarball-кэш под per-site бюджетом. Автоматическая
+  эвикция — LRU по last-access (метки в БД, touch на чтении); ручная — `POST …/cache-config/evict`
+  (до целевого размера или effective-лимита). В обоих случаях удаляется только `.tgz`-блоб с
+  диска, метаданные (`dep_packages`, access-записи) сохраняются — блоб заново фетчится
+  (иммутабельный кэш, §5).
 - Rate-limit/backoff к registry + таймауты; ретраи с экспоненциальной задержкой.
 
 ## 10. Замена shared-сборки (полный zero-node)
@@ -294,6 +299,11 @@ per-site настройка лимита в БД `site_cache_config(site_id, max
 дефолт 5 мин, автозапуск в `cmd/server`); admin API `GET/PUT /api/sites/{id}/cache-config`
 (вал: `0 < max ≤ 8 GiB`, иначе 400); unit: валидация/round-trip/effective-max/LRU-эвикция/no-op
 (безлимит, без стора)/admin CRUD, integration `TestDependencyCacheEviction`).
+✅ ручная эвикция (слайс 7b: `deps.Service.ManualEvictTarballs` — LRU до целевого размера или
+effective-лимита, только `.tgz`-блобы, метаданные сохраняются; admin API
+`POST /api/sites/{id}/cache-config/evict` (body `targetDepsBytes` опционален) →
+`{evicted, evictedBytes}`; unit: to-target/fallback-to-limit/no-limit-noop/admin, integration —
+продолжение `TestDependencyCacheEviction`).
 Осталось: фаза 3.
 
 **Фаза 3:** `cmd/dependency-build` (замена `scripts/build-shared`, npm больше нигде не упоминается),

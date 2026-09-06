@@ -222,3 +222,99 @@ func TestCacheConfigAdminCRUD(t *testing.T) {
 		t.Fatalf("PUT cache-config(over-cap) status = %d, want 400", over.Code)
 	}
 }
+
+func TestManualEvictTarballsToTarget(t *testing.T) {
+	svc, db := newTestDepsService(t, &fakeRegistry{})
+	cache := newFakeTarballCache()
+	svc.WithTarballCache(cache)
+	ctx := context.Background()
+
+	cache.put("a", "1.0.0", 30)
+	cache.put("b", "1.0.0", 30)
+	cache.put("c", "1.0.0", 30)
+	_ = db.TouchTarballAccess(ctx, "a", "1.0.0")
+	time.Sleep(2 * time.Millisecond)
+	_ = db.TouchTarballAccess(ctx, "b", "1.0.0")
+	time.Sleep(2 * time.Millisecond)
+	_ = db.TouchTarballAccess(ctx, "c", "1.0.0")
+
+	// Manual eviction to target 30 bytes: drop oldest "a" (30) and "b" (30) -> 30.
+	evictedBytes, evicted, err := svc.ManualEvictTarballs(ctx, 30)
+	if err != nil {
+		t.Fatalf("ManualEvictTarballs: %v", err)
+	}
+	if evicted != 2 || evictedBytes != 60 {
+		t.Errorf("manual evict = (%d bytes, %d files), want (60, 2)", evictedBytes, evicted)
+	}
+	if cache.Has("a", "1.0.0") || cache.Has("b", "1.0.0") {
+		t.Errorf("oldest 'a'/'b' should be evicted")
+	}
+	if !cache.Has("c", "1.0.0") {
+		t.Errorf("newest 'c' should be retained")
+	}
+}
+
+func TestManualEvictTarballsTargetZeroFallsBackToLimit(t *testing.T) {
+	svc, db := newTestDepsService(t, &fakeRegistry{})
+	cache := newFakeTarballCache()
+	svc.WithTarballCache(cache)
+	ctx := context.Background()
+
+	cache.put("a", "1.0.0", 30)
+	cache.put("b", "1.0.0", 30)
+	_ = db.TouchTarballAccess(ctx, "a", "1.0.0")
+	time.Sleep(2 * time.Millisecond)
+	_ = db.TouchTarballAccess(ctx, "b", "1.0.0")
+
+	// target 0 (omitted) falls back to the effective limit.
+	if err := svc.SetCacheConfig(ctx, "site-1", 30); err != nil {
+		t.Fatalf("SetCacheConfig: %v", err)
+	}
+	_, evicted, err := svc.ManualEvictTarballs(ctx, 0)
+	if err != nil {
+		t.Fatalf("ManualEvictTarballs(0): %v", err)
+	}
+	if evicted != 1 { // drop oldest "a" to reach 30
+		t.Errorf("evicted = %d, want 1", evicted)
+	}
+}
+
+func TestManualEvictTarballsWithoutLimitNoop(t *testing.T) {
+	svc, _ := newTestDepsService(t, &fakeRegistry{})
+	cache := newFakeTarballCache()
+	cache.put("a", "1.0.0", 100)
+	svc.WithTarballCache(cache)
+
+	// No configured limit and target 0 -> effective limit unknown -> no-op.
+	got, n, err := svc.ManualEvictTarballs(context.Background(), 0)
+	if err != nil || n != 0 || got != 0 {
+		t.Errorf("manual evict (unlimited) = (%d, %d, %v), want (0,0,nil)", got, n, err)
+	}
+	if cache.Size("a", "1.0.0") == 0 {
+		t.Errorf("no-op must not delete tarballs")
+	}
+}
+
+func TestEvictCacheConfigAdmin(t *testing.T) {
+	app, _, siteID := newDepsApp(t, &fakeRegistry{})
+	handler := admin.NewRouter(app)
+
+	evict := request(t, handler, http.MethodPost, "/api/sites/"+siteID+"/cache-config/evict", map[string]any{"targetDepsBytes": 1 << 20})
+	if evict.Code != http.StatusOK {
+		t.Fatalf("POST evict status = %d (%s)", evict.Code, evict.Body.String())
+	}
+	var out struct {
+		Evicted      int   `json:"evicted"`
+		EvictedBytes int64 `json:"evictedBytes"`
+	}
+	decodeResponse(t, evict, &out)
+	if out.EvictedBytes != 0 {
+		t.Errorf("evict response = %+v, want 0 evicted on empty cache", out)
+	}
+
+	// Empty body (no JSON) must also be accepted.
+	evict = request(t, handler, http.MethodPost, "/api/sites/"+siteID+"/cache-config/evict", nil)
+	if evict.Code != http.StatusOK {
+		t.Fatalf("POST evict (no body) status = %d, want 200", evict.Code)
+	}
+}

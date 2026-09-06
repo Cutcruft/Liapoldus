@@ -511,4 +511,12 @@ func TestDependencyCacheEviction(t *testing.T) {
 	if len(access) != 3 {
 		t.Errorf("access records = %d, want 3 (metadata preserved)", len(access))
 	}
+
+	// Manual eviction down to 30 bytes: drop "b" (30) next, keeping "c".
+	if got, n, err := services.Deps.ManualEvictTarballs(ctx, 30); err != nil || n != 1 || got != 30 {
+		t.Fatalf("manual evict (to 30) = (%d, %d, %v), want (30,1,nil)", got, n, err)
+	}
+	if disk.Has("b", "1.0.0") || !disk.Has("c", "1.0.0") {
+		t.Errorf("after manual evict: 'b' should be gone, 'c' retained")
+	}
 }

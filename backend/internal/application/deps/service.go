@@ -514,6 +514,56 @@ func (s *Service) EvictTarballs(ctx context.Context) (evictedBytes int64, evicte
 	return evictedBytes, evicted, nil
 }
 
+// ManualEvictTarballs runs an explicit LRU-eviction pass down to a target
+// retained size (cache-limits/eviction, spec §11). A non-positive targetBytes
+// falls back to the effective limit (max over sites; smoke no-op when no site
+// has a limit). Only the on-disk tarball blobs are deleted; the DB metadata
+// (dep_packages, access records) is left intact so packages are re-fetched on
+// the next build. Returns the bytes evicted and the number of blobs removed.
+func (s *Service) ManualEvictTarballs(ctx context.Context, targetBytes int64) (evictedBytes int64, evicted int, err error) {
+	if s.tarballs == nil {
+		return 0, 0, nil
+	}
+	limit := targetBytes
+	if limit <= 0 {
+		var ok bool
+		limit, ok, err = s.EffectiveCacheLimit(ctx)
+		if err != nil {
+			return 0, 0, err
+		}
+		if !ok || limit <= 0 {
+			return 0, 0, nil
+		}
+	}
+	access, err := s.deps.ListTarballAccess(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	var total int64
+	for _, acc := range access {
+		total += s.tarballs.Size(acc.Name, acc.Version)
+	}
+	if total <= limit {
+		return 0, 0, nil
+	}
+	for _, acc := range access {
+		if total <= limit {
+			break
+		}
+		size := s.tarballs.Size(acc.Name, acc.Version)
+		if size == 0 || !s.tarballs.Has(acc.Name, acc.Version) {
+			continue
+		}
+		if err := s.tarballs.Delete(acc.Name, acc.Version); err != nil {
+			return evictedBytes, evicted, err
+		}
+		total -= size
+		evictedBytes += size
+		evicted++
+	}
+	return evictedBytes, evicted, nil
+}
+
 // StartCacheEviction runs the periodic LRU-eviction sweep on an interval until
 // the context is cancelled (cache-limits/eviction, spec §11). A non-positive
 // interval disables the periodic tick; on the context the function returns.

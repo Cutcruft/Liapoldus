@@ -142,3 +142,32 @@ func (h *DepsHandler) PutCacheConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	httpapi.RespondJSON(w, http.StatusOK, cacheConfigResponse{MaxDepsBytes: req.MaxDepsBytes})
 }
+
+type evictCacheRequest struct {
+	TargetDepsBytes int64 `json:"targetDepsBytes"`
+}
+
+type evictCacheResponse struct {
+	Evicted      int   `json:"evicted"`
+	EvictedBytes int64 `json:"evictedBytes"`
+}
+
+// EvictCacheConfig runs a manual LRU-eviction pass of the site's dependency
+// tarball cache down to the requested retained size (cache-limits/eviction,
+// spec §11). A target of 0 (or omitted) evicts down to the effective limit.
+// Only on-disk .tgz blobs are removed; DB metadata stays intact. The request
+// targets the shared cache, so the siteID path parameter is informational.
+func (h *DepsHandler) EvictCacheConfig(w http.ResponseWriter, r *http.Request) {
+	var req evictCacheRequest
+	if r.Body != nil && r.ContentLength != 0 {
+		if !httpapi.DecodeJSON(r, &req, w) {
+			return
+		}
+	}
+	evictedBytes, evicted, err := h.deps.ManualEvictTarballs(r.Context(), req.TargetDepsBytes)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, evictCacheResponse{Evicted: evicted, EvictedBytes: evictedBytes})
+}
