@@ -143,6 +143,54 @@ func TestSiteAndPageFlow(t *testing.T) {
 	}
 }
 
+func TestComponentsListCatalog(t *testing.T) {
+	app, db := newAdminHandlerTestAppDB(t)
+	handler := admin.NewRouter(app)
+	var created struct {
+		ID string `json:"id"`
+	}
+	decodeResponse(t, request(t, handler, http.MethodPost, "/api/sites", map[string]any{"name": "Demo", "slug": "demo"}), &created)
+	seedSiteDefs(t, db, created.ID)
+
+	var catalog []struct {
+		Type      string         `json:"type"`
+		Label     string         `json:"label"`
+		Container bool           `json:"container"`
+		Schema    map[string]any `json:"schema"`
+	}
+	decodeResponse(t, request(t, handler, http.MethodGet, "/api/sites/"+created.ID+"/components", nil), &catalog)
+
+	want := []struct {
+		Type      string
+		Container bool
+	}{
+		{"Container", true},
+		{"Text", false},
+		{"Image", false},
+		{"Button", false},
+		// Seeded site definitions are appended after the builtins.
+		{"Container", false},
+		{"Text", false},
+	}
+	if len(catalog) != len(want) {
+		t.Fatalf("catalog len = %d, want %d (%#v)", len(catalog), len(want), catalog)
+	}
+	for i, w := range want {
+		if catalog[i].Type != w.Type || catalog[i].Container != w.Container {
+			t.Fatalf("catalog[%d] = {type:%q container:%v}, want {type:%q container:%v}", i, catalog[i].Type, catalog[i].Container, w.Type, w.Container)
+		}
+	}
+	// Every entry is inspector-ready.
+	for _, c := range catalog {
+		if c.Schema == nil {
+			t.Fatalf("component %q missing schema", c.Type)
+		}
+		if c.Label == "" {
+			t.Fatalf("component %q missing label", c.Type)
+		}
+	}
+}
+
 func TestInvalidComponentIsRejected(t *testing.T) {
 	app, db := newAdminHandlerTestAppDB(t)
 	handler := admin.NewRouter(app)

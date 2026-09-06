@@ -3,8 +3,8 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-// Proxy targets come from the environment so the same config works on the
-// host (defaults) and inside docker-compose (VITE_API_URL=http://backend:8080).
+// Proxy targets come from the environment so the same config works out of the
+// box on the host (defaults) and with an explicit VITE_API_URL later.
 const API_TARGET = process.env.VITE_API_URL || 'http://localhost:8080';
 const CLIENT_TARGET = process.env.VITE_CLIENT_URL || 'http://localhost:18080';
 

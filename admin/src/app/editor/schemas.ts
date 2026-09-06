@@ -1,4 +1,7 @@
-/** Встроенные компоненты и их JSON-Schema (подмножество draft-07 для генератора форм). */
+/** Каталог компонентов редактора и их JSON-Schema (подмножество draft-07 для генератора форм). */
+
+import { useEffect, useMemo, useState } from 'react';
+import type { AdminApi } from '../../runtime/api';
 
 export type JSONSchemaValueType = 'string' | 'number' | 'boolean';
 
@@ -35,7 +38,33 @@ export interface BuiltinComponent {
   container: boolean;
 }
 
-export const BUILTIN_COMPONENTS: BuiltinComponent[] = [
+/** Backend отдаёт каталог как `{type,label,container,schema}`. */
+type RawCatalogEntry = {
+  type: string;
+  label: string;
+  container: boolean;
+  schema: unknown;
+};
+
+/** Каталог, отправленный с сервера, в схему редактора. Невалидные записи пропускаются. */
+export function parseCatalog(raw: unknown): BuiltinComponent[] {
+  if (!Array.isArray(raw)) return [];
+  const out: BuiltinComponent[] = [];
+  for (const entry of raw) {
+    const e = entry as RawCatalogEntry;
+    if (typeof e?.type !== 'string' || e.type === '') continue;
+    if (typeof e?.label !== 'string' || e.label === '') continue;
+    const schema = e.schema as JSONSchema | null;
+    if (typeof schema !== 'object' || schema === null) continue;
+    if (schema.type !== 'object') continue;
+    if (typeof schema.properties !== 'object' || schema.properties === null) continue;
+    out.push({ type: e.type, label: e.label, container: e.container === true, schema });
+  }
+  return out;
+}
+
+/** Синхронный fallback: используется, пока каталог не загружен с бэкенда. */
+const FALLBACK_BUILTINS: BuiltinComponent[] = [
   {
     type: 'Container',
     label: 'Контейнер',
@@ -119,14 +148,64 @@ export const BUILTIN_COMPONENTS: BuiltinComponent[] = [
   },
 ];
 
+/** Статический индекс fallback-каталога (используется тестами и до загрузки). */
 export const BUILTIN_BY_TYPE: Record<string, BuiltinComponent> = Object.fromEntries(
-  BUILTIN_COMPONENTS.map((c) => [c.type, c]),
+  FALLBACK_BUILTINS.map((c) => [c.type, c]),
 );
 
-export function builtinFieldSchema(type: string): JSONSchema | undefined {
-  return BUILTIN_BY_TYPE[type]?.schema;
+/** Загрузка каталога с бэкенда; при ошибке/невалидном ответе — fallback. */
+export async function loadCatalog(
+  api: AdminApi,
+  siteId: string,
+): Promise<BuiltinComponent[]> {
+  try {
+    const res = await api.request('GET', `/api/sites/${encodeURIComponent(siteId)}/components`);
+    if (!res.ok) return FALLBACK_BUILTINS;
+    const parsed = parseCatalog(res.body);
+    return parsed.length > 0 ? parsed : FALLBACK_BUILTINS;
+  } catch {
+    return FALLBACK_BUILTINS;
+  }
 }
 
-export function isBuiltinType(type: string): boolean {
-  return type in BUILTIN_BY_TYPE;
+export interface ComponentCatalog {
+  components: BuiltinComponent[];
+  byType: Record<string, BuiltinComponent>;
+  schemasByType: Record<string, JSONSchema>;
+}
+
+/**
+ * Каталог компонентов редактора. Изначально синхронный fallback (кнопки
+ * палитры работают сразу), а после успешной загрузки страницы заменяется
+ * полным каталогом с бэкенда (builtin + определённые на сайте компоненты).
+ * `enabled` должен становиться true только когда редактор готов к работе.
+ */
+export function useComponentCatalog(
+  api: AdminApi,
+  siteId: string,
+  enabled: boolean,
+): ComponentCatalog {
+  const [components, setComponents] = useState<BuiltinComponent[]>(FALLBACK_BUILTINS);
+
+  useEffect(() => {
+    if (!enabled || siteId === '') return;
+    let alive = true;
+    void loadCatalog(api, siteId).then((next) => {
+      if (alive) setComponents(next);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [api, siteId, enabled]);
+
+  const byType = useMemo(
+    () => Object.fromEntries(components.map((c) => [c.type, c])),
+    [components],
+  );
+  const schemasByType = useMemo(
+    () => Object.fromEntries(components.map((c) => [c.type, c.schema])),
+    [components],
+  );
+
+  return { components, byType, schemasByType };
 }

@@ -56,13 +56,46 @@ func (h *ComponentHandler) Define(w http.ResponseWriter, r *http.Request) {
 	httpapi.RespondJSON(w, http.StatusCreated, result)
 }
 
+// editorComponent is one entry of the editor catalog returned by
+// GET /api/sites/{id}/components: builtin platform components plus the site's
+// defined components, each shaped for the editor palette/inspector.
+type editorComponent struct {
+	Type      string         `json:"type"`
+	Label     string         `json:"label"`
+	Container bool           `json:"container"`
+	Schema    map[string]any `json:"schema"`
+}
+
+// List returns the unified editor catalog for a site: platform builtin
+// components first, then the site's component definitions mapped to the same
+// shape. The admin editor loads this once when it mounts (schemas.ts).
 func (h *ComponentHandler) List(w http.ResponseWriter, r *http.Request) {
-	result, err := h.components.List(r.Context(), siteID(r))
+	defs, err := h.components.List(r.Context(), siteID(r))
 	if err != nil {
 		httpapi.RespondError(w, err)
 		return
 	}
-	httpapi.RespondJSON(w, http.StatusOK, result)
+	builtins := component.Builtins()
+	catalog := make([]editorComponent, 0, len(builtins)+len(defs))
+	for _, b := range builtins {
+		catalog = append(catalog, editorComponent{Type: b.Type, Label: b.Label, Container: b.Container, Schema: b.Schema})
+	}
+	for _, d := range defs {
+		label := d.Name
+		if l, ok := stringMeta(d.Metadata, "label"); ok && l != "" {
+			label = l
+		}
+		catalog = append(catalog, editorComponent{Type: d.ID, Label: label, Container: false, Schema: d.Schema})
+	}
+	httpapi.RespondJSON(w, http.StatusOK, catalog)
+}
+
+func stringMeta(m map[string]any, key string) (string, bool) {
+	if m == nil {
+		return "", false
+	}
+	v, ok := m[key].(string)
+	return v, ok
 }
 
 func (h *ComponentHandler) Get(w http.ResponseWriter, r *http.Request) {

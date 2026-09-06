@@ -48,7 +48,7 @@ export { OPERATIONS, operationByKind, runOperation } from './operations';
 export type { OperationKind, OperationSpec } from './operations';
 export { createTokenStore, validateToken } from './token-store';
 export type { AdminAuthState } from './token-store';
-export { APP_VERSION, DEFAULT_BUILDS_WS_PATH, DEFAULT_DEV_WS_PATH, ENV_DEV } from './constants';
+export { APP_VERSION, AUTOSAVE_DEBOUNCE_MS, DEFAULT_BUILDS_WS_PATH, DEFAULT_DEV_WS_PATH, ENV_DEV } from './constants';
 export type { SliceStore } from '@liapoldus/ui-runtime';
 export { makeTranslate } from './i18n';
 export type { Translate } from './i18n';

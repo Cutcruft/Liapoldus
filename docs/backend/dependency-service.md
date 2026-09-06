@@ -65,14 +65,14 @@ domain:
     версионные layout»: один пакет может встречаться несколько раз (по версии), порядок Deps = BFS
     (родители раньше детей) → раскладка детерминирована.
 
-storage (новые tables `005_dependencies.sql`):
-  dependencies(site_id, name, spec, resolved_version, integrity, updated_at)   // вершинные
-  dep_packages(name, version, integrity, tarball_url, dependencies JSON)       // кэш метаданных
+storage (migration `005_dependencies.sql`):
+  site_dependencies(site_id, name, spec, resolved_version, integrity, updated_at)  // вершинные
+  dep_packages(name, version, integrity, tarball_url, dependencies JSON)           // кэш метаданных
   blobs на диске: <data>/deps/<name>/<version>.tgz  (диск-стор internal/infra/deps/store; таблицы индексов нет)
 ```
 
-- Версии **immutable** → записи кэша никто не переписывает; `dep_packages` и `dep_blobs` растут
-  монотонно, эвикция не нужна.
+- Версии **immutable** → записи кэша никто не переписывает; `site_dependencies` (по сайту), `dep_packages`
+  и дисковый кэш tarball'ов растут монотонно, эвикция не нужна.
 - Идемпотентность: повторный резолв того же `name@exact`, fetch того же tarball — no-op.
 
 ## 5. Резолв и раскладка графа

@@ -1,5 +1,6 @@
 # Go
 backend/bin/
+backend/tmp/
 backend/*.log
 
 # e2e runtime data

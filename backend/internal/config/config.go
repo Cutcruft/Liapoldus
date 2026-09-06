@@ -49,8 +49,13 @@ type Config struct {
 }
 
 // Load is the single source of configuration: every value comes from the
-// environment. There are no code defaults; missing or invalid variables are
-// collected into a single error so operators see the full set at once.
+// environment. Most variables are required; missing or invalid ones are
+// collected into a single error so operators see the full set at once. A few
+// operational values carry sane code defaults instead of being required:
+// LIAPOLDUS_BUILD_DIR="./build", LIAPOLDUS_DEPS_DIR="./deps",
+// LIAPOLDUS_NPM_REGISTRY=public npm registry, and
+// LIAPOLDUS_DEPS_CACHE_EVICT_INTERVAL=5m (a non-positive value disables the
+// periodic sweep).
 func Load() (Config, error) {
 	var problems []string
 

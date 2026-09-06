@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useSelector } from '@liapoldus/ui-runtime';
 import type { ComponentNode, Translate } from '../../runtime';
 import { findNode } from './tree-utils';
-import { BUILTIN_COMPONENTS } from './schemas';
+import type { BuiltinComponent } from './schemas';
 import type { EditorStore, EditorActions } from './page-store';
 import { ToolButton } from './controls';
 
 interface TreeRowProps {
   node: ComponentNode;
   depth: number;
+  components: readonly BuiltinComponent[];
   selectionId?: string;
   addingId?: string;
   isRoot: boolean;
@@ -21,6 +22,7 @@ interface TreeRowProps {
 function TreeRow({
   node,
   depth,
+  components,
   selectionId,
   addingId,
   isRoot,
@@ -32,7 +34,7 @@ function TreeRow({
   const selected = selectionId === node.id;
   const summary =
     (node.props?.['label'] as string) ?? (node.props?.['text'] as string) ?? node.type;
-  const isContainer = BUILTIN_COMPONENTS.some((c) => c.type === node.type && c.container);
+  const isContainer = components.some((c) => c.type === node.type && c.container);
 
   return (
     <div>
@@ -73,7 +75,7 @@ function TreeRow({
 
       {addingId === node.id && (
         <div className="ml-6 mt-0.5 flex flex-wrap gap-1 py-0.5">
-          {BUILTIN_COMPONENTS.map((c) => (
+          {components.map((c) => (
             <button
               key={c.type}
               type="button"
@@ -94,6 +96,7 @@ function TreeRow({
           key={child.id}
           node={child}
           depth={depth + 1}
+          components={components}
           selectionId={selectionId}
           addingId={addingId}
           isRoot={false}
@@ -111,10 +114,12 @@ export function TreePanel({
   store,
   actions,
   t,
+  components,
 }: {
   store: EditorStore;
   actions: EditorActions;
   t: Translate;
+  components: readonly BuiltinComponent[];
 }) {
   const tree = useSelector(store, (s) => s.tree);
   const selectionId = useSelector(store, (s) => s.selectionId);
@@ -128,6 +133,7 @@ export function TreePanel({
       <TreeRow
         node={tree}
         depth={0}
+        components={components}
         isRoot
         selectionId={selectionId}
         addingId={addingId}

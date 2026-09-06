@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSelector } from '@liapoldus/ui-runtime';
-import { runOperation, type Page } from '../../runtime';
+import { AUTOSAVE_DEBOUNCE_MS, runOperation, type Page } from '../../runtime';
 import { useAdmin } from '../admin-context';
 import { useOperation } from '../use-operation';
 import { createEditorStore, editorActions } from './page-store';
+import { useComponentCatalog } from './schemas';
 import { TreePanel } from './TreePanel';
 import { Inspector } from './Inspector';
 import { PreviewPane } from './PreviewPane';
@@ -13,8 +14,6 @@ import { createPreviewStore, previewActions } from './preview-store';
 import { ToolButton } from './controls';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed';
-
-const AUTOSAVE_MS = 1500;
 
 const PANEL_CLASS = 'rounded-lg border border-neutral-200 bg-white p-3';
 
@@ -25,6 +24,8 @@ export function EditorPage() {
   const store = useMemo(() => createEditorStore(), []);
   const actions = useMemo(() => editorActions(store), [store]);
   const page = useOperation<Page>('getPage', { pageId });
+  // Каталог компонентов загружается только после успешной загрузки страницы.
+  const catalog = useComponentCatalog(api, siteId, page.state.status === 'success');
 
   const previewStore = useMemo(() => createPreviewStore(siteId), [siteId]);
   const preview = useMemo(() => previewActions(previewStore, { api, t, siteId }), [previewStore, api, t, siteId]);
@@ -60,7 +61,7 @@ export function EditorPage() {
     setSaveState('saving');
     const timer = setTimeout(() => {
       void performSave();
-    }, AUTOSAVE_MS);
+    }, AUTOSAVE_DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
     };
@@ -116,7 +117,7 @@ export function EditorPage() {
 
       <div className="grid flex-1 grid-cols-[15rem_minmax(0,1fr)_18rem] gap-4 overflow-hidden">
         <section className={`${PANEL_CLASS} overflow-auto`} aria-label={t('editor.tree')}>
-          <TreePanel store={store} actions={actions} t={t} />
+          <TreePanel store={store} actions={actions} t={t} components={catalog.components} />
         </section>
         <section className={`${PANEL_CLASS} overflow-auto`} aria-label={t('editor.canvas')}>
           <CanvasTabBar view={canvasView} onView={setCanvasView} t={t} />
@@ -127,7 +128,13 @@ export function EditorPage() {
           )}
         </section>
         <section className={`${PANEL_CLASS} overflow-auto`} aria-label={t('editor.props')}>
-          <Inspector store={store} actions={actions} t={t} siteId={siteId} />
+          <Inspector
+            store={store}
+            actions={actions}
+            t={t}
+            siteId={siteId}
+            schemasByType={catalog.schemasByType}
+          />
         </section>
       </div>
     </div>

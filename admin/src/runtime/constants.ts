@@ -11,3 +11,6 @@ export const DEFAULT_DEV_WS_PATH = '/dev/build/ws';
 
 /** Путь канала событий сборок (admin, M3). */
 export const DEFAULT_BUILDS_WS_PATH = '/api/builds/ws';
+
+/** Дебаунс автосохранения схемы в редакторе (мс). */
+export const AUTOSAVE_DEBOUNCE_MS = 1500;

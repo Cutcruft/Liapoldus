@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Page } from '../../runtime';
 import { jsonResponse, renderApp } from '../test-utils';
-import { setDevSocketFactory, type WsLike } from './dev-ws';
+import { setDevSocketFactory, type WsLike } from '../ws-client';
 import { __lastRichTextEditor } from '../rich-text/RichTextEditor';
 
 function inertSocket(): WsLike {

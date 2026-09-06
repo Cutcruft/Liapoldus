@@ -96,6 +96,48 @@ func mustSchema(t *testing.T, raw string) map[string]any {
 	return decodeSchema(t, raw)
 }
 
+func TestComponentBuiltins(t *testing.T) {
+	builtins := component.Builtins()
+	if len(builtins) != 4 {
+		t.Fatalf("want 4 builtin components, got %d", len(builtins))
+	}
+	byType := map[string]component.BuiltinComponent{}
+	for _, b := range builtins {
+		byType[b.Type] = b
+	}
+	for _, name := range []string{"Container", "Text", "Image", "Button"} {
+		if _, ok := byType[name]; !ok {
+			t.Fatalf("builtin %q missing", name)
+		}
+	}
+	if !byType["Container"].Container {
+		t.Fatal("Container must be a container")
+	}
+	for _, containerOnly := range []string{"Text", "Image", "Button"} {
+		if byType[containerOnly].Container {
+			t.Fatalf("%s must be a leaf component", containerOnly)
+		}
+	}
+	// Schema is editor-consumable: object type with properties; number fields
+	// use min/max (the generator's range validation keys).
+	gap, ok := byType["Container"].Schema["properties"].(map[string]any)["gap"].(map[string]any)
+	if !ok {
+		t.Fatal("Container schema missing gap property")
+	}
+	if _, ok := gap["min"]; !ok {
+		t.Fatalf("gap must carry min/max for the form generator: %#v", gap)
+	}
+}
+
+func TestComponentBuiltinLookup(t *testing.T) {
+	if _, ok := component.Builtin("Text"); !ok {
+		t.Fatal("builtin lookup for Text must succeed")
+	}
+	if _, ok := component.Builtin("Nope"); ok {
+		t.Fatal("builtin lookup for unknown type must fail")
+	}
+}
+
 func TestComponentDefine(t *testing.T) {
 	ctx := context.Background()
 	svc, fd := newComponentService(t)

@@ -3,8 +3,8 @@
 Цель: довести проект до рабочего MVP с полной функциональностью.
 `make dev` запускает всё.
 
-**Текущий статус:** M0–M2 + M3-slice 1 (Builds), слайсы 5 (Docker), 1 (Git), 2 (Auth+Dashboard+Settings), 3 (Token Editor), 4 (Dependencies UI) — выполнены.
-Осталось: слайс 6 (Cleanup).
+**Текущий статус:** M0–M2 + M3-slice 1 (Builds), слайсы 5 (Docker), 1 (Git), 2 (Auth+Dashboard+Settings), 3 (Token Editor), 4 (Dependencies UI), 6 (Cleanup) — выполнены.
+MVP функционально полный.
 
 **Порядок слайсов:** 5 (Docker) → 1 (Git) → 2 (Auth) → 3 (Tokens) → 4 (Deps) → 6 (Cleanup)
 
@@ -831,59 +831,58 @@ VITE_CLIENT_URL=http://localhost:18080
 
 ---
 
-## Слайс 6: Doc + Code Cleanup
+## Слайс 6: Doc + Code Cleanup — выполнено
 
 ### 6.1 Удаление мёртвого кода
 
 | Файл | Действие |
 |------|---------|
-| `backend/internal/infra/git/repo.go` | Удалить метод `Head` (строки 221-255) |
-| `admin/src/components/ui/label.tsx` | Удалить файл |
-| `admin/src/app/Placeholder.tsx` | Удалить файл |
-| `admin/src/app/editor/dev-ws.ts` | Объединить с `build-ws.ts` → общий `app/ws-client.ts` |
+| `backend/internal/infra/git/repo.go` | Удалён метод `Head` (остались `HeadSHA`/`mustHead`) |
+| `admin/src/components/ui/label.tsx` | Удалён |
+| `admin/src/app/Placeholder.tsx` | Удалён |
+| `admin/src/app/editor/dev-ws.ts` + `admin/src/app/builds/build-ws.ts` | Объединены → `app/ws-client.ts` (`connectWs<T>`, `connectDevWs`/`connectBuildWs`, инжект фабрик) |
 
 ### 6.2 Извлечение хардкода в конфиги
 
-| Файл | Что извлекаем |
+| Файл | Что извлечено |
 |------|--------------|
-| `admin/src/app/AppShell.tsx` | Version `'v0.1 (M0)'` → `APP_VERSION` из `runtime/constants.ts` |
-| `admin/src/app/editor/schemas.ts` | Builtin components → загрузка из backend API (`GET /api/sites/{id}/components`) |
-| `admin/src/app/editor/dev-ws.ts` | WS path → `DEFAULT_DEV_WS_PATH` из constants |
-| `admin/src/app/builds/build-ws.ts` | WS path → `DEFAULT_BUILDS_WS_PATH` из constants |
-| `admin/src/app/editor/preview-store.ts` | `ENV_DEV` → `ENV_DEV` из constants |
-| `admin/src/app/editor/EditorPage.tsx` | Debounce `500` → `AUTOSAVE_DEBOUNCE_MS` из constants |
-| `backend/internal/config/config.go` | Исправить комментарий "no code defaults" → задокументировать реальные дефолты |
+| `admin/src/app/AppShell.tsx` | Version → `APP_VERSION` (`0.1.0 (MVP)`) из `runtime/constants.ts` |
+| `admin/src/app/editor/schemas.ts` | Builtin components → загрузка из `GET /api/sites/{id}/components` (backend-каталог, `application/component/builtin.go`; `useComponentCatalog` + fallback на статику) |
+| `admin/src/app/ws-client.ts` | WS paths → `DEFAULT_DEV_WS_PATH`/`DEFAULT_BUILDS_WS_PATH` из constants |
+| `admin/src/app/editor/preview-store.ts` | `ENV_DEV` из constants |
+| `admin/src/app/editor/EditorPage.tsx` | Debounce → `AUTOSAVE_DEBOUNCE_MS=1500` из constants |
+| `backend/internal/config/config.go` | Комментарий "no code defaults" исправлен — задокументированы реальные дефолты |
 | `admin/vite.config.ts` | Proxy targets → env vars (сделано в слайсе 5) |
 
 ### 6.3 Новые файлы
 
-- `admin/src/runtime/constants.ts` — `APP_VERSION`, `ENV_DEV`, `DEFAULT_DEV_WS_PATH`, `DEFAULT_BUILDS_WS_PATH`, `AUTOSAVE_DEBOUNCE_MS`
+- `admin/src/runtime/constants.ts` — `APP_VERSION`, `ENV_DEV`, `DEFAULT_DEV_WS_PATH`, `DEFAULT_BUILDS_WS_PATH`, `AUTOSAVE_DEBOUNCE_MS` — создан
 
-### 6.4 Объединение WS клиентов
+### 6.4 Объединение WS клиентов — выполнено
 
-- `admin/src/app/ws-client.ts` — общий WS клиент (объединение `editor/dev-ws.ts` и `builds/build-ws.ts`)
-- Удалить `editor/dev-ws.ts`
-- Обновить `editor/preview-store.ts` и `builds/build-event.ts` для использования нового клиента
+- `admin/src/app/ws-client.ts` — общий WS клиент (`connectWs<T>` поверх `WebSocket`, reconnect/backoff) + `connectDevWs`/`connectBuildWs` (+ суффиксы путей из constants)
+- `editor/dev-ws.ts` и `builds/build-ws.ts` — удалены
+- `preview-store.ts` и `builds/build-event.ts` — используют новый клиент (инжект фабрик `setDevSocketFactory`/`setBuildSocketFactory` для тестов)
 
-### 6.5 Обновление документации
+### 6.5 Обновление документации — выполнено
 
 | Файл | Действие |
 |------|---------|
-| `TODO.md` | Удалить выполненные пункты (M0-M2 + M3-slice 1), оставить только актуальное |
-| `docs/editor-spec.md` | Добавить M3 секции (Git, Tokens, Deps, Auth), обновить M0-M2 |
-| `docs/api-admin.md` | Добавить git/, tokens/, deps (resolve), auth секции |
-| `docs/api-client.md` | Проверить актуальность |
-| `docs/feature-status.md` | Актуализировать все строки, добавить M3 |
-| `docs/backend/dependency-service.md` | Исправить §4 (stale про dep_blobs), обновить статус |
-| `docs/shadcn-migration.md` | Обновить: U0-U1 done, U2-U5 pending. Или удалить если не планируется |
-| `README.md` | Обновить: quick start с `make dev` и `docker-compose` |
+| `TODO.md` | Обновлён: добавлены строки M2 (2–5), M3 (слайс 1), Слайс 6; статусы прошлых слайсов актуализированы |
+| `docs/editor-spec.md` | Обновлено: каталог компонентов (builtin ← backend), ссылка на кодовый редактор, убраны ссылки на удалённый документ |
+| `docs/api-admin.md` | Добавлена секция «Компоненты» (каталог + CRUD) перед «Роуты» |
+| `docs/api-client.md` | Проверена — актуальна (каталог компонентов находится в admin API) |
+| `docs/feature-status.md` | Добавлена строка Слайса 6 (doc+cleanup), counts 224/224 |
+| `docs/backend/dependency-service.md` | Исправлен §4 (stale про dep_blobs → site_dependencies + disk-кэш) |
+| `docs/shadcn-migration.md` | Удалён (U2–U5 не проводятся; статус зафиксирован в editor-spec) |
+| `README.md` | Добавлен «Быстрый старт» (`make dev`, `make docker-up`, порты, токен) |
 
-### 6.6 Config consistency
+### 6.6 Config consistency — выполнено
 
-- `backend/internal/config/config.go` — добавить комментарии к дефолтным значениям
-- `backend/Dockerfile` — добавить HEALTHCHECK, expose оба порта (admin + client)
-- `backend/docker-compose.yml` (существующий) — удалить (заменяется корневым)
-- `admin/.env.example` + `backend/.env.example` — создать (сделано в слайсе 5)
+- `backend/internal/config/config.go` — комментарии к дефолтным значениям добавлены
+- `backend/Dockerfile` — HEALTHCHECK + expose оба порта (admin + client) — проверено
+- `backend/docker-compose.yml` — отсутствует; корневой заменяет (слайс 5)
+- `admin/.env.example` + `backend/.env.example` — есть (сделано в слайсе 5)
 
 ---
 

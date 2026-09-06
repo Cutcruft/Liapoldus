@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { useSelector } from '@liapoldus/ui-runtime';
 import type { JSONSchema } from './schemas';
-import { builtinFieldSchema } from './schemas';
 import type { BindingSourceName } from './field-form';
 import { SchemaForm, type ValidationCode } from './field-form';
 import { findSelected } from './TreePanel';
@@ -35,16 +34,18 @@ export function Inspector({
   actions,
   t,
   siteId,
+  schemasByType,
 }: {
   store: EditorStore;
   actions: EditorActions;
   t: Translate;
   siteId: string;
+  schemasByType: Record<string, JSONSchema>;
 }) {
   const tree = useSelector(store, (s) => s.tree);
   const selectionId = useSelector(store, (s) => s.selectionId);
   const node = findSelected(tree, selectionId);
-  const schema: JSONSchema | undefined = node ? builtinFieldSchema(node.type) : undefined;
+  const schema: JSONSchema | undefined = node ? schemasByType[node.type] : undefined;
 
   const sourceLabel = (s: BindingSourceName) => t(BINDING_LABEL[s]);
   const errorLabel = (code: ValidationCode) => t(VALIDATION_LABEL[code]);

@@ -7,7 +7,7 @@ import { useOperation } from '../use-operation';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { EntityTable } from '../components/EntityTable';
 import { Field } from '../components/Field';
-import { connectBuildWs } from '../builds/build-ws';
+import { connectBuildWs } from '../ws-client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

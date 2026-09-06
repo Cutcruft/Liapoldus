@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from '@liapoldus/ui-runtime';
 import type { DevRebuildEvent, SliceStore, Translate } from '../../runtime';
-import { connectDevWs } from './dev-ws';
+import { connectDevWs } from '../ws-client';
 import type { PreviewActions, PreviewState } from './preview-store';
 import { ToolButton } from './controls';
 

@@ -1,6 +1,6 @@
 import { createSliceStore, type SliceStore } from '@liapoldus/ui-runtime';
 import type { AdminApi, Build, BuildStatus, DevRebuildEvent, Translate } from '../../runtime';
-import { runOperation } from '../../runtime';
+import { ENV_DEV, runOperation } from '../../runtime';
 
 export type PreviewStatus = 'idle' | 'building' | 'ready' | 'failed';
 
@@ -13,8 +13,6 @@ export type PreviewState = {
   queued: boolean;
   buildStatus?: BuildStatus;
 };
-
-export const ENV_DEV = 'development';
 
 export type PreviewActions = {
   requestBuild: () => Promise<void>;

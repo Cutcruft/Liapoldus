@@ -68,7 +68,7 @@ proxy: {
 
 ## 4. ui-kit — layout-примитивы
 
-Примитивы **только** про позиционирование; рендерятся в Tailwind-утилиты (v4, классы генерируются как статические строки). Стилизация (цвета, кнопки, поля) — вне кита, в админке через shadcn/ui (документ `docs/shadcn-migration.md`, U-слайсы попутно с фичами).
+Примитивы **только** про позиционирование; рендерятся в Tailwind-утилиты (v4, классы генерируются как статические строки). Стилизация (цвета, кнопки, поля) — вне кита, в админке через shadcn/ui (U-слайсы попутно с фичами).
 
 ### Шкалы
 
@@ -238,7 +238,7 @@ LEFT  Дерево                 CENTER Canvas-превью          RIGHT И�
 
 - [x] Список страниц и роутов; crud-страниц. *(Слайс 1/3: Sites/SiteHome/SitePages/SiteRoutes, use-operation, ConfirmButton убрал window.confirm, EntityTable/Field, ops listPages/deletePage, страницы покрыты 13 тестами — админка 33/33.)*
 - [x] Редактор дерева: рендер, add/remove/move, focus, undo/redo (slice-store + история). *(Слайс 2/3: tree-utils иммутабельные, page-store с past/future + savedKey-dirty, TreePanel (add-меню из БИ, ↑/↓/✕), ToolButton; покрыто tree-utils/page-store.)*
-- [x] Инспектор: генератор формы из JSON-Schema, live-валидация (R4), asset-picker, binds-переключатель literal/source. *(Слайс 2/3: schemas.ts BUILTIN_COMPONENTS + builtinFieldSchema; SchemaForm: текст/число/checkbox/enum-селект, validateValue → required/type/enum/range; asset-picker — M2.)*
+- [x] Инспектор: генератор формы из JSON-Schema, live-валидация (R4), asset-picker, binds-переключатель literal/source. *(Слайс 2/3: schemas.ts BUILTIN_COMPONENTS + builtinFieldSchema; SchemaForm: текст/число/checkbox/enum-селект, validateValue → required/type/enum/range; asset-picker — M2. Слайс 6: builtin-каталог перемещён на бэкенд — `GET /api/sites/{id}/components` (union builtin + определённые на сайте, `component/builtin.go`); `schemas.ts` загружает каталог через `useComponentCatalog` (fallback на статические builtin до загрузки/при недоступности API); TreePanel/Inspector получают `components`/`schemasByType` пропсом.)*
 - [x] Bindings: picker источника (content/route/query/operation/form + path). *(Слайс 2/3: BINDING_SOURCES select + path-инпут, BindingSource в types, Inspector/EditorPage binding-тест → уходит в PUT.)*
 - [x] Draft-стор + автосейв (дебаунс 1500) + индикатор версии. *(Слайс 2/3: EditorPage autosave → saveTree, SaveIndicator; дебаунсы протестированы через waitFor.)*
 - [x] Canvas-превью: iframe, авто-сборка dev после save, WS DevRebuildEvent → reload. *(Слайс 2/3: локальный design-mode рендер Container/Text/Image/Button с bindings `{{source:path}}`; Слайс 3/3: таб «Дизайн | Превью», iframe `/build/{site}/{development}/{snapshot}/dist/index.html`, авто-сборка после автосейва (createSnapshot «Dev preview» + createBuild development), ротация превью-снапшота, preview-store на slice-store (coalescing/queued + персист последнего снапшота в localStorage), WS `/dev/build/ws?siteId=` → DevRebuildEvent refresh, ops createBuild/getBuild/deleteSnapshot. DevRebuilder на стороне рантайма (материализация из git) — M3/Этап 3.)*
@@ -263,7 +263,7 @@ LEFT  Дерево                 CENTER Canvas-превью          RIGHT И�
 
 ### Миграция на shadcn/ui (U-слайсы)
 
-Поэтапная замена инлайн-Tailwind-контролов на shadcn/ui — слайсами, попутно с фичами M2–M3 (без big-bang): U0 setup+тема, U1 примитивы+AlertDialog, U2 таблицы/диалоги/табы, U3 формы и Radix-select. Полный план, миграционная карта и тест-влияние — `docs/shadcn-migration.md`.
+Поэтапная замена инлайн-Tailwind-контролов на shadcn/ui — слайсами, попутно с фичами M2–M3 (без big-bang): U0 setup+тема, U1 примитивы+AlertDialog, U2 таблицы/диалоги/табы, U3 формы и Radix-select. U0–U1 выполнены (тема `@theme inline`, базовый набор в `src/components/ui/`, ConfirmButton на AlertDialog); U2–U5 как планировали не проводились — полная миграция не требуется.
 
 ### Свои React-компоненты (кодовый редактор) — проект
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderApp, type MockCall } from '../test-utils';
-import { setBuildSocketFactory, type WsLike } from '../builds/build-ws';
+import { setBuildSocketFactory, type WsLike } from '../ws-client';
 import type { Build, BuildEvent, Snapshot } from '../../runtime';
 
 const snapV1: Snapshot = { id: 'snap1', siteId: 's1', name: 'V1', createdAt: '2026-09-01T10:00:00Z' };

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { createAdminApi } from '../../runtime/api';
 import { makeTranslate } from '../../runtime/i18n';
 import { STRINGS } from '../../runtime/strings';
-import { setDevSocketFactory, type WsLike } from './dev-ws';
+import { setDevSocketFactory, type WsLike } from '../ws-client';
 import { createPreviewStore, previewActions } from './preview-store';
 import type { PreviewActions } from './preview-store';
 import { CanvasPreview } from './CanvasPreview';

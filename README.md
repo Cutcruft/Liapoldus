@@ -1,5 +1,15 @@
 # Архитектура Liapoldus Frontend Constructor
 
+## Быстрый старт
+
+Предварительно: `cp backend/.env.example backend/.env` (окружение бэкенда; значения совпадают с `docker-compose.yml`).
+
+- `make dev` — Postgres в Docker + бэкенд с hot-reload (air) + админка (Vite). Требует `backend/.env`.
+- `make docker-up` — весь стек в Docker: Postgres + бэкенд + админка.
+- `make test` / `make lint` — тесты, typecheck, vet.
+
+Порты: admin API `:8080`, client/runtime `:18080`, admin SPA `:5173`. Авторизация админки — `LIAPOLDUS_ADMIN_TOKEN` (пустой = открыто).
+
 ## 1. Назначение
 
 Сервис предназначен для создания и публикации frontend-сайтов из управляемых компонентов.

@@ -130,6 +130,32 @@ DELETE /api/assets/{assetId}            // 204 (удаляет и байты)
 
 `variants[].url` — относительный путь клиентского порта (тот же, что отдаётся `client` API).
 
+## Компоненты
+
+Каталог компонентов редактора. `GET /api/sites/{siteId}/components` возвращает **объединённый каталог**: сначала платформенные builtin-компоненты (Container/Text/Image/Button), затем определённые на сайте. Каждая запись — `{type, label, container, schema}` (schema — JSON-Schema draft-07-подмножество для генератора форм).
+
+```http
+GET /api/sites/{siteId}/components
+Accept: application/json
+
+[
+  {"type":"Container","label":"Контейнер","container":true,"schema":{"type":"object","properties":{...}}},
+  {"type":"Text","label":"Текст","container":false,"schema":{...}},
+  {"type":"MySection","label":"Моя секция","container":false,"schema":{...}}   // определённый на сайте
+]
+```
+
+- `container: true` — разрешено вкладывать детей (у текущих builtin — только `Container`; пользовательские всегда `container: false`).
+- Полный CRUD определений:
+
+```http
+POST   /api/sites/{siteId}/components            // create {id,name,kind,source,schema,metadata}
+GET    /api/sites/{siteId}/components            // каталог (builtin + определённые)
+GET    /api/sites/{siteId}/components/{id}       // определение
+PUT    /api/sites/{siteId}/components/{id}       // update {name,schema,metadata}
+DELETE /api/sites/{siteId}/components/{id}       // 204
+```
+
 ## Роуты
 
 Единый маршрут. `matcher` — полное регулярное выражение пути; `priority` (больше = раньше); при равенстве — порядок создания.
