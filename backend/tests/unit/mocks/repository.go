@@ -83,6 +83,34 @@ func (mr *MockStorageMockRecorder) CreateContent(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContent", reflect.TypeOf((*MockStorage)(nil).CreateContent), arg0, arg1)
 }
 
+// CreateDepPackage mocks base method.
+func (m *MockStorage) CreateDepPackage(arg0 context.Context, arg1 domain.DepPackage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDepPackage", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDepPackage indicates an expected call of CreateDepPackage.
+func (mr *MockStorageMockRecorder) CreateDepPackage(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDepPackage", reflect.TypeOf((*MockStorage)(nil).CreateDepPackage), arg0, arg1)
+}
+
+// CreateDependency mocks base method.
+func (m *MockStorage) CreateDependency(arg0 context.Context, arg1 domain.Dependency) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDependency", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDependency indicates an expected call of CreateDependency.
+func (mr *MockStorageMockRecorder) CreateDependency(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDependency", reflect.TypeOf((*MockStorage)(nil).CreateDependency), arg0, arg1)
+}
+
 // CreateForm mocks base method.
 func (m *MockStorage) CreateForm(arg0 context.Context, arg1 domain.Form) error {
 	m.ctrl.T.Helper()
@@ -207,6 +235,20 @@ func (m *MockStorage) DeleteContent(arg0 context.Context, arg1 string) error {
 func (mr *MockStorageMockRecorder) DeleteContent(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteContent", reflect.TypeOf((*MockStorage)(nil).DeleteContent), arg0, arg1)
+}
+
+// DeleteDependency mocks base method.
+func (m *MockStorage) DeleteDependency(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDependency", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDependency indicates an expected call of DeleteDependency.
+func (mr *MockStorageMockRecorder) DeleteDependency(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDependency", reflect.TypeOf((*MockStorage)(nil).DeleteDependency), arg0, arg1, arg2)
 }
 
 // DeleteForm mocks base method.
@@ -367,6 +409,36 @@ func (m *MockStorage) GetContentsByIDs(arg0 context.Context, arg1 string, arg2 [
 func (mr *MockStorageMockRecorder) GetContentsByIDs(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContentsByIDs", reflect.TypeOf((*MockStorage)(nil).GetContentsByIDs), arg0, arg1, arg2)
+}
+
+// GetDepPackage mocks base method.
+func (m *MockStorage) GetDepPackage(arg0 context.Context, arg1, arg2 string) (domain.DepPackage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDepPackage", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.DepPackage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDepPackage indicates an expected call of GetDepPackage.
+func (mr *MockStorageMockRecorder) GetDepPackage(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDepPackage", reflect.TypeOf((*MockStorage)(nil).GetDepPackage), arg0, arg1, arg2)
+}
+
+// GetDependency mocks base method.
+func (m *MockStorage) GetDependency(arg0 context.Context, arg1, arg2 string) (domain.Dependency, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDependency", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Dependency)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDependency indicates an expected call of GetDependency.
+func (mr *MockStorageMockRecorder) GetDependency(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDependency", reflect.TypeOf((*MockStorage)(nil).GetDependency), arg0, arg1, arg2)
 }
 
 // GetForm mocks base method.
@@ -534,6 +606,21 @@ func (mr *MockStorageMockRecorder) ListContentsBySite(arg0, arg1, arg2 any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListContentsBySite", reflect.TypeOf((*MockStorage)(nil).ListContentsBySite), arg0, arg1, arg2)
 }
 
+// ListDependenciesBySite mocks base method.
+func (m *MockStorage) ListDependenciesBySite(arg0 context.Context, arg1 string) ([]domain.Dependency, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDependenciesBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Dependency)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListDependenciesBySite indicates an expected call of ListDependenciesBySite.
+func (mr *MockStorageMockRecorder) ListDependenciesBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDependenciesBySite", reflect.TypeOf((*MockStorage)(nil).ListDependenciesBySite), arg0, arg1)
+}
+
 // ListFormsBySite mocks base method.
 func (m *MockStorage) ListFormsBySite(arg0 context.Context, arg1 string) ([]domain.Form, error) {
 	m.ctrl.T.Helper()
@@ -679,6 +766,20 @@ func (m *MockStorage) UpdateContent(arg0 context.Context, arg1 domain.Content) e
 func (mr *MockStorageMockRecorder) UpdateContent(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateContent", reflect.TypeOf((*MockStorage)(nil).UpdateContent), arg0, arg1)
+}
+
+// UpdateDependency mocks base method.
+func (m *MockStorage) UpdateDependency(arg0 context.Context, arg1 domain.Dependency) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateDependency", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateDependency indicates an expected call of UpdateDependency.
+func (mr *MockStorageMockRecorder) UpdateDependency(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDependency", reflect.TypeOf((*MockStorage)(nil).UpdateDependency), arg0, arg1)
 }
 
 // UpdateForm mocks base method.
@@ -1647,4 +1748,153 @@ func (m *MockBuildRepository) UpdateBuild(arg0 context.Context, arg1 domain.Buil
 func (mr *MockBuildRepositoryMockRecorder) UpdateBuild(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBuild", reflect.TypeOf((*MockBuildRepository)(nil).UpdateBuild), arg0, arg1)
+}
+
+// MockDependencyRepository is a mock of DependencyRepository interface.
+type MockDependencyRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockDependencyRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockDependencyRepositoryMockRecorder is the mock recorder for MockDependencyRepository.
+type MockDependencyRepositoryMockRecorder struct {
+	mock *MockDependencyRepository
+}
+
+// NewMockDependencyRepository creates a new mock instance.
+func NewMockDependencyRepository(ctrl *gomock.Controller) *MockDependencyRepository {
+	mock := &MockDependencyRepository{ctrl: ctrl}
+	mock.recorder = &MockDependencyRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDependencyRepository) EXPECT() *MockDependencyRepositoryMockRecorder {
+	return m.recorder
+}
+
+// CreateDependency mocks base method.
+func (m *MockDependencyRepository) CreateDependency(arg0 context.Context, arg1 domain.Dependency) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDependency", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDependency indicates an expected call of CreateDependency.
+func (mr *MockDependencyRepositoryMockRecorder) CreateDependency(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDependency", reflect.TypeOf((*MockDependencyRepository)(nil).CreateDependency), arg0, arg1)
+}
+
+// DeleteDependency mocks base method.
+func (m *MockDependencyRepository) DeleteDependency(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDependency", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDependency indicates an expected call of DeleteDependency.
+func (mr *MockDependencyRepositoryMockRecorder) DeleteDependency(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDependency", reflect.TypeOf((*MockDependencyRepository)(nil).DeleteDependency), arg0, arg1, arg2)
+}
+
+// GetDependency mocks base method.
+func (m *MockDependencyRepository) GetDependency(arg0 context.Context, arg1, arg2 string) (domain.Dependency, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDependency", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Dependency)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDependency indicates an expected call of GetDependency.
+func (mr *MockDependencyRepositoryMockRecorder) GetDependency(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDependency", reflect.TypeOf((*MockDependencyRepository)(nil).GetDependency), arg0, arg1, arg2)
+}
+
+// ListDependenciesBySite mocks base method.
+func (m *MockDependencyRepository) ListDependenciesBySite(arg0 context.Context, arg1 string) ([]domain.Dependency, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDependenciesBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Dependency)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListDependenciesBySite indicates an expected call of ListDependenciesBySite.
+func (mr *MockDependencyRepositoryMockRecorder) ListDependenciesBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDependenciesBySite", reflect.TypeOf((*MockDependencyRepository)(nil).ListDependenciesBySite), arg0, arg1)
+}
+
+// UpdateDependency mocks base method.
+func (m *MockDependencyRepository) UpdateDependency(arg0 context.Context, arg1 domain.Dependency) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateDependency", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateDependency indicates an expected call of UpdateDependency.
+func (mr *MockDependencyRepositoryMockRecorder) UpdateDependency(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDependency", reflect.TypeOf((*MockDependencyRepository)(nil).UpdateDependency), arg0, arg1)
+}
+
+// MockDepPackageRepository is a mock of DepPackageRepository interface.
+type MockDepPackageRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockDepPackageRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockDepPackageRepositoryMockRecorder is the mock recorder for MockDepPackageRepository.
+type MockDepPackageRepositoryMockRecorder struct {
+	mock *MockDepPackageRepository
+}
+
+// NewMockDepPackageRepository creates a new mock instance.
+func NewMockDepPackageRepository(ctrl *gomock.Controller) *MockDepPackageRepository {
+	mock := &MockDepPackageRepository{ctrl: ctrl}
+	mock.recorder = &MockDepPackageRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDepPackageRepository) EXPECT() *MockDepPackageRepositoryMockRecorder {
+	return m.recorder
+}
+
+// CreateDepPackage mocks base method.
+func (m *MockDepPackageRepository) CreateDepPackage(arg0 context.Context, arg1 domain.DepPackage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDepPackage", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDepPackage indicates an expected call of CreateDepPackage.
+func (mr *MockDepPackageRepositoryMockRecorder) CreateDepPackage(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDepPackage", reflect.TypeOf((*MockDepPackageRepository)(nil).CreateDepPackage), arg0, arg1)
+}
+
+// GetDepPackage mocks base method.
+func (m *MockDepPackageRepository) GetDepPackage(arg0 context.Context, arg1, arg2 string) (domain.DepPackage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDepPackage", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.DepPackage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDepPackage indicates an expected call of GetDepPackage.
+func (mr *MockDepPackageRepositoryMockRecorder) GetDepPackage(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDepPackage", reflect.TypeOf((*MockDepPackageRepository)(nil).GetDepPackage), arg0, arg1, arg2)
 }

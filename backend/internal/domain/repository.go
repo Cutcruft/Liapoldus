@@ -16,6 +16,8 @@ type Storage interface {
 	FormRepository
 	ComponentDefinitionRepository
 	BuildRepository
+	DependencyRepository
+	DepPackageRepository
 }
 
 type SiteRepository interface {
@@ -94,4 +96,22 @@ type BuildRepository interface {
 	// re-publication of a snapshot.
 	GetBuildBySnapshot(context.Context, string, string, string) (Build, error)
 	UpdateBuild(context.Context, Build) error
+}
+
+// DependencyRepository persists top-level, per-site npm dependencies. The
+// (site_id, name) pair is unique; re-declaring a dependency updates its spec.
+type DependencyRepository interface {
+	CreateDependency(context.Context, Dependency) error
+	GetDependency(context.Context, string, string) (Dependency, error)
+	ListDependenciesBySite(context.Context, string) ([]Dependency, error)
+	UpdateDependency(context.Context, Dependency) error
+	DeleteDependency(context.Context, string, string) error
+}
+
+// DepPackageRepository is the immutable content-addressed cache of registry
+// metadata keyed by (name, version). CreateDepPackage is a no-op when the
+// entry already exists (versions are immutable).
+type DepPackageRepository interface {
+	GetDepPackage(context.Context, string, string) (DepPackage, error)
+	CreateDepPackage(context.Context, DepPackage) error
 }

@@ -9,6 +9,7 @@ import (
 	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
@@ -26,6 +27,7 @@ type App struct {
 	Snapshots  *snapshot.Service
 	Components *component.Service
 	Builds     *buildapp.Service
+	Deps       *deps.Service
 	Logger     *slog.Logger
 	AdminToken string
 }
@@ -42,6 +44,7 @@ func NewRouter(app App) http.Handler {
 	snapshotHandler := NewSnapshotHandler(app.Snapshots)
 	componentHandler := NewComponentHandler(app.Components)
 	buildHandler := NewBuildHandler(app.Builds)
+	depsHandler := NewDepsHandler(app.Deps)
 
 	// Health stays public (pre-auth).
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -121,6 +124,10 @@ func NewRouter(app App) http.Handler {
 
 	protected.HandleFunc("POST /api/sites/{siteID}/builds", buildHandler.Create)
 	protected.HandleFunc("GET /api/builds/{buildID}", buildHandler.Get)
+
+	protected.HandleFunc("GET /api/sites/{siteID}/dependencies", depsHandler.List)
+	protected.HandleFunc("POST /api/sites/{siteID}/dependencies", depsHandler.Create)
+	protected.HandleFunc("DELETE /api/sites/{siteID}/dependencies/{name}", depsHandler.Delete)
 
 	mux.Handle("/", httpapi.BearerAuth(app.AdminToken, httpapi.WithCORS(protected)))
 

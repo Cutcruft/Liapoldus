@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **дизайн, фаза 1 не начата**.
+Спецификация и тест-план. Статус: **фаза 1 — domain/storage/registry/deps.Service/admin API/unit+integration-тесты готовы; шаги 3 (диск-blobs) и 4 (материализация+бандлинг) и e2e — в работе**.
 
 ## 1. Цель и принципы
 
@@ -14,7 +14,8 @@ tarball (Go stdlib `archive/tar` + `compress/gzip`) и сбандлить (уж�
 
 1. **Весь биндинг в Go, включая shared-бандлы.** `backend/scripts/build-shared` (npm/esbuild-node)
    заменяется Go-инструментом; один механизм и для фиксированного shared-набора, и для per-site deps.
-2. **Источник — npm registry напрямую** (`https://registry.npmjs.org`), не esm.sh/unpkg.
+2. **Источник — npm registry напрямую** (`https://registry.npmjs.org`, переопределяется env
+   `LIAPOLDUS_NPM_REGISTRY` — зеркала/прокси, решение 2), не esm.sh/unpkg.
 3. **Резолв и бандл deps сайта — при публикации снапшота.** Сервер ходит в registry только на
    первый контакт с новой версией; далее — бессрочный local-кэш.
 4. **Диапазоны → пин в снапшот.** Admin задаёт npm-диапазон (`^1.2`); при создании снапшота
@@ -155,18 +156,20 @@ storage (новые tables `005_dependencies.sql`):
 
 ## 11. Этапность
 
-**Фаза 1 (MVP, следующая работа):**
-1. `domain` + `storage` (tables 005, memory+postgres), `deps.Service` (CRUD вершинных deps,
+**Фаза 1 (MVP):**
+1. ✅ `domain` + `storage` (tables 005, memory+postgres), `deps.Service` (CRUD вершинных deps,
    резолв + flat-graph + кэш + integrity).
-2. Registry-фетчер `internal/infra/deps/registry` (packument abbr, tarball+integrity, semver через
-   Masterminds/semver, rate-limit/backoff).
-3. Диск-стор blobs `internal/infra/deps/store` (по образцу artifactstore).
-4. Интеграция публикации: lock в снапшот, materializer (node_modules-layout из кэша → esbuild
+2. ✅ Registry-фетчер `internal/infra/deps/registry` (packument abbr, scoped `%2F`, semver через
+   Masterminds/semver, backoff, 404/unresolvable маппинг; tarball-фетч — в шаге 4 вместе с integrity-проверкой).
+3. ⏳ Диск-стор blobs `internal/infra/deps/store` (по образцу artifactstore).
+4. ⏳ Интеграция публикации: materializer (node_modules-layout из кэша → esbuild
    per-dep бандлы в `_deps/`, `manifest.deps` + externals, `DepBuildError` для несовместимых).
-5. Admin API deps CRUD; ошибки 400/404/422.
-6. Тесты: unit (semver-резолв, integrity, конфликтные версии, cache no-op), integration
-   (фейковый registry httptest + реальный esbuild Go; постгрес-очередь §5 прод-аналог), e2e
-   (публикация сайта с lodash-es → бандл `_deps` + import-map в манифесте).
+   Lock в снапшот уже готов: `snapshot.Service` получает variadic `LockResolver` = `deps.Service.ResolveLock`.
+5. ✅ Admin API deps CRUD (`GET/POST /api/sites/{id}/dependencies`, `DELETE .../{name}` с scoped `%2F`);
+   ошибки 400/404/422 (`ErrInvalidDepSpec`/`ErrPackageNotFound`/`ErrUnresolvableSpec`+`ErrVersionConflict`).
+6. ✅ Тесты unit (валидация, best-effort probe, flat-граф, reuse/конфликт, кэш no-op, packument-резолв с
+   httptest-фейком, admin + lock в снапшот, 422 при нерезолвящемся графе) и integration
+   (локальный registry-сервер + memory/postgres). Осталось: e2e (реальный esbuild) в шаге 4.
 7. Документация обновляется вместе с кодом; коммиты по шагам, отдельно после каждой фазы.
 
 **Фаза 2:** subpath-покрытие полностью, вложенные версионные layout (конфликты), CSS/ассеты,

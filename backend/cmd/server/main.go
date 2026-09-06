@@ -93,6 +93,7 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 		Snapshots:  services.Snapshots,
 		Components: services.Components,
 		Builds:     services.Builds,
+		Deps:       services.Deps,
 		Logger:     logger,
 		AdminToken: cfg.AdminToken,
 	})

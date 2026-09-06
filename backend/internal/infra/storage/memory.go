@@ -22,6 +22,8 @@ type Memory struct {
 	submissions map[string][]domain.Submission
 	defs        map[string]*domain.ComponentDefinition
 	builds      map[string]domain.Build
+	deps        map[string]domain.Dependency
+	pkgCache    map[string]domain.DepPackage
 }
 
 var _ domain.Storage = (*Memory)(nil)
@@ -39,6 +41,8 @@ func NewMemory() *Memory {
 		submissions: make(map[string][]domain.Submission),
 		defs:        make(map[string]*domain.ComponentDefinition),
 		builds:      make(map[string]domain.Build),
+		deps:        make(map[string]domain.Dependency),
+		pkgCache:    make(map[string]domain.DepPackage),
 	}
 }
 
@@ -138,6 +142,11 @@ func (m *Memory) DeleteSite(_ context.Context, id string) error {
 		if form.SiteID == id {
 			delete(m.forms, k)
 			delete(m.submissions, k)
+		}
+	}
+	for k, dep := range m.deps {
+		if dep.SiteID == id {
+			delete(m.deps, k)
 		}
 	}
 	return nil
@@ -513,6 +522,8 @@ func (m *Memory) ListSubmissionsByForm(_ context.Context, siteID, formID string)
 
 func (m *Memory) defKey(siteID, id string) string { return siteID + "\x00" + id }
 
+func (m *Memory) depsKey(siteID, name string) string { return siteID + "\x00" + name }
+
 func (m *Memory) Save(_ context.Context, def *domain.ComponentDefinition) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -609,6 +620,83 @@ func (m *Memory) UpdateBuild(_ context.Context, build domain.Build) error {
 		return domain.ErrNotFound
 	}
 	m.builds[build.ID] = clone(build)
+	return nil
+}
+
+func (m *Memory) CreateDependency(_ context.Context, dep domain.Dependency) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.depsKey(dep.SiteID, dep.Name)
+	if _, ok := m.deps[key]; ok {
+		return domain.ErrAlreadyExists
+	}
+	m.deps[key] = clone(dep)
+	return nil
+}
+
+func (m *Memory) GetDependency(_ context.Context, siteID, name string) (domain.Dependency, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	dep, ok := m.deps[m.depsKey(siteID, name)]
+	if !ok {
+		return domain.Dependency{}, domain.ErrNotFound
+	}
+	return clone(dep), nil
+}
+
+func (m *Memory) ListDependenciesBySite(_ context.Context, siteID string) ([]domain.Dependency, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]domain.Dependency, 0)
+	for _, dep := range m.deps {
+		if dep.SiteID == siteID {
+			result = append(result, clone(dep))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
+}
+
+func (m *Memory) UpdateDependency(_ context.Context, dep domain.Dependency) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.depsKey(dep.SiteID, dep.Name)
+	if _, ok := m.deps[key]; !ok {
+		return domain.ErrNotFound
+	}
+	m.deps[key] = clone(dep)
+	return nil
+}
+
+func (m *Memory) DeleteDependency(_ context.Context, siteID, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.depsKey(siteID, name)
+	if _, ok := m.deps[key]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(m.deps, key)
+	return nil
+}
+
+func (m *Memory) GetDepPackage(_ context.Context, name, version string) (domain.DepPackage, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	pkg, ok := m.pkgCache[name+"\x00"+version]
+	if !ok {
+		return domain.DepPackage{}, domain.ErrNotFound
+	}
+	return clone(pkg), nil
+}
+
+func (m *Memory) CreateDepPackage(_ context.Context, pkg domain.DepPackage) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := pkg.Name + "\x00" + pkg.Version
+	if _, ok := m.pkgCache[key]; ok {
+		return nil
+	}
+	m.pkgCache[key] = clone(pkg)
 	return nil
 }
 

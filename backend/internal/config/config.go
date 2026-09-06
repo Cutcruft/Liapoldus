@@ -39,6 +39,7 @@ type Config struct {
 	AssetFallbackMime       string
 	AssetFileURLTemplate    string
 	AssetCacheMaxAgeSeconds int
+	NPMRegistryURL          string
 	MaxUploadBytes          int64
 	StartupTimeout          time.Duration
 	ShutdownTimeout         time.Duration
@@ -158,6 +159,13 @@ func Load() (Config, error) {
 		problems = append(problems, err.Error())
 	}
 
+	// npm registry is optional and defaults to the public registry; mirrors
+	// and proxies are configured explicitly (dependency-service spec §3).
+	npmRegistryURL := strings.TrimSpace(os.Getenv("LIAPOLDUS_NPM_REGISTRY"))
+	if npmRegistryURL == "" {
+		npmRegistryURL = "https://registry.npmjs.org"
+	}
+
 	problems = append(problems, requireAll(
 		"LIAPOLDUS_ADMIN_ADDR", "LIAPOLDUS_CLIENT_ADDR", "LIAPOLDUS_ASSET_DIR", "LIAPOLDUS_GIT_DIR",
 	)...)
@@ -196,6 +204,7 @@ func Load() (Config, error) {
 		AssetFallbackMime:       assetFallbackMime,
 		AssetFileURLTemplate:    assetFileURLTemplate,
 		AssetCacheMaxAgeSeconds: assetCacheMaxAgeSeconds,
+		NPMRegistryURL:          npmRegistryURL,
 		MaxUploadBytes:          maxUploadBytes,
 		StartupTimeout:          startupTimeout,
 		ShutdownTimeout:         shutdownTimeout,

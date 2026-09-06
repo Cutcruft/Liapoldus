@@ -107,6 +107,7 @@ type Snapshot struct {
 	SiteID    string         `json:"siteId"`
 	Name      string         `json:"name"`
 	Pages     []SnapshotPage `json:"pages"`
+	DepsLock  SnapshotLock   `json:"depsLock,omitempty"`
 	CreatedAt time.Time      `json:"createdAt"`
 }
 

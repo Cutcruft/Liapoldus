@@ -14,10 +14,22 @@ type Service struct {
 	sites domain.SiteRepository
 	pages domain.PageRepository
 	repo  domain.SnapshotRepository
+	locks LockResolver
 }
 
-func NewService(sites domain.SiteRepository, pages domain.PageRepository, repo domain.SnapshotRepository) *Service {
-	return &Service{sites: sites, pages: pages, repo: repo}
+// LockResolver freezes the site's dependency lock into a new snapshot
+// (dependency-service spec §7). Optional: created without one, snapshots get
+// an empty lock.
+type LockResolver interface {
+	ResolveLock(context.Context, string) (domain.SnapshotLock, error)
+}
+
+func NewService(sites domain.SiteRepository, pages domain.PageRepository, repo domain.SnapshotRepository, locks ...LockResolver) *Service {
+	svc := &Service{sites: sites, pages: pages, repo: repo}
+	if len(locks) > 0 && locks[0] != nil {
+		svc.locks = locks[0]
+	}
+	return svc
 }
 
 func (s *Service) Create(ctx context.Context, siteID, name string) (domain.Snapshot, error) {
@@ -49,6 +61,15 @@ func (s *Service) Create(ctx context.Context, siteID, name string) (domain.Snaps
 		return domain.Snapshot{}, err
 	}
 	snapshot := domain.Snapshot{ID: id, SiteID: siteID, Name: name, Pages: refs, CreatedAt: time.Now().UTC()}
+	if s.locks != nil {
+		lock, err := s.locks.ResolveLock(ctx, siteID)
+		if err != nil {
+			// Publication must never proceed with an unresolved dependency
+			// graph: invalid/nonexistent packages fail the snapshot now.
+			return domain.Snapshot{}, fmt.Errorf("resolve dependencies: %w", err)
+		}
+		snapshot.DepsLock = lock
+	}
 	if err := s.repo.CreateSnapshot(ctx, snapshot); err != nil {
 		return domain.Snapshot{}, err
 	}

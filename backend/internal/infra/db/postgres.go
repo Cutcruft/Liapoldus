@@ -15,7 +15,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -284,15 +284,19 @@ func (p *Postgres) ListPageVersions(ctx context.Context, pageID string) ([]domai
 }
 
 func (p *Postgres) CreateSnapshot(ctx context.Context, snapshot domain.Snapshot) error {
+	lock, err := json.Marshal(snapshot.DepsLock)
+	if err != nil {
+		return fmt.Errorf("marshal snapshot lock: %w", err)
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin create snapshot: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO snapshots (id, site_id, name, created_at)
-		VALUES ($1, $2, $3, $4)
-	`, snapshot.ID, snapshot.SiteID, snapshot.Name, snapshot.CreatedAt); err != nil {
+		INSERT INTO snapshots (id, site_id, name, deps_lock, created_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`, snapshot.ID, snapshot.SiteID, snapshot.Name, lock, snapshot.CreatedAt); err != nil {
 		return fmt.Errorf("insert snapshot: %w", err)
 	}
 	for _, page := range snapshot.Pages {
@@ -311,33 +315,47 @@ func (p *Postgres) CreateSnapshot(ctx context.Context, snapshot domain.Snapshot)
 
 func (p *Postgres) GetSnapshot(ctx context.Context, id string) (domain.Snapshot, error) {
 	var snapshot domain.Snapshot
-	if err := p.pool.QueryRow(ctx, `SELECT id, site_id, name, created_at FROM snapshots WHERE id = $1`, id).
-		Scan(&snapshot.ID, &snapshot.SiteID, &snapshot.Name, &snapshot.CreatedAt); err != nil {
+	var lock []byte
+	if err := p.pool.QueryRow(ctx, `SELECT id, site_id, name, COALESCE(deps_lock, '{}'), created_at FROM snapshots WHERE id = $1`, id).
+		Scan(&snapshot.ID, &snapshot.SiteID, &snapshot.Name, &lock, &snapshot.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Snapshot{}, domain.ErrNotFound
 		}
 		return domain.Snapshot{}, fmt.Errorf("get snapshot: %w", err)
 	}
+	pages, err := p.snapshotPages(ctx, id)
+	if err != nil {
+		return domain.Snapshot{}, err
+	}
+	snapshot.Pages = pages
+	if err := json.Unmarshal(lock, &snapshot.DepsLock); err != nil {
+		return domain.Snapshot{}, fmt.Errorf("unmarshal snapshot lock: %w", err)
+	}
+	return snapshot, nil
+}
+
+func (p *Postgres) snapshotPages(ctx context.Context, snapshotID string) ([]domain.SnapshotPage, error) {
 	rows, err := p.pool.Query(ctx, `
 		SELECT page_id, version_id, version
 		FROM snapshot_pages WHERE snapshot_id = $1 ORDER BY page_id
-	`, id)
+	`, snapshotID)
 	if err != nil {
-		return domain.Snapshot{}, fmt.Errorf("get snapshot pages: %w", err)
+		return nil, fmt.Errorf("get snapshot pages: %w", err)
 	}
 	defer rows.Close()
+	pages := make([]domain.SnapshotPage, 0)
 	for rows.Next() {
 		var page domain.SnapshotPage
 		if err := rows.Scan(&page.PageID, &page.VersionID, &page.Version); err != nil {
-			return domain.Snapshot{}, fmt.Errorf("scan snapshot page: %w", err)
+			return nil, fmt.Errorf("scan snapshot page: %w", err)
 		}
-		snapshot.Pages = append(snapshot.Pages, page)
+		pages = append(pages, page)
 	}
-	return snapshot, rows.Err()
+	return pages, rows.Err()
 }
 
 func (p *Postgres) ListSnapshotsBySite(ctx context.Context, siteID string) ([]domain.Snapshot, error) {
-	rows, err := p.pool.Query(ctx, `SELECT id, site_id, name, created_at FROM snapshots WHERE site_id = $1 ORDER BY created_at, id`, siteID)
+	rows, err := p.pool.Query(ctx, `SELECT id, site_id, name, COALESCE(deps_lock, '{}'), created_at FROM snapshots WHERE site_id = $1 ORDER BY created_at, id`, siteID)
 	if err != nil {
 		return nil, fmt.Errorf("list snapshots: %w", err)
 	}
@@ -345,8 +363,12 @@ func (p *Postgres) ListSnapshotsBySite(ctx context.Context, siteID string) ([]do
 	result := make([]domain.Snapshot, 0)
 	for rows.Next() {
 		var snapshot domain.Snapshot
-		if err := rows.Scan(&snapshot.ID, &snapshot.SiteID, &snapshot.Name, &snapshot.CreatedAt); err != nil {
+		var lock []byte
+		if err := rows.Scan(&snapshot.ID, &snapshot.SiteID, &snapshot.Name, &lock, &snapshot.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan snapshot: %w", err)
+		}
+		if err := json.Unmarshal(lock, &snapshot.DepsLock); err != nil {
+			return nil, fmt.Errorf("unmarshal snapshot lock: %w", err)
 		}
 		result = append(result, snapshot)
 	}
@@ -1026,4 +1048,117 @@ func scanBuild(row rowScanner) (domain.Build, error) {
 		}
 	}
 	return build, nil
+}
+
+func (p *Postgres) CreateDependency(ctx context.Context, dep domain.Dependency) error {
+	_, err := p.pool.Exec(ctx, `
+		INSERT INTO site_dependencies (site_id, name, spec, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`, dep.SiteID, dep.Name, dep.Spec, dep.CreatedAt, dep.UpdatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return domain.ErrAlreadyExists
+		}
+		return fmt.Errorf("create dependency: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) GetDependency(ctx context.Context, siteID, name string) (domain.Dependency, error) {
+	var dep domain.Dependency
+	err := p.pool.QueryRow(ctx, `
+		SELECT site_id, name, spec, created_at, updated_at
+		FROM site_dependencies WHERE site_id = $1 AND name = $2
+	`, siteID, name).Scan(&dep.SiteID, &dep.Name, &dep.Spec, &dep.CreatedAt, &dep.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Dependency{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Dependency{}, fmt.Errorf("get dependency: %w", err)
+	}
+	return dep, nil
+}
+
+func (p *Postgres) ListDependenciesBySite(ctx context.Context, siteID string) ([]domain.Dependency, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT site_id, name, spec, created_at, updated_at
+		FROM site_dependencies WHERE site_id = $1 ORDER BY name
+	`, siteID)
+	if err != nil {
+		return nil, fmt.Errorf("list dependencies: %w", err)
+	}
+	defer rows.Close()
+	result := make([]domain.Dependency, 0)
+	for rows.Next() {
+		var dep domain.Dependency
+		if err := rows.Scan(&dep.SiteID, &dep.Name, &dep.Spec, &dep.CreatedAt, &dep.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan dependency: %w", err)
+		}
+		result = append(result, dep)
+	}
+	return result, rows.Err()
+}
+
+func (p *Postgres) UpdateDependency(ctx context.Context, dep domain.Dependency) error {
+	tag, err := p.pool.Exec(ctx, `
+		UPDATE site_dependencies SET spec = $3, updated_at = $4
+		WHERE site_id = $1 AND name = $2
+	`, dep.SiteID, dep.Name, dep.Spec, dep.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("update dependency: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (p *Postgres) DeleteDependency(ctx context.Context, siteID, name string) error {
+	tag, err := p.pool.Exec(ctx, `
+		DELETE FROM site_dependencies WHERE site_id = $1 AND name = $2
+	`, siteID, name)
+	if err != nil {
+		return fmt.Errorf("delete dependency: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (p *Postgres) GetDepPackage(ctx context.Context, name, version string) (domain.DepPackage, error) {
+	var pkg domain.DepPackage
+	var depsJSON []byte
+	err := p.pool.QueryRow(ctx, `
+		SELECT name, version, integrity, tarball_url, dependencies, fetched_at
+		FROM dep_packages WHERE name = $1 AND version = $2
+	`, name, version).
+		Scan(&pkg.Name, &pkg.Version, &pkg.Integrity, &pkg.TarballURL, &depsJSON, &pkg.FetchedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.DepPackage{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.DepPackage{}, fmt.Errorf("get dep package: %w", err)
+	}
+	if len(depsJSON) > 0 {
+		if err := json.Unmarshal(depsJSON, &pkg.Dependencies); err != nil {
+			return domain.DepPackage{}, fmt.Errorf("unmarshal dep package deps: %w", err)
+		}
+	}
+	return pkg, nil
+}
+
+func (p *Postgres) CreateDepPackage(ctx context.Context, pkg domain.DepPackage) error {
+	depsJSON, err := json.Marshal(pkg.Dependencies)
+	if err != nil {
+		return fmt.Errorf("marshal dep package deps: %w", err)
+	}
+	if _, err := p.pool.Exec(ctx, `
+		INSERT INTO dep_packages (name, version, integrity, tarball_url, dependencies, fetched_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (name, version) DO NOTHING
+	`, pkg.Name, pkg.Version, pkg.Integrity, pkg.TarballURL, depsJSON, pkg.FetchedAt); err != nil {
+		return fmt.Errorf("create dep package: %w", err)
+	}
+	return nil
 }

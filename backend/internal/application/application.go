@@ -1,10 +1,13 @@
 package application
 
 import (
+	"context"
+
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
 	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/git"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
@@ -18,6 +21,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/builder"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/materializer"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/build/shared"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/registry"
 	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 )
 
@@ -35,6 +39,7 @@ type Services struct {
 	Components *component.Service
 	Builds     *buildapp.Service
 	Runtime    *runtime.Service
+	Deps       *deps.Service
 }
 
 // New builds every aggregate service from the given storage, blob store and
@@ -58,6 +63,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		DefaultStatus: cfg.RedirectDefaultStatus,
 		Allowed:       redirectAllowed,
 	})
+	depsSvc := deps.NewService(storage, storage, registryAdapter{client: registry.New(cfg.NPMRegistryURL)})
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
@@ -66,7 +72,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 			MaxDepth:       cfg.ComponentMaxDepth,
 		}),
 		Components: comps,
-		Snapshots:  snapshot.NewService(storage, storage, storage),
+		Snapshots:  snapshot.NewService(storage, storage, storage, depsSvc),
 		Builds:     builds,
 		Runtime:    runtime.NewService(storage, storage, storage, routes, builds),
 		Contents:   content.NewService(storage),
@@ -78,5 +84,26 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		}),
 		Routes: routes,
 		Forms:  form.NewService(storage, storage, form.Settings{EmailPattern: cfg.EmailPattern}),
+		Deps:   depsSvc,
 	}
+}
+
+// registryAdapter bridges the infra HTTP registry client onto the application
+// Registry interface, keeping infra independent of application types.
+type registryAdapter struct {
+	client *registry.Client
+}
+
+func (a registryAdapter) Resolve(ctx context.Context, name, spec string) (deps.ResolvedVersion, error) {
+	resolved, err := a.client.Resolve(ctx, name, spec)
+	if err != nil {
+		return deps.ResolvedVersion{}, err
+	}
+	return deps.ResolvedVersion{
+		Name:         resolved.Name,
+		Version:      resolved.Version,
+		Integrity:    resolved.Integrity,
+		TarballURL:   resolved.TarballURL,
+		Dependencies: resolved.Dependencies,
+	}, nil
 }
