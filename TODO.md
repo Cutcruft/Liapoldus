@@ -57,14 +57,14 @@
 ## Этап 4b — Dependency-сервис (zero-node npm-зависимости, spec: `docs/backend/dependency-service.md`)
 
 - [x] Спека: дизайн confirmed решений (zero-node/zero-sh Go, npm-registry напрямую, резолв на publish снапшота, диапазон→lock exact+sha512, fail на несовместимых); план фаз §11, ограничения §12.
-- [x] Фаза 1 — **domain+storage**: `domain.Dependency`/`LockedDep`/`SnapshotLock`/`DepPackage` + доменные ошибки; `snapshots.deps_lock` JSONB (миграция `005_dependencies.sql`); таблицы `site_dependencies`/`dep_packages`/`dep_blobs`; постгрес+memory-репозитории. 🔑 (resolvedVersion — пассивный лучший-effort, не источник правды).
+- [x] Фаза 1 — **domain+storage**: `domain.Dependency`/`LockedDep`/`SnapshotLock`/`DepPackage` + доменные ошибки; `snapshots.deps_lock` JSONB (миграция `005_dependencies.sql`); таблицы `site_dependencies`/`dep_packages` (диск-стор блобов — `internal/infra/deps/store`, БД не индексирует); постгрес+memory-репозитории. 🔑 (resolvedVersion — пассивный лучший-effort, не источник правды).
 - [x] Фаза 1 — **registry-фетчер**: `internal/infra/deps/registry` (packument abbr `install-v2+json`, scoped `%2F`, max-semver по диапазону, skip yanked, integrity+tarball, кэш 5m, retries/backoff, 404→`ErrPackageNotFound`/unresolvable→`ErrUnresolvableSpec`) + `Masterminds/semver/v3`.
 - [x] Фаза 1 — **`deps.Service`**: `Add` (валидация имени/спек+probe best-effort, upsert), `Remove`, `List`, `ResolveLock` (flat-graph BFS, reuse совместимой версии, `ErrVersionConflict`, сортировка, integrity-cache в `dep_packages`).
 - [x] Фаза 1 — **lock в снапшот**: `snapshot.Service` variadic `LockResolver` → `snapshot.DepsLock` заполняется при `Create` (fail издания если граф не резолвится); `LIAPOLDUS_NPM_REGISTRY` (default public registry).
 - [x] Фаза 1 — **admin API**: `GET/POST /api/sites/{id}/dependencies`, `DELETE .../{name}` (scoped `%2F`); маппинг ошибок (400/404/422).
 - [x] Фаза 1 — **тесты**: unit (`deps_service`, `deps_registry` с httptest-фейком, admin deps+lock, снимок-lock 422) и integration (флоу memory+postgres с локальным registry-сервером).
-- [ ] Фаза 1 — **материализация+бандлинг**: диск-стор blobs; `node_modules`-layout; per-dep esbuild `_deps/*.js` → `manifest.deps`+externals; `DepBuildError` (на базе `LockResolver`/registry фикстуров выше); e2e с реальным esbuild.
-- [ ] Фаза 1 — финальные поверки (gofmt/vet/test, spec-обновление, коммит).
+- [x] Фаза 1 — **материализация+бандлинг**: диск-стор tarball-блобов (`internal/infra/deps/store`, `<data>/deps/<name>/<version>.tgz`; таблица `dep_blobs` убрана); `node_modules`-layout; per-dep esbuild `dist/_deps/<name>@<version>.js` (scoped `%2F`) с транзитивами-инлайном и `SharedExternals`-external; `manifest.deps`+`manifest.externals`; `DepBuildError` (браузерные builtins); e2e (httptest-registry + реальный esbuild). Починен `artifactstore.copyTree` (вложенные `dist/_deps/` не копировались).
+- [x] Фаза 1 — финальные поверки (gofmt/vet/test, spec-обновление, коммит).
 - [ ] **Фаза 2**: полное subpath-покрытие, вложенные версионные layout, CSS/ассеты пакетов, peer-fail, allowlist scopes.
 - [ ] **Фаза 3**: `cmd/dependency-build` вместо `scripts/build-shared` (npm уходит полностью), ликвидация shell-обёрток, SBOM.
 
