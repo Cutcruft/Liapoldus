@@ -24,3 +24,8 @@ export type {
 } from './hooks';
 export { PageRenderer, RouteOutlet } from './render';
 export type { ComponentMap, PageRendererProps, RouteOutletProps } from './render';
+export {
+  BUILTIN_COMPONENTS,
+  componentMapFromRegistry,
+  registerBuiltinComponents,
+} from './builtin';
