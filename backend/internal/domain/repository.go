@@ -112,6 +112,13 @@ type DependencyRepository interface {
 	ListAllowlist(context.Context, string) ([]string, error)
 	AddAllowlist(context.Context, string, string) error
 	RemoveAllowlist(context.Context, string, string) error
+	// CacheConfig (cache-limits/eviction, spec §11): per-site tarball cache
+	// limit plus the global last-access stamps that drive LRU eviction.
+	SetCacheConfig(context.Context, SiteCacheConfig) error
+	GetCacheConfig(context.Context, string) (SiteCacheConfig, bool, error)
+	ListCacheConfigs(context.Context) ([]SiteCacheConfig, error)
+	TouchTarballAccess(context.Context, string, string) error
+	ListTarballAccess(context.Context) ([]TarballAccess, error)
 }
 
 // DepPackageRepository is the immutable content-addressed cache of registry

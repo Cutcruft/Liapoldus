@@ -28,7 +28,7 @@ func RespondError(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 	case errors.Is(err, domain.ErrInvalidRequest):
 		status = http.StatusBadRequest
-	case errors.Is(err, domain.ErrInvalidDepSpec), errors.Is(err, domain.ErrInvalidAllowlistEntry):
+	case errors.Is(err, domain.ErrInvalidDepSpec), errors.Is(err, domain.ErrInvalidAllowlistEntry), errors.Is(err, domain.ErrInvalidCacheConfig):
 		status = http.StatusBadRequest
 	case errors.Is(err, domain.ErrPackageNotFound):
 		status = http.StatusNotFound

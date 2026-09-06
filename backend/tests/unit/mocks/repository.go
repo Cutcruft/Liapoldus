@@ -395,6 +395,22 @@ func (mr *MockStorageMockRecorder) GetBuildBySnapshot(arg0, arg1, arg2, arg3 any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuildBySnapshot", reflect.TypeOf((*MockStorage)(nil).GetBuildBySnapshot), arg0, arg1, arg2, arg3)
 }
 
+// GetCacheConfig mocks base method.
+func (m *MockStorage) GetCacheConfig(arg0 context.Context, arg1 string) (domain.SiteCacheConfig, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCacheConfig", arg0, arg1)
+	ret0, _ := ret[0].(domain.SiteCacheConfig)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetCacheConfig indicates an expected call of GetCacheConfig.
+func (mr *MockStorageMockRecorder) GetCacheConfig(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCacheConfig", reflect.TypeOf((*MockStorage)(nil).GetCacheConfig), arg0, arg1)
+}
+
 // GetContent mocks base method.
 func (m *MockStorage) GetContent(arg0 context.Context, arg1 string) (domain.Content, error) {
 	m.ctrl.T.Helper()
@@ -590,6 +606,21 @@ func (mr *MockStorageMockRecorder) ListAllowlist(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllowlist", reflect.TypeOf((*MockStorage)(nil).ListAllowlist), arg0, arg1)
 }
 
+// ListCacheConfigs mocks base method.
+func (m *MockStorage) ListCacheConfigs(arg0 context.Context) ([]domain.SiteCacheConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCacheConfigs", arg0)
+	ret0, _ := ret[0].([]domain.SiteCacheConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCacheConfigs indicates an expected call of ListCacheConfigs.
+func (mr *MockStorageMockRecorder) ListCacheConfigs(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCacheConfigs", reflect.TypeOf((*MockStorage)(nil).ListCacheConfigs), arg0)
+}
+
 // ListAssetsBySite mocks base method.
 func (m *MockStorage) ListAssetsBySite(arg0 context.Context, arg1 string) ([]domain.Asset, error) {
 	m.ctrl.T.Helper()
@@ -755,6 +786,21 @@ func (mr *MockStorageMockRecorder) ListSubmissionsByForm(arg0, arg1, arg2 any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSubmissionsByForm", reflect.TypeOf((*MockStorage)(nil).ListSubmissionsByForm), arg0, arg1, arg2)
 }
 
+// ListTarballAccess mocks base method.
+func (m *MockStorage) ListTarballAccess(arg0 context.Context) ([]domain.TarballAccess, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTarballAccess", arg0)
+	ret0, _ := ret[0].([]domain.TarballAccess)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTarballAccess indicates an expected call of ListTarballAccess.
+func (mr *MockStorageMockRecorder) ListTarballAccess(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTarballAccess", reflect.TypeOf((*MockStorage)(nil).ListTarballAccess), arg0)
+}
+
 // RemoveAllowlist mocks base method.
 func (m *MockStorage) RemoveAllowlist(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -781,6 +827,34 @@ func (m *MockStorage) Save(arg0 context.Context, arg1 *domain.ComponentDefinitio
 func (mr *MockStorageMockRecorder) Save(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Save", reflect.TypeOf((*MockStorage)(nil).Save), arg0, arg1)
+}
+
+// SetCacheConfig mocks base method.
+func (m *MockStorage) SetCacheConfig(arg0 context.Context, arg1 domain.SiteCacheConfig) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetCacheConfig", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetCacheConfig indicates an expected call of SetCacheConfig.
+func (mr *MockStorageMockRecorder) SetCacheConfig(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCacheConfig", reflect.TypeOf((*MockStorage)(nil).SetCacheConfig), arg0, arg1)
+}
+
+// TouchTarballAccess mocks base method.
+func (m *MockStorage) TouchTarballAccess(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TouchTarballAccess", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// TouchTarballAccess indicates an expected call of TouchTarballAccess.
+func (mr *MockStorageMockRecorder) TouchTarballAccess(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TouchTarballAccess", reflect.TypeOf((*MockStorage)(nil).TouchTarballAccess), arg0, arg1, arg2)
 }
 
 // UpdateBuild mocks base method.

@@ -31,6 +31,9 @@ var (
 	// ErrInvalidAllowlistEntry means the submitted allowlist entry is not a
 	// legal npm name, scoped package or scope wildcard ("@scope/*", "*").
 	ErrInvalidAllowlistEntry = errors.New("invalid allowlist entry")
+	// ErrInvalidCacheConfig means the submitted per-site dependency cache limit
+	// is not a legal value (must be positive and within the platform cap).
+	ErrInvalidCacheConfig = errors.New("invalid dependency cache configuration")
 )
 
 var depNamePattern = regexp.MustCompile(`^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$`)
@@ -131,4 +134,33 @@ type DepPackage struct {
 	PeerDependencies     map[string]string `json:"peerDependencies,omitempty"`
 	PeerDependenciesMeta map[string]bool   `json:"peerDependenciesMeta,omitempty"`
 	FetchedAt            time.Time         `json:"fetchedAt"`
+}
+
+// MaxDepsCacheBytes is the platform-wide upper bound for a single site's
+// dependency tarball cache limit (channel 7, cache-limits/eviction). Values
+// above it are rejected as invalid.
+const MaxDepsCacheBytes = 8 << 30 // 8 GiB
+
+// SiteCacheConfig carries the per-site dependency tarball cache limit
+// (cache-limits/eviction, spec §11). A site without a configuration entry has
+// no limit of its own; the effective limit of the shared cache is the maximum
+// across all sites that have one. Empty config authorizes unlimited caching.
+type SiteCacheConfig struct {
+	SiteID       string `json:"siteId"`
+	MaxDepsBytes int64  `json:"maxDepsBytes"`
+}
+
+// ValidCacheLimit reports whether a per-site dependency cache limit is legal.
+func ValidCacheLimit(maxDepsBytes int64) bool {
+	return maxDepsBytes > 0 && maxDepsBytes <= MaxDepsCacheBytes
+}
+
+// TarballAccess is one (name, version) tarball access stamp used to drive the
+// LRU eviction of the shared on-disk cache. A more recent LastAccess keeps the
+// tarball on disk longer; eviction removes the least recently used entries
+// first until the shared cache fits its effective size limit.
+type TarballAccess struct {
+	Name       string    `json:"name"`
+	Version    string    `json:"version"`
+	LastAccess time.Time `json:"lastAccess"`
 }

@@ -69,6 +69,32 @@ func (s *Store) Has(name, version string) bool {
 	return err == nil
 }
 
+// Size reports the on-disk size (bytes) of a cached tarball, or 0 if absent.
+func (s *Store) Size(name, version string) int64 {
+	info, err := os.Stat(s.path(name, version))
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+// Delete removes a cached tarball (and its now-empty parent package dir). The
+// tarball is immutable and re-fetchable, so deletion is always safe; a missing
+// file is not an error.
+func (s *Store) Delete(name, version string) error {
+	target := s.path(name, version)
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("deps store delete: %w", err)
+	}
+	// Best-effort cleanup of the now-empty <name> dir (and @scope/ for scoped).
+	dir := filepath.Dir(target)
+	for i := 0; i < 2 && dir != s.root; i++ {
+		_ = os.Remove(dir)
+		dir = filepath.Dir(dir)
+	}
+	return nil
+}
+
 // Open reads a previously saved tarball for (name, version).
 func (s *Store) Open(name, version string) ([]byte, error) {
 	data, err := os.ReadFile(s.path(name, version))

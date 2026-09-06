@@ -45,6 +45,7 @@ type Config struct {
 	StartupTimeout          time.Duration
 	ShutdownTimeout         time.Duration
 	ReadHeaderTimeout       time.Duration
+	DepsCacheEvictInterval  time.Duration
 }
 
 // Load is the single source of configuration: every value comes from the
@@ -171,6 +172,19 @@ func Load() (Config, error) {
 		npmRegistryURL = "https://registry.npmjs.org"
 	}
 
+	// Periodic tarball-cache eviction interval (cache-limits/eviction, §11).
+	// Optional; defaults to 5 minutes. A non-positive value disables the
+	// periodic sweep (eviction then only runs right after cache writes).
+	depsCacheEvictInterval := 5 * time.Minute
+	if raw, ok := os.LookupEnv("LIAPOLDUS_DEPS_CACHE_EVICT_INTERVAL"); ok && strings.TrimSpace(raw) != "" {
+		d, err := time.ParseDuration(strings.TrimSpace(raw))
+		if err != nil {
+			problems = append(problems, "LIAPOLDUS_DEPS_CACHE_EVICT_INTERVAL: "+err.Error())
+		} else {
+			depsCacheEvictInterval = d
+		}
+	}
+
 	problems = append(problems, requireAll(
 		"LIAPOLDUS_ADMIN_ADDR", "LIAPOLDUS_CLIENT_ADDR", "LIAPOLDUS_ASSET_DIR", "LIAPOLDUS_GIT_DIR",
 	)...)
@@ -215,6 +229,7 @@ func Load() (Config, error) {
 		StartupTimeout:          startupTimeout,
 		ShutdownTimeout:         shutdownTimeout,
 		ReadHeaderTimeout:       readHeaderTimeout,
+		DepsCacheEvictInterval:  depsCacheEvictInterval,
 	}, nil
 }
 

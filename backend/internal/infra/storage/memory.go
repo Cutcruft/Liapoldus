@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
@@ -25,6 +26,8 @@ type Memory struct {
 	deps        map[string]domain.Dependency
 	pkgCache    map[string]domain.DepPackage
 	allowlist   map[string]map[string]struct{}
+	cacheConfig map[string]domain.SiteCacheConfig
+	tarballAcc  map[string]domain.TarballAccess
 }
 
 var _ domain.Storage = (*Memory)(nil)
@@ -45,6 +48,8 @@ func NewMemory() *Memory {
 		deps:        make(map[string]domain.Dependency),
 		pkgCache:    make(map[string]domain.DepPackage),
 		allowlist:   make(map[string]map[string]struct{}),
+		cacheConfig: make(map[string]domain.SiteCacheConfig),
+		tarballAcc:  make(map[string]domain.TarballAccess),
 	}
 }
 
@@ -726,6 +731,54 @@ func (m *Memory) RemoveAllowlist(_ context.Context, siteID, entry string) error 
 		delete(m.allowlist, siteID)
 	}
 	return nil
+}
+
+func (m *Memory) SetCacheConfig(_ context.Context, cfg domain.SiteCacheConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cacheConfig[cfg.SiteID] = cfg
+	return nil
+}
+
+func (m *Memory) GetCacheConfig(_ context.Context, siteID string) (domain.SiteCacheConfig, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cfg, ok := m.cacheConfig[siteID]
+	return cfg, ok, nil
+}
+
+func (m *Memory) ListCacheConfigs(_ context.Context) ([]domain.SiteCacheConfig, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]domain.SiteCacheConfig, 0, len(m.cacheConfig))
+	for _, cfg := range m.cacheConfig {
+		result = append(result, cfg)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].SiteID < result[j].SiteID })
+	return result, nil
+}
+
+func (m *Memory) TouchTarballAccess(_ context.Context, name, version string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tarballAcc[name+"\x00"+version] = domain.TarballAccess{Name: name, Version: version, LastAccess: time.Now().UTC()}
+	return nil
+}
+
+func (m *Memory) ListTarballAccess(_ context.Context) ([]domain.TarballAccess, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]domain.TarballAccess, 0, len(m.tarballAcc))
+	for _, acc := range m.tarballAcc {
+		result = append(result, acc)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].LastAccess.Equal(result[j].LastAccess) {
+			return result[i].Name < result[j].Name
+		}
+		return result[i].LastAccess.Before(result[j].LastAccess)
+	})
+	return result, nil
 }
 
 func (m *Memory) GetDepPackage(_ context.Context, name, version string) (domain.DepPackage, error) {

@@ -1,6 +1,6 @@
 # Dependency-сервис (zero-node npm-зависимости, Go)
 
-Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; allowlist scopes (фаза 2, слайс 6) — реализованы; осталось: кэш-лимиты/эвикция**.
+Спецификация и тест-план. Статус: **фаза 1 — готово: domain/storage/registry/deps.Service/admin API; шаги 3 (диск-стор) и 4 (материализация+бандлинг+e2e) — выполнены; subpath-импорты из site-кода и внутри вершинных deps (фаза 2, слайсы 1–2) — реализованы; вложенные версионные layout (фаза 2, слайс 3) — реализованы; CSS/не-JS ассеты пакетов (фаза 2, слайс 4) — реализованы; peer-политика (фаза 2, слайс 5) — реализована; allowlist scopes (фаза 2, слайс 6) — реализованы; кэш-лимиты/эвикция (фаза 2, слайс 7) — реализованы; осталось: фаза 3 (cmd/dependency-build)**.
 
 ## 1. Цель и принципы
 
@@ -188,10 +188,13 @@ storage (новые tables `005_dependencies.sql`):
   `DELETE /api/sites/{id}/dependencies/{name}`. Порт `deps.DomainService`; хендлер в admin api.
 - Allowlist (слайс 6): `GET /api/sites/{id}/dependencies/allowlist`,
   `POST …/allowlist {entry}`, `DELETE …/allowlist/{entry}` (scoped-записи — URL-encode `%2F`).
+- Кэш-лимиты (слайс 7): `GET /api/sites/{id}/cache-config` → `{maxDepsBytes}` (0 = без своего
+  лимита), `PUT …/cache-config {maxDepsBytes}`. Валидация: `0 < maxDepsBytes ≤ 8 GiB` → иначе 400.
 - Ошибки: неизвестный пакет → 404; нерезолвящийся диапазон → 422 `{error, detail|hint}`;
   неудовлетворённый peer (peer-политика §5) → 422;
   пакет вне allowlist (allowlist-политика §5) → 422;
-  невалидная allowlist-запись → 400; дубль-запись → 409; удаление отсутствующей → 404;
+  невалидная allowlist-запись → 400; невалидный cache-config → 400; дубль-запись → 409;
+  удаление отсутствующей → 404;
   конфликт версий → 422 (legacy-контракт; при вложенном layout резолв больше не падает — см. §5);
   `latest`/тег-спек → 400.
 - Резолв **не** в POST: объявление зависимости валидирует форму/пакетный синтаксис, а сам резолв
@@ -208,6 +211,9 @@ storage (новые tables `005_dependencies.sql`):
 - Allowlist scopes (слайс 6): per-site allowlist в БД + admin API; ограничивает, какие
   пакеты (включая транзитивные) могут попасть в lock сайта. Публичные маршруты не
   открываются: зависимости не содержат секретов/токенов админа.
+- Кэш-лимиты/эвикция (слайс 7): общий tarball-кэш под per-site бюджетом. Эвикция — LRU по
+  last-access (метки в БД, touch на чтении); удаляется только `.tgz`-блоб с диска, метаданные
+  (`dep_packages`, access-записи) сохраняются — блоб заново фетчится (иммутабельный кэш, §5).
 - Rate-limit/backoff к registry + таймауты; ретраи с экспоненциальной задержкой.
 
 ## 10. Замена shared-сборки (полный zero-node)
@@ -278,7 +284,17 @@ unit: 6 кейсов политики + парсинг packument, integration `T
 дубль → 409, удаление отсутствующей → 404; unit: матчер/валидация, policy (vertex/
 transitive/star/empty/scope), admin CRUD + 422 на create, integration
 `TestDependencyAllowlist`).
-Осталось: кэш-лимиты/эвикция (слайс 7).
+✅ кэш-лимиты/эвикция (слайс 7: общий tarball-кэш (блоб keyed по name/version, не per-site) +
+per-site настройка лимита в БД `site_cache_config(site_id, max_deps_bytes)` и access-метки
+`dep_tarball_access(name, version, last_access)` (миграция 007); effective-лимит кэша = max по
+сайтам, нет записей = безлимит; LRU-эвикция по last-access — удаляется только `.tgz` с диска
+(`store.Delete`), `dep_packages`/access-записи сохраняются (иммутабельный кэш, пакет заново
+фетчится); access-touch на чтении tarball в `Layout.blob()`; метод `deps.Service.EvictTarballs` +
+`StartCacheEviction` (периодический sweep, интервал `LIAPOLDUS_DEPS_CACHE_EVICT_INTERVAL`,
+дефолт 5 мин, автозапуск в `cmd/server`); admin API `GET/PUT /api/sites/{id}/cache-config`
+(вал: `0 < max ≤ 8 GiB`, иначе 400); unit: валидация/round-trip/effective-max/LRU-эвикция/no-op
+(безлимит, без стора)/admin CRUD, integration `TestDependencyCacheEviction`).
+Осталось: фаза 3.
 
 **Фаза 3:** `cmd/dependency-build` (замена `scripts/build-shared`, npm больше нигде не упоминается),
 ликвидация shell-обёрток, SBOM/audit-экспорт.

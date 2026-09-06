@@ -8,11 +8,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/db"
+	"github.com/liapoldus/liapoldus/backend/internal/infra/deps/store"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
 
@@ -423,5 +425,90 @@ func TestDependencyAllowlist(t *testing.T) {
 	}
 	if _, err := services.Deps.ResolveLock(ctx, site.ID); err != nil {
 		t.Fatalf("ResolveLock(after clearing allowlist): %v", err)
+	}
+}
+
+// TestDependencyCacheEviction drives the LRU tarball eviction against a real
+// on-disk store (cache-limits/eviction, spec §11): after a per-site limit is
+// set, EvictTarballs removes the least-recently-used cached tarballs until the
+// retained total is at or under the limit, and leaves the DB metadata intact.
+func TestDependencyCacheEviction(t *testing.T) {
+	ctx := context.Background()
+
+	blobs, err := storage.NewDiskBlobStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	depsDir := t.TempDir()
+	cfg := config.Config{
+		DefaultLocale:           "ru",
+		RedirectDefaultStatus:   301,
+		RedirectAllowedStatuses: []int{301, 302},
+		ComponentMaxDepth:       5,
+		ComponentTypes:          []string{"Container", "Text"},
+		PageInitialVersion:      1,
+		LocalGitDir:             t.TempDir(),
+		MasterVariantName:       "master",
+		AssetFallbackName:       "asset",
+		AssetFallbackMime:       "application/octet-stream",
+		AssetFileURLTemplate:    "/api/assets/{id}/file",
+		AssetCacheMaxAgeSeconds: 31536000,
+		MaxUploadBytes:          10485760,
+		NPMRegistryURL:          "http://unused.local",
+		DepsDir:                 depsDir,
+	}
+	services := application.New(storage.NewMemory(), blobs, cfg)
+
+	site, err := services.Sites.Create(ctx, "Cache", "cache", "ru", []string{"cache.test"})
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	t.Cleanup(func() { _ = services.Store.DeleteSite(ctx, site.ID) })
+
+	// Seed three cached tarballs on disk (30 bytes each = 90 total) and stamp
+	// their last-access oldest-first.
+	disk := store.New(depsDir)
+	for _, name := range []string{"a", "b", "c"} {
+		if err := disk.Save(name, "1.0.0", []byte(strings.Repeat("x", 30))); err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+	for _, name := range []string{"a", "b", "c"} {
+		if err := services.Store.TouchTarballAccess(ctx, name, "1.0.0"); err != nil {
+			t.Fatalf("touch %s: %v", name, err)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	// Unlimited until a limit is configured → eviction is a no-op.
+	if got, n, err := services.Deps.EvictTarballs(ctx); err != nil || n != 0 || got != 0 {
+		t.Fatalf("evict (unlimited) = (%d, %d, %v), want (0,0,nil)", got, n, err)
+	}
+	if !disk.Has("a", "1.0.0") {
+		t.Fatalf("unlimited eviction must not delete tarballs")
+	}
+
+	// Limit 60 → drop the oldest ("a", 30 bytes) to reach 60.
+	if err := services.Deps.SetCacheConfig(ctx, site.ID, 60); err != nil {
+		t.Fatalf("SetCacheConfig: %v", err)
+	}
+	if got, n, err := services.Deps.EvictTarballs(ctx); err != nil || n != 1 || got != 30 {
+		t.Fatalf("evict (limit 60) = (%d, %d, %v), want (30,1,nil)", got, n, err)
+	}
+	if disk.Has("a", "1.0.0") {
+		t.Errorf("oldest 'a' tarball should be evicted from disk")
+	}
+	if !disk.Has("b", "1.0.0") || !disk.Has("c", "1.0.0") {
+		t.Errorf("newer 'b'/'c' tarballs should be retained")
+	}
+
+	// The metadata in the DB (access records) is left intact — the tarball is
+	// simply re-fetched on the next build.
+	access, err := services.Store.ListTarballAccess(ctx)
+	if err != nil {
+		t.Fatalf("ListTarballAccess: %v", err)
+	}
+	if len(access) != 3 {
+		t.Errorf("access records = %d, want 3 (metadata preserved)", len(access))
 	}
 }

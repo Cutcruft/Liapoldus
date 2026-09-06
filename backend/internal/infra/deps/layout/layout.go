@@ -35,22 +35,28 @@ type TarballFetcher interface {
 
 // Layout is the infra implementation of build.DepLayouter.
 type Layout struct {
-	pkgs  domain.DepPackageRepository
-	blobs *store.Store
-	fetch TarballFetcher
+	pkgs     domain.DepPackageRepository
+	blobs    *store.Store
+	fetch    TarballFetcher
+	accessor domain.DependencyRepository
 }
 
 type LayoutOptions struct {
 	Packages domain.DepPackageRepository
 	Store    *store.Store
 	Fetch    TarballFetcher
+	// Accessor, when set, records per-tarball last-access stamps so the
+	// dependency cache can LRU-evict the least recently used tarballs
+	// (cache-limits/eviction, spec §11). Optional; nil disables tracking.
+	Accessor domain.DependencyRepository
 }
 
 func New(opts LayoutOptions) *Layout {
 	return &Layout{
-		pkgs:  opts.Packages,
-		blobs: opts.Store,
-		fetch: opts.Fetch,
+		pkgs:     opts.Packages,
+		blobs:    opts.Store,
+		fetch:    opts.Fetch,
+		accessor: opts.Accessor,
 	}
 }
 
@@ -305,6 +311,7 @@ func (l *Layout) layOut(ctx context.Context, dir string, deps []domain.LockedDep
 // cache when present and fetching from the registry otherwise.
 func (l *Layout) blob(ctx context.Context, dep domain.LockedDep) ([]byte, error) {
 	if l.blobs.Has(dep.Name, dep.Version) {
+		l.touch(dep.Name, dep.Version)
 		if data, err := l.blobs.Open(dep.Name, dep.Version); err == nil {
 			return data, nil
 		}
@@ -329,7 +336,18 @@ func (l *Layout) blob(ctx context.Context, dep domain.LockedDep) ([]byte, error)
 	if err := l.blobs.Save(dep.Name, dep.Version, data); err != nil {
 		return nil, fmt.Errorf("dependency %s@%s: cache write: %w", dep.Name, dep.Version, err)
 	}
+	l.touch(dep.Name, dep.Version)
 	return data, nil
+}
+
+// touch records a last-access stamp for a tarball identity when an accessor is
+// configured. Read failures are best-effort (the LRU eviction still runs using
+// whatever stamps exist).
+func (l *Layout) touch(name, version string) {
+	if l.accessor == nil {
+		return
+	}
+	_ = l.accessor.TouchTarballAccess(context.Background(), name, version)
 }
 
 // bundle builds one _deps artifact for a top-level dependency, or for one of

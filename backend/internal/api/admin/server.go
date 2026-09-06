@@ -131,6 +131,8 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/sites/{siteID}/dependencies/allowlist", depsHandler.ListAllowlist)
 	protected.HandleFunc("POST /api/sites/{siteID}/dependencies/allowlist", depsHandler.AddAllowlist)
 	protected.HandleFunc("DELETE /api/sites/{siteID}/dependencies/allowlist/{entry}", depsHandler.RemoveAllowlist)
+	protected.HandleFunc("GET /api/sites/{siteID}/cache-config", depsHandler.GetCacheConfig)
+	protected.HandleFunc("PUT /api/sites/{siteID}/cache-config", depsHandler.PutCacheConfig)
 
 	mux.Handle("/", httpapi.BearerAuth(app.AdminToken, httpapi.WithCORS(protected)))
 

@@ -16,7 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -1171,6 +1171,83 @@ func (p *Postgres) RemoveAllowlist(ctx context.Context, siteID, entry string) er
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+func (p *Postgres) SetCacheConfig(ctx context.Context, cfg domain.SiteCacheConfig) error {
+	now := time.Now().UTC()
+	_, err := p.pool.Exec(ctx, `
+		INSERT INTO site_cache_config (site_id, max_deps_bytes, created_at, updated_at)
+		VALUES ($1, $2, $3, $3)
+		ON CONFLICT (site_id) DO UPDATE SET max_deps_bytes = EXCLUDED.max_deps_bytes, updated_at = EXCLUDED.updated_at
+	`, cfg.SiteID, cfg.MaxDepsBytes, now)
+	if err != nil {
+		return fmt.Errorf("set cache config: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) GetCacheConfig(ctx context.Context, siteID string) (domain.SiteCacheConfig, bool, error) {
+	var cfg domain.SiteCacheConfig
+	err := p.pool.QueryRow(ctx, `
+		SELECT site_id, max_deps_bytes FROM site_cache_config WHERE site_id = $1
+	`, siteID).Scan(&cfg.SiteID, &cfg.MaxDepsBytes)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.SiteCacheConfig{}, false, nil
+	}
+	if err != nil {
+		return domain.SiteCacheConfig{}, false, fmt.Errorf("get cache config: %w", err)
+	}
+	return cfg, true, nil
+}
+
+func (p *Postgres) ListCacheConfigs(ctx context.Context) ([]domain.SiteCacheConfig, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT site_id, max_deps_bytes FROM site_cache_config ORDER BY site_id
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list cache configs: %w", err)
+	}
+	defer rows.Close()
+	result := make([]domain.SiteCacheConfig, 0)
+	for rows.Next() {
+		var cfg domain.SiteCacheConfig
+		if err := rows.Scan(&cfg.SiteID, &cfg.MaxDepsBytes); err != nil {
+			return nil, fmt.Errorf("scan cache config: %w", err)
+		}
+		result = append(result, cfg)
+	}
+	return result, rows.Err()
+}
+
+func (p *Postgres) TouchTarballAccess(ctx context.Context, name, version string) error {
+	_, err := p.pool.Exec(ctx, `
+		INSERT INTO dep_tarball_access (name, version, last_access)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (name, version) DO UPDATE SET last_access = EXCLUDED.last_access
+	`, name, version, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("touch tarball access: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) ListTarballAccess(ctx context.Context) ([]domain.TarballAccess, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT name, version, last_access FROM dep_tarball_access ORDER BY last_access, name
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list tarball access: %w", err)
+	}
+	defer rows.Close()
+	result := make([]domain.TarballAccess, 0)
+	for rows.Next() {
+		var acc domain.TarballAccess
+		if err := rows.Scan(&acc.Name, &acc.Version, &acc.LastAccess); err != nil {
+			return nil, fmt.Errorf("scan tarball access: %w", err)
+		}
+		result = append(result, acc)
+	}
+	return result, rows.Err()
 }
 
 func (p *Postgres) GetDepPackage(ctx context.Context, name, version string) (domain.DepPackage, error) {

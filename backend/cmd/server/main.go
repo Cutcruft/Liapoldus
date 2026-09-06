@@ -115,6 +115,13 @@ func serve(ctx context.Context, cfg config.Config, services *application.Service
 	adminServer := &http.Server{Addr: cfg.AdminAddr, Handler: adminHandler, ReadHeaderTimeout: cfg.ReadHeaderTimeout}
 	clientServer := &http.Server{Addr: cfg.ClientAddr, Handler: clientHandler, ReadHeaderTimeout: cfg.ReadHeaderTimeout}
 
+	// Periodic LRU sweep of the dependency tarball cache against per-site
+	// limits (cache-limits/eviction, spec §11).
+	go services.Deps.StartCacheEviction(ctx, cfg.DepsCacheEvictInterval, func(evictedBytes int64, evicted int) {
+		logger.Info("dependency tarball cache eviction ran",
+			"evicted", evicted, "evictedBytes", evictedBytes)
+	})
+
 	errCh := make(chan error, 2)
 	go serveListener(adminServer, logger, errCh)
 	go serveListener(clientServer, logger, errCh)

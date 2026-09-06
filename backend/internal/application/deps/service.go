@@ -36,6 +36,15 @@ type Registry interface {
 	Resolve(ctx context.Context, name, spec string) (ResolvedVersion, error)
 }
 
+// TarballCache is the on-disk immutable tarball store the service evicts from
+// when a per-site cache limit is configured (cache-limits/eviction, spec §11).
+// It is optional: a nil TarballCache disables the on-disk eviction phase.
+type TarballCache interface {
+	Has(name, version string) bool
+	Size(name, version string) int64
+	Delete(name, version string) error
+}
+
 // LockResolver is implemented by Service so snapshot creation can freeze the
 // dependency lock ("lock в снапшот", spec §7).
 type LockResolver interface {
@@ -46,11 +55,21 @@ type Service struct {
 	deps      domain.DependencyRepository
 	packages  domain.DepPackageRepository
 	registry  Registry
+	tarballs  TarballCache
 	resolveMu sync.Mutex
 }
 
 func NewService(deps domain.DependencyRepository, packages domain.DepPackageRepository, registry Registry) *Service {
 	return &Service{deps: deps, packages: packages, registry: registry}
+}
+
+// WithTarballCache attaches the on-disk tarball store so the service can LRU-
+// evict cached tarballs against per-site cache limits (cache-limits/eviction,
+// spec §11). It is safe to call before the service is used; the store is
+// optional and, when absent, eviction only records the access/limits.
+func (s *Service) WithTarballCache(tarballs TarballCache) *Service {
+	s.tarballs = tarballs
+	return s
 }
 
 type edge struct {
@@ -413,4 +432,110 @@ func appendUnique(items []string, value string) []string {
 		}
 	}
 	return append(items, value)
+}
+
+// SetCacheConfig persists a per-site dependency tarball cache limit
+// (cache-limits/eviction, spec §11). The value must be positive and within the
+// platform cap (domain.ValidCacheLimit), otherwise ErrInvalidCacheConfig.
+func (s *Service) SetCacheConfig(ctx context.Context, siteID string, maxDepsBytes int64) error {
+	if !domain.ValidCacheLimit(maxDepsBytes) {
+		return fmt.Errorf("%w: %d (must be in (0, %d])", domain.ErrInvalidCacheConfig, maxDepsBytes, domain.MaxDepsCacheBytes)
+	}
+	return s.deps.SetCacheConfig(ctx, domain.SiteCacheConfig{SiteID: siteID, MaxDepsBytes: maxDepsBytes})
+}
+
+// GetCacheConfig returns the per-site dependency cache limit and whether the
+// site has one configured.
+func (s *Service) GetCacheConfig(ctx context.Context, siteID string) (domain.SiteCacheConfig, bool, error) {
+	return s.deps.GetCacheConfig(ctx, siteID)
+}
+
+// EffectiveCacheLimit returns the effective limit of the shared tarball cache:
+// the maximum max_deps_bytes over all sites that configured one. The second
+// return is false when no site has a limit (unlimited cache).
+func (s *Service) EffectiveCacheLimit(ctx context.Context) (int64, bool, error) {
+	configs, err := s.deps.ListCacheConfigs(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	var max int64
+	found := false
+	for _, cfg := range configs {
+		if !found || cfg.MaxDepsBytes > max {
+			max = cfg.MaxDepsBytes
+			found = true
+		}
+	}
+	return max, found, nil
+}
+
+// EvictTarballs runs one LRU-eviction pass against the effective cache limit.
+// Cached tarballs are removed oldest-access-first until the sum of the retained
+// tarball sizes is at or under the limit. It is a no-op when no site has a
+// limit or no tarball store is attached. It returns the bytes evicted and the
+// number of blobs removed.
+func (s *Service) EvictTarballs(ctx context.Context) (evictedBytes int64, evicted int, err error) {
+	limit, limited, err := s.EffectiveCacheLimit(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	if !limited || s.tarballs == nil {
+		return 0, 0, nil
+	}
+	access, err := s.deps.ListTarballAccess(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	var total int64
+	for _, acc := range access {
+		total += s.tarballs.Size(acc.Name, acc.Version)
+	}
+	if total <= limit {
+		return 0, 0, nil
+	}
+	// ListTarballAccess is oldest-first, so walk from the front: the least
+	// recently used tarball gets removed first, until the retained total is at
+	// or under the limit.
+	for _, acc := range access {
+		if total <= limit {
+			break
+		}
+		size := s.tarballs.Size(acc.Name, acc.Version)
+		if size == 0 || !s.tarballs.Has(acc.Name, acc.Version) {
+			continue
+		}
+		if err := s.tarballs.Delete(acc.Name, acc.Version); err != nil {
+			return evictedBytes, evicted, err
+		}
+		total -= size
+		evictedBytes += size
+		evicted++
+	}
+	return evictedBytes, evicted, nil
+}
+
+// StartCacheEviction runs the periodic LRU-eviction sweep on an interval until
+// the context is cancelled (cache-limits/eviction, spec §11). A non-positive
+// interval disables the periodic tick; on the context the function returns.
+// Intended to run as a single long-lived goroutine from the server entrypoint.
+func (s *Service) StartCacheEviction(ctx context.Context, interval time.Duration, onEvict func(evictedBytes int64, evicted int)) {
+	if interval <= 0 {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			evictedBytes, evicted, err := s.EvictTarballs(ctx)
+			if err != nil {
+				continue // leave error handling to the next tick; no logger here
+			}
+			if evicted > 0 && onEvict != nil {
+				onEvict(evictedBytes, evicted)
+			}
+		}
+	}
 }

@@ -61,6 +61,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Packages: storage,
 		Store:    depsStore,
 		Fetch:    tarballFetcher{client: reg},
+		Accessor: storage,
 	})
 	builds := buildapp.NewService(
 		storage, storage, storage,
@@ -72,7 +73,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		DefaultStatus: cfg.RedirectDefaultStatus,
 		Allowed:       redirectAllowed,
 	})
-	depsSvc := deps.NewService(storage, storage, registryAdapter{client: reg})
+	depsSvc := deps.NewService(storage, storage, registryAdapter{client: reg}).WithTarballCache(depsStore)
 	return &Services{
 		Store: storage,
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),

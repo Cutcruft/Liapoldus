@@ -107,3 +107,38 @@ func (h *DepsHandler) RemoveAllowlist(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+type cacheConfigResponse struct {
+	MaxDepsBytes int64 `json:"maxDepsBytes"`
+}
+
+type cacheConfigRequest struct {
+	MaxDepsBytes int64 `json:"maxDepsBytes"`
+}
+
+// GetCacheConfig returns the site's dependency tarball cache limit
+// (cache-limits/eviction, spec §11). If the site has none configured, the
+// response reports 0, meaning "no limit of its own" (the shared cache then
+// falls back to the platform-wide maximum across sites, or unlimited).
+func (h *DepsHandler) GetCacheConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, _, err := h.deps.GetCacheConfig(r.Context(), siteID(r))
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, cacheConfigResponse{MaxDepsBytes: cfg.MaxDepsBytes})
+}
+
+// PutCacheConfig sets the site's dependency tarball cache limit. The value
+// must be positive and within the platform cap; an invalid value is a 400.
+func (h *DepsHandler) PutCacheConfig(w http.ResponseWriter, r *http.Request) {
+	var req cacheConfigRequest
+	if !httpapi.DecodeJSON(r, &req, w) {
+		return
+	}
+	if err := h.deps.SetCacheConfig(r.Context(), siteID(r), req.MaxDepsBytes); err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, cacheConfigResponse{MaxDepsBytes: req.MaxDepsBytes})
+}
