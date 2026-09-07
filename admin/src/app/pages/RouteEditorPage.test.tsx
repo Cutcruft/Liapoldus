@@ -28,13 +28,13 @@ describe('RouteEditorPage', () => {
     expect(screen.getByDisplayValue('302')).toBeTruthy();
     expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
 
-    fireEvent.change(screen.getByDisplayValue('/old'), { target: { value: '/legacy' } });
+    fireEvent.change(screen.getByDisplayValue('/old'), { target: { value: '^/legacy$' } });
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
 
     await waitFor(() => expect(screen.getByText('Сохранено')).toBeTruthy());
     const put = calls.find((c) => c.method === 'PUT' && c.url === '/api/sites/s1/routes/r2');
     expect(JSON.parse(String(put?.init.body))).toEqual({
-      matcher: '/legacy',
+      matcher: '^/legacy$',
       priority: 2,
       action: { type: 'redirect', target: '/new', status: 302, keepQuery: true },
     });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidRegex, normalizeAction, overlapWarnings, validateRouteFields, REDIRECT_STATUSES } from './route-utils';
+import { isAnchoredRegex, isValidRegex, normalizeAction, overlapWarnings, validateRouteFields, REDIRECT_STATUSES } from './route-utils';
 import type { Route } from '../../runtime';
 
 const route = (id: string, matcher: string): Route => ({
@@ -25,8 +25,22 @@ describe('isValidRegex', () => {
   });
 });
 
+describe('isAnchoredRegex', () => {
+  it('признаёт якорные ^…$', () => {
+    expect(isAnchoredRegex('^/about$')).toBe(true);
+    expect(isAnchoredRegex('^/(foo|bar)$')).toBe(true);
+    expect(isAnchoredRegex('  ^/about$  ')).toBe(true);
+  });
+
+  it('отклоняет неякорные', () => {
+    expect(isAnchoredRegex('/about')).toBe(false);
+    expect(isAnchoredRegex('^/about')).toBe(false);
+    expect(isAnchoredRegex('/about$')).toBe(false);
+  });
+});
+
 describe('validateRouteFields', () => {
-  const base = { matcher: '/about', target: '/posts', actionType: 'renderPage' as const, status: '' };
+  const base = { matcher: '^/about$', target: '/posts', actionType: 'renderPage' as const, status: '' };
 
   it('важно без ошибок', () => {
     expect(validateRouteFields(base)).toEqual({ ok: true });
@@ -42,6 +56,12 @@ describe('validateRouteFields', () => {
     const res = validateRouteFields({ ...base, matcher: '(' });
     expect(res.ok).toBe(false);
     expect(res.matcher).toBe('route.errors.matcherRegex');
+  });
+
+  it('неякорный matcher → matcherAnchored', () => {
+    const res = validateRouteFields({ ...base, matcher: '/about' });
+    expect(res.ok).toBe(false);
+    expect(res.matcher).toBe('route.errors.matcherAnchored');
   });
 
   it('пустой target → targetRequired', () => {

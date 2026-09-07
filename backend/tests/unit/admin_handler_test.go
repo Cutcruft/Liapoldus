@@ -150,6 +150,39 @@ func TestSiteAndPageFlow(t *testing.T) {
 	if len(snapshot.Pages) != 1 || snapshot.Pages[0].PageID != createdPage.ID || snapshot.Pages[0].Version != 2 {
 		t.Fatalf("snapshot pages = %#v, want page version 2", snapshot.Pages)
 	}
+
+	// Version history carries the flat element list per version (§1.3/§3.7).
+	type versionEntry struct {
+		ID      string `json:"id"`
+		Number  int    `json:"number"`
+		List    []any  `json:"list"`
+	}
+	var versions []versionEntry
+	listVersionsResponse := request(t, handler, http.MethodGet, "/api/pages/"+createdPage.ID+"/versions", nil)
+	if listVersionsResponse.Code != http.StatusOK {
+		t.Fatalf("list versions status = %d", listVersionsResponse.Code)
+	}
+	decodeResponse(t, listVersionsResponse, &versions)
+	if len(versions) != 2 {
+		t.Fatalf("versions = %#v, want 2", versions)
+	}
+	if versions[0].Number != 1 || len(versions[0].List) != 2 {
+		t.Fatalf("version 1 = %#v, want list with 2 elements", versions[0])
+	}
+	if versions[1].Number != 2 || len(versions[1].List) != 0 {
+		t.Fatalf("version 2 = %#v, want empty list", versions[1])
+	}
+
+	// GetVersion returns the pinned list, not a tree.
+	var single versionEntry
+	getVersionResponse := request(t, handler, http.MethodGet, "/api/pages/"+createdPage.ID+"/versions/"+versions[0].ID, nil)
+	if getVersionResponse.Code != http.StatusOK {
+		t.Fatalf("get version status = %d", getVersionResponse.Code)
+	}
+	decodeResponse(t, getVersionResponse, &single)
+	if len(single.List) != 2 || single.Number != 1 {
+		t.Fatalf("get version = %#v, want number 1 with 2 elements", single)
+	}
 }
 
 func TestComponentsListCatalog(t *testing.T) {
@@ -332,5 +365,23 @@ func TestRouteValidation(t *testing.T) {
 	})
 	if okRoute.Code != http.StatusCreated {
 		t.Fatalf("create route status = %d", okRoute.Code)
+	}
+
+	for _, matcher := range []string{"/old", "^/old", "/old$", "^old"} {
+		badMatcher := request(t, handler, http.MethodPost, "/api/sites/"+created.ID+"/routes", map[string]any{
+			"matcher": matcher, "priority": 0,
+			"action": map[string]any{"type": "redirect", "target": "/new"},
+		})
+		if badMatcher.Code != http.StatusBadRequest {
+			t.Fatalf("matcher %q: status = %d, want 400", matcher, badMatcher.Code)
+		}
+	}
+
+	badRegex := request(t, handler, http.MethodPost, "/api/sites/"+created.ID+"/routes", map[string]any{
+		"matcher": "^/old(]", "priority": 0,
+		"action": map[string]any{"type": "redirect", "target": "/new"},
+	})
+	if badRegex.Code != http.StatusBadRequest {
+		t.Fatalf("invalid regex matcher = %d, want 400", badRegex.Code)
 	}
 }

@@ -66,6 +66,45 @@ func TestRouteServiceCreateRequiresMatcher(t *testing.T) {
 	}
 }
 
+func TestRouteServiceCreateRejectsInvalidRegex(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockRouteRepository(ctrl)
+
+	_, err := newRouteService(repo).Create(context.Background(), "site_1", "^/old(]", 0, domain.RouteAction{Type: routeapp.Redirect, Target: "/new"})
+	if !errors.Is(err, domain.ErrInvalidRequest) {
+		t.Fatalf("error = %v, want ErrInvalidRequest", err)
+	}
+}
+
+func TestRouteServiceCreateRejectsUnanchoredMatcher(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockRouteRepository(ctrl)
+
+	for _, matcher := range []string{"/old", "^/old", "/old$", `^\Q/old\E`} {
+		_, err := newRouteService(repo).Create(context.Background(), "site_1", matcher, 0, domain.RouteAction{Type: routeapp.Redirect, Target: "/new"})
+		if !errors.Is(err, domain.ErrInvalidRequest) {
+			t.Fatalf("matcher %q: error = %v, want ErrInvalidRequest", matcher, err)
+		}
+	}
+}
+
+func TestRouteServiceCreateAllowsAnchoredMatcher(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockRouteRepository(ctrl)
+	repo.EXPECT().CreateRoute(gomock.Any(), gomock.Any()).Return(nil)
+
+	_, err := newRouteService(repo).Create(context.Background(), "site_1", "^/shop/([a-z]+)$", 0, domain.RouteAction{Type: routeapp.ServeAsset, AssetID: "asset_1"})
+	if err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+}
+
 func TestRouteServiceMatchPriorityAndGroups(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -12,6 +12,11 @@ export function isValidRegex(value: string): boolean {
   }
 }
 
+export function isAnchoredRegex(value: string): boolean {
+  const v = value.trim();
+  return v.startsWith('^') && v.endsWith('$');
+}
+
 export type RouteFields = {
   matcher: string;
   priority: string;
@@ -34,6 +39,7 @@ export function validateRouteFields(
   const out: RouteValidationResult = { ok: true };
   if (!f.matcher.trim()) out.matcher = tKey('matcherRequired');
   else if (!isValidRegex(f.matcher)) out.matcher = tKey('matcherRegex');
+  else if (!isAnchoredRegex(f.matcher)) out.matcher = tKey('matcherAnchored');
   if (!f.target.trim()) out.target = tKey('targetRequired');
   const statusNum = Number(f.status);
   if (f.actionType === 'redirect' && !(REDIRECT_STATUSES as readonly number[]).includes(statusNum)) {

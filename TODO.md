@@ -51,22 +51,24 @@ admin-редактор переведён на лист. Осталось дор
 `backend/internal/application/snapshot/service.go`, `backend/internal/application/gitsnapshot/*`,
 `backend/internal/infra/build/materializer/materializer.go`, `backend/internal/api/admin/handler.go`.
 
-- [ ] **P0 [B]** CRUD страниц/роутов на листе: проверить полноту валидации
+- [x] **P0 [B]** CRUD страниц/роутов на листе: проверить полноту валидации
       `validateList`/`validateElementProps` (page/service.go:126–172): schema-типы,
       обязательные поля, лимит элементов, `assignElementIDs` для вложенных элементов.
-- [ ] **P0 [B]** Валидация matcher-регулярок роута: `backend/internal/domain/route.go` +
+- [x] **P0 [B]** Валидация matcher-регулярок роута: `backend/internal/domain/route.go` +
       handler — ошибка на невалидный/неякоренный regex (`^...$`), нормализация `priority`.
-      (Ср. admin route-utils `validateRouteFields` — привести контракт в соответствие.)
-- [ ] **P1 [B]** Перестройка обработчиков содержимого страниц: `PageVersion`/снапшотные
+      *(Добавлена якорность в backend route.Service + admin validateRouteFields/`matcherAnchored`.)*
+- [x] **P1 [B]** Перестройка обработчиков содержимого страниц: `PageVersion`/снапшотные
       ссылки → `list`; проверить `list_versions`/`PageVersion{List}` на листе
       (model.go:100–106 уже использует `List` — покрыть тестами get/list версий).
-- [ ] **P1 [B]** Снапшот/материализация по листу: `collectElementDefs(version.List, ...)`
+      *(Добавлены проверки versions API в TestSiteAndPageFlow.)*
+- [x] **P1 [B]** Снапшот/материализация по листу: `collectElementDefs(version.List, ...)`
       (materializer.go:223) — список componentId из элементов вместо обхода дерева;
       покрыть снапшот-сборку по листу тестами (`gitsnapshot_test`, `materializer_test`).
-- [ ] **P1 [B]** Убрать остаточные tree-ссылки в сервисном слое, если остались
-      (проверить `grep -rn Tree t page/snapshot/gitsnapshot`).
-- [ ] **P1**: Тесты: CRUD страниц/роутов, порядок листа, regex-группы, снапшот-сборка по листу
+- [x] **P1 [B]** Убрать остаточные tree-ссылки в сервисном слое, если остались
+      (проверить `grep -rn Tree t page/snapshot/gitsnapshot`). *(Комментарий в page/service.go.)*
+- [x] **P1**: Тесты: CRUD страниц/роутов, порядок листа, regex-группы, снапшот-сборка по листу
       (`backend/tests/unit/page_test.go`, `admin_handler_test.go`, `runtime_*_test.go`).
+      *(Итог: backend ok, ui-runtime 262/262, admin 305/305.)*
 
 **Done**: backend полностью живёт на листе; ни одной ветки дерева в коде страниц.
 

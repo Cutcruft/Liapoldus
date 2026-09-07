@@ -128,6 +128,11 @@ func (s *Service) validateRoute(currentID, matcher string, priority int, action 
 	if _, err := regexp.Compile(matcher); err != nil {
 		return fmt.Errorf("%w: invalid route matcher: %v", domain.ErrInvalidRequest, err)
 	}
+	// A matcher must anchor its regex (§3.7 "якорные ^…$"): Match relies on a
+	// full-path match, so an unanchored pattern silently widens the route.
+	if !strings.HasPrefix(matcher, "^") || !strings.HasSuffix(matcher, "$") {
+		return fmt.Errorf("%w: route matcher must be anchored (^...$)", domain.ErrInvalidRequest)
+	}
 	if priority < 0 {
 		return fmt.Errorf("%w: route priority must be >= 0", domain.ErrInvalidRequest)
 	}

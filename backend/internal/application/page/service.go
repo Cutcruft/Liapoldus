@@ -169,7 +169,7 @@ func validateElementProps(props map[string]domain.ElementProp, schema map[string
 		switch p.Kind {
 		case "literal":
 			// literal value is unconstrained here; deep schema validation is a
-			// follow-on, matching the previous tree behaviour of passing props.
+			// follow-on, matching the previous behaviour of passing props through.
 		case "binding":
 			if p.Source == nil {
 				return fmt.Errorf("binding prop requires source")

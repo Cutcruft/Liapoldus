@@ -38,14 +38,14 @@ describe('SiteRoutesPage', () => {
     });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Создать роут' }));
-    fireEvent.change(screen.getByLabelText('Matcher (regex) *'), { target: { value: '/blog' } });
+    fireEvent.change(screen.getByLabelText('Matcher (regex) *'), { target: { value: '^/blog$' } });
     fireEvent.change(screen.getByLabelText('Цель *'), { target: { value: '/posts' } });
     fireEvent.click(screen.getByRole('button', { name: 'Создать' }));
 
-    await waitFor(() => expect(screen.getByText('/blog')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('^/blog$')).toBeTruthy());
     const post = calls.find((c) => c.method === 'POST' && c.url === '/api/sites/s1/routes');
     expect(JSON.parse(String(post?.init.body))).toEqual({
-      matcher: '/blog',
+      matcher: '^/blog$',
       priority: 1,
       action: { type: 'renderPage', pageId: '/posts' },
     });
@@ -66,17 +66,17 @@ describe('SiteRoutesPage', () => {
     });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Создать роут' }));
-    fireEvent.change(screen.getByLabelText('Matcher (regex) *'), { target: { value: '/legacy' } });
+    fireEvent.change(screen.getByLabelText('Matcher (regex) *'), { target: { value: '^/legacy$' } });
     fireEvent.change(screen.getByLabelText('Действие'), { target: { value: 'redirect' } });
     fireEvent.change(screen.getByLabelText('Цель *'), { target: { value: '/moved' } });
     fireEvent.change(screen.getByLabelText('Код ответа *'), { target: { value: '308' } });
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Создать' }));
 
-    await waitFor(() => expect(screen.getByText('/legacy')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('^/legacy$')).toBeTruthy());
     const post = calls.find((c) => c.method === 'POST' && c.url === '/api/sites/s1/routes');
     expect(JSON.parse(String(post?.init.body))).toEqual({
-      matcher: '/legacy',
+      matcher: '^/legacy$',
       priority: 1,
       action: { type: 'redirect', target: '/moved', status: 308, keepQuery: true },
     });
@@ -113,7 +113,7 @@ describe('SiteRoutesPage', () => {
     });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Создать роут' }));
-    fireEvent.change(screen.getByLabelText('Matcher (regex) *'), { target: { value: '/about' } });
+    fireEvent.change(screen.getByLabelText('Matcher (regex) *'), { target: { value: '^/about$' } });
     fireEvent.change(screen.getByLabelText('Цель *'), { target: { value: '/new-about' } });
     fireEvent.blur(screen.getByLabelText('Matcher (regex) *'));
 

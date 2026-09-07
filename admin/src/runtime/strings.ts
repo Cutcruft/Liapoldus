@@ -163,6 +163,7 @@ export const STRINGS = {
   'route.saved': 'Сохранено',
   'route.errors.matcherRequired': 'Укажите matcher',
   'route.errors.matcherRegex': 'Matcher — невалидный regex',
+  'route.errors.matcherAnchored': 'Matcher должен быть якорным (^…$)',
   'route.errors.targetRequired': 'Укажите цель',
   'route.errors.statusRequired': 'redirect: выберите код ответа',
   'route.redirect.status': 'Код ответа',
