@@ -416,6 +416,8 @@ export const STRINGS = {
   'op.getDashboard': 'Дашборд',
   'op.getSettings': 'Настройки',
   'op.getTokens': 'Токены: чтение набора',
+  'op.getSiteSettings': 'Настройки сайта: чтение',
+  'op.updateSiteSettings': 'Настройки сайта: сохранение',
   'op.updateTokens': 'Токены: сохранение набора',
 
   'op.listDependencies': 'Список зависимостей',

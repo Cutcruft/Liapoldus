@@ -36,6 +36,7 @@ import { ComponentsSection } from './components/ComponentsSection';
 import { InfraSection } from './infra/InfraSection';
 import { PagesSection } from './pages/PagesSection';
 import { SnapshotSection } from './states/SnapshotSection';
+import { BaseSection } from './base/BaseSection';
 
 /** Режим вкладки сайта (из URL `?view=`). */
 export type SiteTabMode = 'maintenance' | 'editor';
@@ -274,6 +275,8 @@ export function SiteTab() {
                   <PagesSection />
                 ) : activeEditorSection === 'states' ? (
                   <SnapshotSection />
+                ) : activeEditorSection === 'base' ? (
+                  <BaseSection />
                 ) : (
                   <SectionPlaceholder
                     title={t(sectionNavLabel(activeEditorSection))}

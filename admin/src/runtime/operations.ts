@@ -57,6 +57,9 @@ export type OperationKind =
   | 'rollbackGit'
   | 'getDashboard'
   | 'getSettings'
+
+  | 'getSiteSettings'
+  | 'updateSiteSettings'
   | 'getTokens'
   | 'updateTokens'
   | 'listDependencies'
@@ -623,6 +626,23 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     labelKey: 'op.getSettings',
     method: 'GET',
     route: () => '/api/settings',
+    detail: () => 'OK',
+  },
+
+  getSiteSettings: {
+    kind: 'getSiteSettings',
+    labelKey: 'op.getSiteSettings',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/settings`,
+    detail: () => 'OK',
+  },
+
+  updateSiteSettings: {
+    kind: 'updateSiteSettings',
+    labelKey: 'op.updateSiteSettings',
+    method: 'PUT',
+    route: (args) => `/api/sites/{siteId}/settings`,
+    body: (args) => args.settings ?? {},
     detail: () => 'OK',
   },
 

@@ -48,6 +48,8 @@ export type {
   RuntimeStatus,
   Settings,
   Site,
+	SiteHead,
+	SiteSettings,
   SiteCacheConfig,
   SiteLocales,
   Snapshot,

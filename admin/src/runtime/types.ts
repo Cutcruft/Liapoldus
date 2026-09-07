@@ -29,6 +29,21 @@ export type Site = {
   createdAt?: string;
 };
 
+export type SiteHead = {
+  titleTemplate?: string;
+  description?: string;
+  faviconAssetId?: string;
+  meta: Record<string, string>;
+};
+
+/** Presentation defaults owned by one site (R10). */
+export type SiteSettings = {
+  siteId: string;
+  defaultLocale: string;
+  defaultLayoutSectionId?: string;
+  head: SiteHead;
+};
+
 /**
  * Источник значения свойства (линейная модель §1.3, docs/redesign/backend.md).
  * Дискриминирующий union: ровно один вариант заполнен.
