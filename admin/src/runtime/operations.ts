@@ -21,6 +21,7 @@ export type OperationKind =
   | 'deleteContent'
   | 'putTranslation'
   | 'deleteTranslation'
+  | 'getContentLocales'
   | 'listAssets'
   | 'uploadAsset'
   | 'getAsset'
@@ -247,6 +248,17 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     method: 'DELETE',
     route: (args) => `/api/sites/{siteId}/contents/{contentId}/translations/{locale}`,
     detail: () => 'OK',
+  },
+
+  getContentLocales: {
+    kind: 'getContentLocales',
+    labelKey: 'op.getContentLocales',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/locales`,
+    detail: (b, t) => {
+      const locales = typeof b === 'object' && b !== null && 'locales' in (b as object) ? (b as { locales: unknown }).locales : [];
+      return t('result.count', { n: Array.isArray(locales) ? locales.length : 0 });
+    },
   },
 
   listAssets: {

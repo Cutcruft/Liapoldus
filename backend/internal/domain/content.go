@@ -21,3 +21,17 @@ type ContentData struct {
 	Locale       string         `json:"locale"`
 	Fields       map[string]any `json:"fields"`
 }
+
+// LocaleStat — сколько единиц контента имеют перевод на локаль.
+type LocaleStat struct {
+	Locale       string `json:"locale"`
+	ContentCount int    `json:"contentCount"`
+}
+
+// SiteLocales — список локалей сайта и сводка переведённости (R3).
+// Locales не включает базовый язык: его содержание — весь контент сайта.
+type SiteLocales struct {
+	BaseLocale string       `json:"baseLocale"`
+	Locales    []LocaleStat `json:"locales"`
+	Total      int          `json:"total"`
+}

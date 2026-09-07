@@ -97,3 +97,43 @@ func TestContentServiceBatchSkipsMissingIDs(t *testing.T) {
 		t.Fatalf("batch = %#v, want only existing id", out)
 	}
 }
+
+func TestContentServiceLocalesSummary(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	items := []domain.Content{
+		{ID: "c1", SiteID: "site_1", CollectionID: "col", Fields: map[string]any{"title": "A"},
+			Translations: map[string]map[string]any{"en": {"title": "A en"}}},
+		{ID: "c2", SiteID: "site_1", CollectionID: "col", Fields: map[string]any{"title": "B"},
+			Translations: map[string]map[string]any{"en": {"title": "B en"}, "de": {"title": "B de"}}},
+		{ID: "c3", SiteID: "site_1", CollectionID: "col", Fields: map[string]any{"title": "C"}},
+	}
+	repo := mocks.NewMockContentRepository(ctrl)
+	repo.EXPECT().ListContentsBySite(gomock.Any(), "site_1", "").Return(items, nil)
+
+	summary, err := contentapp.NewService(repo).LocalesSummary(context.Background(), "site_1", "ru")
+	if err != nil {
+		t.Fatalf("locales summary: %v", err)
+	}
+	if summary.BaseLocale != "ru" || summary.Total != 3 {
+		t.Fatalf("summary = %#v", summary)
+	}
+	if len(summary.Locales) != 2 {
+		t.Fatalf("locales = %#v, want en/de", summary.Locales)
+	}
+	for _, stat := range summary.Locales {
+		want := 0
+		switch stat.Locale {
+		case "en":
+			want = 2
+		case "de":
+			want = 1
+		default:
+			t.Fatalf("unexpected locale %q", stat.Locale)
+		}
+		if stat.ContentCount != want {
+			t.Fatalf("%s contentCount = %d, want %d", stat.Locale, stat.ContentCount, want)
+		}
+	}
+}

@@ -29,6 +29,10 @@ export function isEditorSection(v: string | null): v is EditorSectionKey {
   return !!v && (EDITOR_SECTIONS as readonly string[]).includes(v);
 }
 
+export function isMaintenanceSection(v: string | null): v is MaintenanceSectionKey {
+  return !!v && (MAINTENANCE_SECTIONS as readonly string[]).includes(v);
+}
+
 /** Запомнить раздел редактора сайта (возврат в режим открывает его). */
 export function rememberEditorSection(siteId: string, section: EditorSectionKey): void {
   const s = getSiteTabStore();

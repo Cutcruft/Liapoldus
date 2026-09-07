@@ -22,12 +22,14 @@ import {
   currentMaintenanceSection,
   DEFAULT_EDITOR_SECTION,
   isEditorSection,
+  isMaintenanceSection,
   rememberedEditorSection,
   rememberEditorSection,
   selectMaintenanceSection,
   type EditorSectionKey,
   type MaintenanceSectionKey,
 } from './site-tab-store';
+import { ContentSection } from './content/ContentSection';
 
 /** Режим вкладки сайта (из URL `?view=`). */
 export type SiteTabMode = 'maintenance' | 'editor';
@@ -70,10 +72,12 @@ function SectionPlaceholder({ title, description }: { title: string; description
 }
 
 /**
- * Вкладка сайта (слайс R2). Шапка с сегмент-тумблером
+ * Вкладка сайта (слайсы R2–R3). Шапка с сегмент-тумблером
  * [Обслуживание | Редактор] (`?view=editor`), слева вертикальная навигация
- * подразделов, справа рабочая область (заглушки до R3–R14).
- * Возврат в «Редактор» открывает последний выбранный раздел (SPA-память).
+ * подразделов, справа рабочая область. Подразделы обслуживания кодируются в
+ * URL `?mode=content|forms|media` (R3; fallback — SPA-память), редактор
+ * контента — `?mode=content&contentId=...`. Возврат в «Редактор» открывает
+ * последний выбранный раздел (SPA-память).
  */
 export function SiteTab() {
   const { siteId = '' } = useParams();
@@ -83,8 +87,11 @@ export function SiteTab() {
 
   const view: SiteTabMode = searchParams.get('view') === 'editor' ? 'editor' : 'maintenance';
   const sectionParam = searchParams.get('section');
+  const modeParam = searchParams.get('mode');
   const activeEditorSection = isEditorSection(sectionParam) ? sectionParam : rememberedEditorSection(siteId);
-  const maintenanceSection = currentMaintenanceSection(siteId);
+  const maintenanceSection = isMaintenanceSection(modeParam)
+    ? modeParam
+    : currentMaintenanceSection(siteId);
 
   const site = useOperation<Site | null>('getSite', { siteId }, (d) =>
     typeof d === 'object' && d !== null ? (d as Site) : null,
@@ -96,18 +103,19 @@ export function SiteTab() {
     }
   }, [site.state.status, siteId]);
 
-  useEffect(() => {
-    if (isEditorSection(sectionParam)) rememberEditorSection(siteId, sectionParam);
-  }, [sectionParam, siteId]);
-
   const switchView = (next: SiteTabMode) => {
     const nextParams = new URLSearchParams(searchParams);
     if (next === 'editor') {
       nextParams.set('view', 'editor');
       nextParams.set('section', activeEditorSection);
+      nextParams.delete('contentId');
     } else {
+      if (isEditorSection(sectionParam)) {
+        rememberEditorSection(siteId, sectionParam);
+      }
       nextParams.delete('view');
       nextParams.delete('section');
+      nextParams.set('mode', maintenanceSection);
     }
     setSearchParams(nextParams);
   };
@@ -116,6 +124,19 @@ export function SiteTab() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set('view', 'editor');
     nextParams.set('section', key);
+    setSearchParams(nextParams);
+  };
+
+  const pickMaintenanceSection = (key: MaintenanceSectionKey) => {
+    if (isEditorSection(sectionParam)) {
+      rememberEditorSection(siteId, sectionParam);
+    }
+    selectMaintenanceSection(siteId, key);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('view');
+    nextParams.delete('section');
+    nextParams.set('mode', key);
+    nextParams.delete('contentId');
     setSearchParams(nextParams);
   };
 
@@ -183,7 +204,7 @@ export function SiteTab() {
                       key={s.key}
                       type="button"
                       aria-pressed={maintenanceSection === s.key}
-                      onClick={() => selectMaintenanceSection(siteId, s.key)}
+                      onClick={() => pickMaintenanceSection(s.key)}
                       className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
                         maintenanceSection === s.key
                           ? 'bg-blue-50 font-medium text-blue-800'
@@ -197,10 +218,14 @@ export function SiteTab() {
                 })}
               </nav>
               <section className="min-w-0 flex-1 pl-4" aria-label={t(maintenanceNavLabel(maintenanceSection))}>
-                <SectionPlaceholder
-                  title={t(maintenanceNavLabel(maintenanceSection))}
-                  description={t(maintenanceNavLabel(maintenanceSection) + '.description')}
-                />
+                {maintenanceSection === 'content' ? (
+                  <ContentSection />
+                ) : (
+                  <SectionPlaceholder
+                    title={t(maintenanceNavLabel(maintenanceSection))}
+                    description={t(maintenanceNavLabel(maintenanceSection) + '.description')}
+                  />
+                )}
               </section>
             </div>
           ) : (

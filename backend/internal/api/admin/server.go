@@ -48,6 +48,7 @@ func NewRouter(app App) http.Handler {
 	siteHandler := NewSiteHandler(app.Sites)
 	pageHandler := NewPageHandler(app.Pages)
 	contentHandler := NewContentHandler(app.Contents)
+	localesHandler := NewLocalesHandler(app.Sites, app.Contents)
 	assetHandler := NewAssetHandler(app.Assets)
 	routeHandler := NewRouteHandler(app.Routes)
 	formHandler := NewFormHandler(app.Forms)
@@ -117,6 +118,7 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/sites/{siteID}/contents/{contentID}/translations", contentHandler.GetTranslations)
 	protected.HandleFunc("DELETE /api/contents/{contentID}", contentHandler.Delete)
 	protected.HandleFunc("DELETE /api/sites/{siteID}/contents/{contentID}", contentHandler.Delete)
+	protected.HandleFunc("GET /api/sites/{siteID}/locales", localesHandler.Get)
 
 	protected.HandleFunc("POST /api/sites/{siteID}/assets", assetHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/assets", assetHandler.List)

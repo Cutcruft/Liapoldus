@@ -40,6 +40,32 @@ type updateSiteRequest struct {
 	Hosts         *[]string `json:"hosts"`
 }
 
+// LocalesHandler — сводка локалей сайта (R3): базовый язык + использованные
+// в переводах локали + количество переведённого контента.
+type LocalesHandler struct {
+	sites    *site.Service
+	contents *content.Service
+}
+
+func NewLocalesHandler(sites *site.Service, contents *content.Service) *LocalesHandler {
+	return &LocalesHandler{sites: sites, contents: contents}
+}
+
+func (h *LocalesHandler) Get(w http.ResponseWriter, r *http.Request) {
+	sid := siteID(r)
+	current, err := h.sites.Get(r.Context(), sid)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	summary, err := h.contents.LocalesSummary(r.Context(), sid, current.DefaultLocale)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, summary)
+}
+
 func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createSiteRequest
 	if !httpapi.DecodeJSON(r, &req, w) {

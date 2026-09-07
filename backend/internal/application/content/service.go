@@ -3,6 +3,7 @@ package content
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -53,6 +54,30 @@ func (s *Service) Get(ctx context.Context, siteID, id string) (domain.Content, e
 
 func (s *Service) List(ctx context.Context, siteID, collectionID string) ([]domain.Content, error) {
 	return s.repo.ListContentsBySite(ctx, siteID, collectionID)
+}
+
+// LocalesSummary возвращает список локалей сайта (базовый + те, что уже
+// используются в переводах) и сводку переведённости по каждому из них (R3).
+func (s *Service) LocalesSummary(ctx context.Context, siteID, defaultLocale string) (domain.SiteLocales, error) {
+	items, err := s.repo.ListContentsBySite(ctx, siteID, "")
+	if err != nil {
+		return domain.SiteLocales{}, err
+	}
+	counts := map[string]int{}
+	for _, c := range items {
+		for locale := range c.Translations {
+			if locale == "" || locale == defaultLocale {
+				continue
+			}
+			counts[locale]++
+		}
+	}
+	locales := make([]domain.LocaleStat, 0, len(counts))
+	for locale, n := range counts {
+		locales = append(locales, domain.LocaleStat{Locale: locale, ContentCount: n})
+	}
+	sort.Slice(locales, func(i, j int) bool { return locales[i].Locale < locales[j].Locale })
+	return domain.SiteLocales{BaseLocale: defaultLocale, Locales: locales, Total: len(items)}, nil
 }
 
 func (s *Service) UpdateFields(ctx context.Context, siteID, id string, fields map[string]any) (domain.Content, error) {

@@ -72,11 +72,11 @@ describe('SiteTab — режимы вкладки сайта (R2)', () => {
 
     fireEvent.click(within(cluster).getByRole('tab', { name: 'Обслуживание' }));
     await screen.findByRole('heading', { name: 'Контент' });
-    expect(router.state.location.search).toBe('');
+    expect(router.state.location.search).toBe('?mode=content');
 
     fireEvent.click(within(cluster).getByRole('tab', { name: 'Редактор' }));
     expect(await screen.findByRole('heading', { name: 'Страницы' })).toBeTruthy();
-    expect(router.state.location.search).toBe('?view=editor&section=pages');
+    expect(router.state.location.search).toBe('?mode=content&view=editor&section=pages');
   });
 
   it('глубокая ссылка восстанавливает режим и раздел из URL', async () => {
@@ -102,5 +102,48 @@ describe('SiteTab — режимы вкладки сайта (R2)', () => {
     expect(await screen.findByText(/site not found/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Сайты' }));
     expect(router.state.location.pathname).toBe('/');
+  });
+});
+
+describe('SiteTab — подразделы обслуживания в URL (R3)', () => {
+  it('выбор подраздела «Формы+ответы» меняет mode в URL и показывает заглушку', async () => {
+    const { router } = await renderApp({ path: '/sites/s1', handler: siteHandler });
+    await screen.findByRole('heading', { name: 'Alpha' });
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Обслуживание' })).getByRole('button', { name: 'Формы+ответы' }));
+
+    expect(await screen.findByRole('heading', { name: 'Формы+ответы' })).toBeTruthy();
+    expect(router.state.location.search).toBe('?mode=forms');
+  });
+
+  it('глубокая ссылка ?mode=media открывает Медиа и подсвечивает подраздел', async () => {
+    const { router } = await renderApp({ path: '/sites/s1?mode=media', handler: siteHandler });
+    await screen.findByRole('heading', { name: 'Alpha' });
+
+    expect(await screen.findByRole('heading', { name: 'Медиа' })).toBeTruthy();
+    const maintNav = screen.getByRole('navigation', { name: 'Обслуживание' });
+    expect(within(maintNav).getByRole('button', { name: 'Медиа' }).getAttribute('aria-pressed')).toBe('true');
+    expect(router.state.location.search).toBe('?mode=media');
+  });
+
+  it('возврат в «Обслуживание» сохраняет активный подраздел (mode) из памяти/URL', async () => {
+    const { router } = await renderApp({ path: '/sites/s1?mode=forms', handler: siteHandler });
+    await screen.findByRole('heading', { name: 'Формы+ответы' });
+
+    fireEvent.click(within(modeCluster()).getByRole('tab', { name: 'Редактор' }));
+    await screen.findByRole('heading', { name: 'Компоненты' });
+
+    fireEvent.click(within(modeCluster()).getByRole('tab', { name: 'Обслуживание' }));
+    expect(await screen.findByRole('heading', { name: 'Формы+ответы' })).toBeTruthy();
+    expect(router.state.location.search).toBe('?mode=forms');
+  });
+
+  it('переход в «Редактор» убирает contentId из URL, но сохраняет mode', async () => {
+    const { router } = await renderApp({ path: '/sites/s1?mode=content&contentId=c2', handler: siteHandler });
+    await screen.findByRole('heading', { name: 'Alpha' });
+
+    fireEvent.click(within(modeCluster()).getByRole('tab', { name: 'Редактор' }));
+    await screen.findByRole('heading', { name: 'Компоненты' });
+    expect(router.state.location.search).toBe('?mode=content&view=editor&section=components');
   });
 });

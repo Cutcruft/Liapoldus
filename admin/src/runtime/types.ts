@@ -67,6 +67,20 @@ export type ContentSummary = {
 
 export type ContentDetail = ContentSummary & {
   translations?: Record<string, { fields: Record<string, unknown> }>;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ContentLocaleStat = {
+  locale: string;
+  contentCount: number;
+};
+
+/** Сводка локалей сайта (R3): базовый язык + локали в переводе + итоги. */
+export type SiteLocales = {
+  baseLocale: string;
+  locales: ContentLocaleStat[];
+  total: number;
 };
 
 export type AssetVariant = { name: string; url: string; mime: string; size: number };
