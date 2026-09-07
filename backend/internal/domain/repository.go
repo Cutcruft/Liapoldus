@@ -79,6 +79,7 @@ type FormRepository interface {
 	DeleteForm(context.Context, string, string) error
 	CreateSubmission(context.Context, Submission) error
 	ListSubmissionsByForm(context.Context, string, string) ([]Submission, error)
+	DeleteSubmission(context.Context, string, string, string) error
 }
 
 type ComponentDefinitionRepository interface {

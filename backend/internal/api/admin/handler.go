@@ -506,6 +506,104 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// AssetUsageHandler — список мест, где используется ассет (R4): контент
+// (все локали) и формы (из их определений). Совпадением считается значение-
+// строка, равное ID ассета, или относительный byte URL /api/assets/{id}/file
+// (картинки в rich-text). Сканирование рекурсивное по полям.
+type AssetUsageHandler struct {
+	assets   *asset.Service
+	contents *content.Service
+	forms    *form.Service
+}
+
+func NewAssetUsageHandler(assets *asset.Service, contents *content.Service, forms *form.Service) *AssetUsageHandler {
+	return &AssetUsageHandler{assets: assets, contents: contents, forms: forms}
+}
+
+type assetUsageContent struct {
+	ID           string `json:"id"`
+	CollectionID string `json:"collectionId"`
+}
+
+type assetUsageForm struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type assetUsageResponse struct {
+	AssetID  string             `json:"assetId"`
+	Contents []assetUsageContent `json:"contents"`
+	Forms    []assetUsageForm    `json:"forms"`
+}
+
+func (h *AssetUsageHandler) Get(w http.ResponseWriter, r *http.Request) {
+	sid := siteID(r)
+	assetID := r.PathValue("assetID")
+	if assetID == "" {
+		assetID = r.URL.Query().Get("assetId")
+	}
+	current, err := h.assets.Get(r.Context(), assetID)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	if current.SiteID != sid {
+		httpapi.RespondError(w, domain.ErrNotFound)
+		return
+	}
+	resp := assetUsageResponse{AssetID: assetID, Contents: []assetUsageContent{}, Forms: []assetUsageForm{}}
+	contents, err := h.contents.List(r.Context(), sid, "")
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	for _, c := range contents {
+		if referencesAsset(c.Fields, assetID) || anyTranslationReferences(c.Translations, assetID) {
+			resp.Contents = append(resp.Contents, assetUsageContent{ID: c.ID, CollectionID: c.CollectionID})
+		}
+	}
+	forms, err := h.forms.List(r.Context(), sid)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	for _, f := range forms {
+		if referencesAsset(f.Definition, assetID) {
+			resp.Forms = append(resp.Forms, assetUsageForm{ID: f.ID, Name: f.Name})
+		}
+	}
+	httpapi.RespondJSON(w, http.StatusOK, resp)
+}
+
+func referencesAsset(v any, assetID string) bool {
+	switch x := v.(type) {
+	case string:
+		return x == assetID || strings.Contains(x, "/api/assets/"+assetID+"/file")
+	case []any:
+		for _, item := range x {
+			if referencesAsset(item, assetID) {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, item := range x {
+			if referencesAsset(item, assetID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func anyTranslationReferences(translations map[string]map[string]any, assetID string) bool {
+	for _, fields := range translations {
+		if referencesAsset(fields, assetID) {
+			return true
+		}
+	}
+	return false
+}
+
 type RouteHandler struct{ routes *route.Service }
 
 func NewRouteHandler(routes *route.Service) *RouteHandler {
@@ -668,6 +766,22 @@ func (h *FormHandler) ListSubmissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpapi.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *FormHandler) DeleteSubmission(w http.ResponseWriter, r *http.Request) {
+	formID := r.PathValue("formID")
+	if formID == "" {
+		formID = r.URL.Query().Get("formId")
+	}
+	submissionID := r.PathValue("submissionID")
+	if submissionID == "" {
+		submissionID = r.URL.Query().Get("submissionId")
+	}
+	if err := h.forms.DeleteSubmission(r.Context(), siteID(r), formID, submissionID); err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type SnapshotHandler struct{ snapshots *snapshot.Service }

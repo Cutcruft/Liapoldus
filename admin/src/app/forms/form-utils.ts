@@ -1,5 +1,39 @@
 import type { FormDefinition } from '../../runtime';
 
+/** Человекочитаемое значение поля payload (скаляр/JSON). */
+export function formatPayloadValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/** Скалярное значение для CSV (без переносов строк), иначе JSON. */
+function csvValue(value: unknown): string {
+  const s = formatPayloadValue(value);
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/** Экранирование CSV-поля по RFC4180. */
+function csvEscape(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
+/** CSV-файл сабмитов: колонки — поля формы + дата + id. BOM добавляется при скачивании. */
+export function buildSubmissionsCsv(
+  fieldNames: string[],
+  submissions: Array<{ id: string; createdAt: string; payload?: Record<string, unknown> | undefined }>,
+  labels: { date: string; id: string },
+): string {
+  const header = [...fieldNames, labels.date, labels.id];
+  const rows = submissions.map((s) => [
+    ...fieldNames.map((name) => csvEscape(csvValue(s.payload?.[name]))),
+    csvEscape(csvValue(s.createdAt)),
+    csvEscape(s.id),
+  ]);
+  return [header.map(csvEscape).join(','), ...rows.map((r) => r.join(','))].join('\n');
+}
+
 /** Исполнители полей формы: subset контракта docs/ui-runtime/json-descriptors.md §10. */
 const FIELD_TYPES = ['text', 'email', 'password', 'number', 'select', 'checkbox', 'textarea', 'custom'] as const;
 

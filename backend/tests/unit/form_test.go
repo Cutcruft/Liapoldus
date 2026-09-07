@@ -86,3 +86,29 @@ func TestFormServiceSubmitRequiresValuesObject(t *testing.T) {
 		t.Fatalf("error = %v, want ErrInvalidRequest", err)
 	}
 }
+
+func TestFormServiceDeleteSubmission(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockFormRepository(ctrl)
+	repo.EXPECT().GetForm(gomock.Any(), "site_1", "form_1").Return(domain.Form{ID: "form_1", SiteID: "site_1"}, nil)
+	repo.EXPECT().DeleteSubmission(gomock.Any(), "site_1", "form_1", "sub_1").Return(nil)
+
+	if err := newFormService(repo, nil).DeleteSubmission(context.Background(), "site_1", "form_1", "sub_1"); err != nil {
+		t.Fatalf("delete submission: %v", err)
+	}
+}
+
+func TestFormServiceDeleteSubmissionFormNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repo := mocks.NewMockFormRepository(ctrl)
+	repo.EXPECT().GetForm(gomock.Any(), "site_1", "form_1").Return(domain.Form{}, domain.ErrNotFound)
+
+	err := newFormService(repo, nil).DeleteSubmission(context.Background(), "site_1", "form_1", "sub_1")
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
+	}
+}

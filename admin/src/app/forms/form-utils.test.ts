@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultDefinition, slugifyFormId, validateDefinition } from './form-utils';
+import { buildSubmissionsCsv, createDefaultDefinition, formatPayloadValue, slugifyFormId, validateDefinition } from './form-utils';
 
 describe('slugifyFormId', () => {
   it('латиница → form.<slug>', () => {
@@ -83,5 +83,40 @@ describe('validateDefinition', () => {
   it('fields опционален (пусто = [])', () => {
     const res = validateDefinition(JSON.stringify({ id: 'form.x', submit: { target: 't' } }));
     expect(res.ok).toBe(true);
+  });
+});
+
+describe('formatPayloadValue', () => {
+  it('скаляры как есть, объекты/массивы — JSON', () => {
+    expect(formatPayloadValue('text')).toBe('text');
+    expect(formatPayloadValue(7)).toBe('7');
+    expect(formatPayloadValue(true)).toBe('true');
+    expect(formatPayloadValue(null)).toBe('');
+    expect(formatPayloadValue(undefined)).toBe('');
+    expect(formatPayloadValue({ a: 1 })).toBe('{"a":1}');
+  });
+});
+
+describe('buildSubmissionsCsv', () => {
+  const S = (payload: Record<string, unknown>, createdAt = '2026-01-01T00:00:00Z', id = 's1') => ({
+    id,
+    createdAt,
+    payload,
+  });
+
+  it('заголовок: поля формы + дата + id', () => {
+    const csv = buildSubmissionsCsv(['email', 'city'], [S({ email: 'a@b.c' })], { date: 'Дата', id: 'ID' });
+    expect(csv.split('\n')[0]).toBe('email,city,Дата,ID');
+    expect(csv.split('\n')[1]).toBe('a@b.c,,2026-01-01T00:00:00Z,s1');
+  });
+
+  it('экранирует запятые и кавычки по RFC4180', () => {
+    const csv = buildSubmissionsCsv(['note'], [S({ note: 'a,"b"' })], { date: 'Дата', id: 'ID' });
+    expect(csv.split('\n')[1]).toBe('"a,""b""",2026-01-01T00:00:00Z,s1');
+  });
+
+  it('объектные значения — JSON, экранированы как CSV-поле', () => {
+    const csv = buildSubmissionsCsv(['meta'], [S({ meta: { x: 1 } })], { date: 'Дата', id: 'ID' });
+    expect(csv.split('\n')[1]).toBe('"{""x"":1}",2026-01-01T00:00:00Z,s1');
   });
 });

@@ -335,6 +335,20 @@ func (mr *MockStorageMockRecorder) DeleteSnapshot(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSnapshot", reflect.TypeOf((*MockStorage)(nil).DeleteSnapshot), arg0, arg1)
 }
 
+// DeleteSubmission mocks base method.
+func (m *MockStorage) DeleteSubmission(arg0 context.Context, arg1, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSubmission", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSubmission indicates an expected call of DeleteSubmission.
+func (mr *MockStorageMockRecorder) DeleteSubmission(arg0, arg1, arg2, arg3 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSubmission", reflect.TypeOf((*MockStorage)(nil).DeleteSubmission), arg0, arg1, arg2, arg3)
+}
+
 // Get mocks base method.
 func (m *MockStorage) Get(arg0 context.Context, arg1, arg2 string) (*domain.ComponentDefinition, error) {
 	m.ctrl.T.Helper()
@@ -1656,6 +1670,20 @@ func (m *MockFormRepository) DeleteForm(arg0 context.Context, arg1, arg2 string)
 func (mr *MockFormRepositoryMockRecorder) DeleteForm(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteForm", reflect.TypeOf((*MockFormRepository)(nil).DeleteForm), arg0, arg1, arg2)
+}
+
+// DeleteSubmission mocks base method.
+func (m *MockFormRepository) DeleteSubmission(arg0 context.Context, arg1, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSubmission", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSubmission indicates an expected call of DeleteSubmission.
+func (mr *MockFormRepositoryMockRecorder) DeleteSubmission(arg0, arg1, arg2, arg3 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSubmission", reflect.TypeOf((*MockFormRepository)(nil).DeleteSubmission), arg0, arg1, arg2, arg3)
 }
 
 // GetForm mocks base method.

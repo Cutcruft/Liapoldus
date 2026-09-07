@@ -106,13 +106,13 @@ describe('SiteTab — режимы вкладки сайта (R2)', () => {
 });
 
 describe('SiteTab — подразделы обслуживания в URL (R3)', () => {
-  it('выбор подраздела «Формы+ответы» меняет mode в URL и показывает заглушку', async () => {
+  it('выбор подраздела «Формы+ответы» меняет mode в URL и показывает список форм', async () => {
     const { router } = await renderApp({ path: '/sites/s1', handler: siteHandler });
     await screen.findByRole('heading', { name: 'Alpha' });
 
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Обслуживание' })).getByRole('button', { name: 'Формы+ответы' }));
 
-    expect(await screen.findByRole('heading', { name: 'Формы+ответы' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Формы' })).toBeTruthy();
     expect(router.state.location.search).toBe('?mode=forms');
   });
 
@@ -128,13 +128,13 @@ describe('SiteTab — подразделы обслуживания в URL (R3)'
 
   it('возврат в «Обслуживание» сохраняет активный подраздел (mode) из памяти/URL', async () => {
     const { router } = await renderApp({ path: '/sites/s1?mode=forms', handler: siteHandler });
-    await screen.findByRole('heading', { name: 'Формы+ответы' });
+    await screen.findByRole('heading', { name: 'Формы' });
 
     fireEvent.click(within(modeCluster()).getByRole('tab', { name: 'Редактор' }));
     await screen.findByRole('heading', { name: 'Компоненты' });
 
     fireEvent.click(within(modeCluster()).getByRole('tab', { name: 'Обслуживание' }));
-    expect(await screen.findByRole('heading', { name: 'Формы+ответы' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Формы' })).toBeTruthy();
     expect(router.state.location.search).toBe('?mode=forms');
   });
 

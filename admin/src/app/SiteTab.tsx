@@ -30,6 +30,8 @@ import {
   type MaintenanceSectionKey,
 } from './site-tab-store';
 import { ContentSection } from './content/ContentSection';
+import { FormsSection } from './forms/FormsSection';
+import { MediaSection } from './media/MediaSection';
 
 /** Режим вкладки сайта (из URL `?view=`). */
 export type SiteTabMode = 'maintenance' | 'editor';
@@ -137,6 +139,7 @@ export function SiteTab() {
     nextParams.delete('section');
     nextParams.set('mode', key);
     nextParams.delete('contentId');
+    nextParams.delete('formId');
     setSearchParams(nextParams);
   };
 
@@ -220,6 +223,10 @@ export function SiteTab() {
               <section className="min-w-0 flex-1 pl-4" aria-label={t(maintenanceNavLabel(maintenanceSection))}>
                 {maintenanceSection === 'content' ? (
                   <ContentSection />
+                ) : maintenanceSection === 'forms' ? (
+                  <FormsSection />
+                ) : maintenanceSection === 'media' ? (
+                  <MediaSection />
                 ) : (
                   <SectionPlaceholder
                     title={t(maintenanceNavLabel(maintenanceSection))}

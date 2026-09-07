@@ -116,6 +116,14 @@ func (s *Service) ListSubmissions(ctx context.Context, siteID, formID string) ([
 	return s.repo.ListSubmissionsByForm(ctx, siteID, formID)
 }
 
+// DeleteSubmission removes a single stored submission for a form.
+func (s *Service) DeleteSubmission(ctx context.Context, siteID, formID, submissionID string) error {
+	if _, err := s.repo.GetForm(ctx, siteID, formID); err != nil {
+		return err
+	}
+	return s.repo.DeleteSubmission(ctx, siteID, formID, submissionID)
+}
+
 func validateSubmission(definition map[string]any, values map[string]any, emailPattern *regexp.Regexp) error {
 	fields, ok := definition["fields"].([]any)
 	if !ok {

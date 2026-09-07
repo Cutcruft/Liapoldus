@@ -37,6 +37,8 @@ export type OperationKind =
   | 'updateForm'
   | 'deleteForm'
   | 'listSubmissions'
+  | 'deleteSubmission'
+  | 'getAssetUsage'
   | 'createSnapshot'
   | 'listSnapshots'
   | 'deleteSnapshot'
@@ -388,6 +390,32 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     method: 'GET',
     route: (args) => `/api/sites/{siteId}/forms/{formId}/submissions`,
     detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
+  },
+
+  deleteSubmission: {
+    kind: 'deleteSubmission',
+    labelKey: 'op.deleteSubmission',
+    method: 'DELETE',
+    route: (args) => `/api/sites/{siteId}/forms/{formId}/submissions/{submissionId}`,
+    detail: () => 'OK',
+  },
+
+  getAssetUsage: {
+    kind: 'getAssetUsage',
+    labelKey: 'op.getAssetUsage',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/assets/{assetId}/usage`,
+    detail: (b, t) => {
+      const contents =
+        typeof b === 'object' && b !== null && Array.isArray((b as { contents?: unknown }).contents)
+          ? (b as { contents: unknown[] }).contents.length
+          : 0;
+      const forms =
+        typeof b === 'object' && b !== null && Array.isArray((b as { forms?: unknown }).forms)
+          ? (b as { forms: unknown[] }).forms.length
+          : 0;
+      return t('result.assetUsage', { n: contents + forms });
+    },
   },
 
   createSnapshot: {

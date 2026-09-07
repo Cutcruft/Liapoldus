@@ -50,6 +50,7 @@ func NewRouter(app App) http.Handler {
 	contentHandler := NewContentHandler(app.Contents)
 	localesHandler := NewLocalesHandler(app.Sites, app.Contents)
 	assetHandler := NewAssetHandler(app.Assets)
+	assetUsageHandler := NewAssetUsageHandler(app.Assets, app.Contents, app.Forms)
 	routeHandler := NewRouteHandler(app.Routes)
 	formHandler := NewFormHandler(app.Forms)
 	snapshotHandler := NewSnapshotHandler(app.Snapshots)
@@ -125,6 +126,7 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/assets/{assetID}", assetHandler.GetMetadata)
 	protected.HandleFunc("GET /api/assets/{assetID}/file", assetHandler.GetFile)
 	protected.HandleFunc("DELETE /api/assets/{assetID}", assetHandler.Delete)
+	protected.HandleFunc("GET /api/sites/{siteID}/assets/{assetID}/usage", assetUsageHandler.Get)
 
 	protected.HandleFunc("POST /api/sites/{siteID}/routes", routeHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/routes", routeHandler.List)
@@ -145,6 +147,8 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("DELETE /api/sites/{siteID}/forms/{formID}", formHandler.Delete)
 	protected.HandleFunc("GET /api/forms/{formID}/submissions", formHandler.ListSubmissions)
 	protected.HandleFunc("GET /api/sites/{siteID}/forms/{formID}/submissions", formHandler.ListSubmissions)
+	protected.HandleFunc("DELETE /api/forms/{formID}/submissions/{submissionID}", formHandler.DeleteSubmission)
+	protected.HandleFunc("DELETE /api/sites/{siteID}/forms/{formID}/submissions/{submissionID}", formHandler.DeleteSubmission)
 
 	protected.HandleFunc("POST /api/sites/{siteID}/snapshots", snapshotHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/snapshots", snapshotHandler.List)

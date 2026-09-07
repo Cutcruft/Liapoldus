@@ -96,6 +96,19 @@ export type AssetMeta = {
   createdAt?: string;
 };
 
+/** Ссылка на контент, использующий ассет (R4: ответ `GET /assets/{id}/usage`). */
+export type AssetUsageContent = { id: string; collectionId: string };
+
+/** Ссылка на форму, использующую ассет в определении. */
+export type AssetUsageForm = { id: string; name: string };
+
+/** «Где используется ассет» — контент (поля/галереи/переводы) и формы (definitions). */
+export type AssetUsage = {
+  assetId: string;
+  contents: AssetUsageContent[];
+  forms: AssetUsageForm[];
+};
+
 export type RouteAction =
   | { type: 'renderPage'; pageId: string }
   | { type: 'serveAsset'; assetId: string }

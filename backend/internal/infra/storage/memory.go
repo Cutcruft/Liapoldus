@@ -535,6 +535,24 @@ func (m *Memory) ListSubmissionsByForm(_ context.Context, siteID, formID string)
 	return clone(m.submissions[formID]), nil
 }
 
+func (m *Memory) DeleteSubmission(_ context.Context, siteID, formID, submissionID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	form, ok := m.forms[formID]
+	if !ok || form.SiteID != siteID {
+		return domain.ErrNotFound
+	}
+	list := m.submissions[formID]
+	for i, submission := range list {
+		if submission.ID != submissionID {
+			continue
+		}
+		m.submissions[formID] = append(list[:i], list[i+1:]...)
+		return nil
+	}
+	return domain.ErrNotFound
+}
+
 func (m *Memory) defKey(siteID, id string) string { return siteID + "\x00" + id }
 
 func (m *Memory) depsKey(siteID, name string) string { return siteID + "\x00" + name }

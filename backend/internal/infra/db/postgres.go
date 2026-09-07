@@ -795,6 +795,19 @@ func (p *Postgres) ListSubmissionsByForm(ctx context.Context, siteID, formID str
 	return result, rows.Err()
 }
 
+func (p *Postgres) DeleteSubmission(ctx context.Context, siteID, formID, submissionID string) error {
+	result, err := p.pool.Exec(ctx, `
+		DELETE FROM submissions WHERE id = $1 AND site_id = $2 AND form_id = $3
+	`, submissionID, siteID, formID)
+	if err != nil {
+		return fmt.Errorf("delete submission: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 type rowScanner interface{ Scan(...any) error }
 
 func scanPage(row rowScanner) (domain.Page, error) {
