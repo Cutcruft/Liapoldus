@@ -24,6 +24,8 @@ export type {
 } from './hooks';
 export { PageRenderer, RouteOutlet } from './render';
 export type { ComponentMap, PageRendererProps, RouteOutletProps } from './render';
+export { HeadController, applyHead } from './head-controller';
+export type { HeadControllerProps, HeadDocument } from './head-controller';
 export {
   BUILTIN_COMPONENTS,
   componentMapFromRegistry,

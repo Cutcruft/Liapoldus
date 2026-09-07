@@ -155,4 +155,35 @@ describe('descriptor parse (JSON)', () => {
     expect(() => validateBindingSource({ kind: 'props' } as never)).toThrow(DescriptorValidationError);
     expect(() => validateBindingSource({ kind: 'content' } as never)).toThrow(DescriptorValidationError);
   });
+
+  it('page: layoutSectionId/head парсятся в PageDescriptor (R10 P1)', () => {
+    expect(
+      validatePageDescriptor({
+        id: 'page.home',
+        elements: [],
+        layoutSectionId: 'layout.shell',
+        head: { title: 'Home', description: 'desc', meta: { robots: 'noindex' } },
+      }),
+    ).toMatchObject({
+      layoutSectionId: 'layout.shell',
+      head: { title: 'Home', description: 'desc', meta: { robots: 'noindex' } },
+    });
+  });
+
+  it('contract: site head/defaultLayoutSectionId парсятся (R10 P1)', () => {
+    const parsed = parseDescriptors(
+      JSON.stringify({
+        siteId: 's', environment: 'prod', version: '1', locale: 'ru',
+        providers: [], operations: [], endpoints: [], routes: [], themes: [],
+        head: { titleTemplate: '{title} — ACME', description: 'site', og: { type: 'website' } },
+        defaultLayoutSectionId: 'layout.shell',
+      }),
+    );
+    expect(parsed.contract.defaultLayoutSectionId).toBe('layout.shell');
+    expect(parsed.contract.head).toMatchObject({
+      titleTemplate: '{title} — ACME',
+      description: 'site',
+      og: { type: 'website' },
+    });
+  });
 });

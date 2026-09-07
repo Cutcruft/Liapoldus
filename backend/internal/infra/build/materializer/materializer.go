@@ -186,11 +186,14 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		}
 	}
 	for _, p := range pages {
+		head := wirePageHead(p.Version.Head)
 		elementsJSON, err := json.Marshal(pageElements{
-			SnapshotID: req.SnapshotID,
-			VersionID:  p.Version.ID,
-			PageID:     p.Page.PageID,
-			Elements:   wireElements(p.Version.List),
+			SnapshotID:      req.SnapshotID,
+			VersionID:       p.Version.ID,
+			PageID:          p.Page.PageID,
+			Elements:        wireElements(p.Version.List),
+			LayoutSectionID: p.Version.LayoutSectionID,
+			Head:            head,
 		})
 		if err != nil {
 			return fail("elements "+p.Page.PageID, err)
@@ -338,12 +341,16 @@ func homePage(siteID string, pages []domain.SnapshotPage, routes domain.RouteRep
 }
 
 // pageElements is the wire shape registerPage stores for a page (matches the
-// ui-runtime page descriptor; Elements is the flat element list).
+// ui-runtime page descriptor; Elements is the flat element list). R10 P1:
+// LayoutSectionID/Head carry the raw per-page overrides the runtime merges
+// over the site defaults.
 type pageElements struct {
-	SnapshotID string        `json:"snapshotId"`
-	VersionID  string        `json:"versionId"`
-	PageID     string        `json:"pageId"`
-	Elements   []wireElement `json:"elements"`
+	SnapshotID      string           `json:"snapshotId"`
+	VersionID       string           `json:"versionId"`
+	PageID          string           `json:"pageId"`
+	Elements        []wireElement    `json:"elements"`
+	LayoutSectionID string           `json:"layoutSectionId,omitempty"`
+	Head            *domain.PageHead `json:"head,omitempty"`
 }
 
 // wireElement mirrors the runtime ElementDescriptor: props/bindings are always
@@ -353,6 +360,21 @@ type wireElement struct {
 	ComponentID string                        `json:"componentId"`
 	Props       map[string]domain.ElementProp `json:"props"`
 	Bindings    []domain.BindingSource        `json:"bindings"`
+}
+
+// wirePageHead returns the raw per-page head override carried by the pinned
+// version (nil when empty). The client merges it over the site defaults.
+func wirePageHead(version domain.PageHead) *domain.PageHead {
+	if headEmpty(version) {
+		return nil
+	}
+	h := version
+	return &h
+}
+
+func headEmpty(h domain.PageHead) bool {
+	return h.Title == "" && h.Description == "" && h.Robots == "" && h.Canonical == "" &&
+		len(h.OG) == 0 && len(h.Meta) == 0
 }
 
 func wireElements(list []domain.Element) []wireElement {

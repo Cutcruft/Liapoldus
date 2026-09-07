@@ -271,31 +271,36 @@ func TestComponentsListCatalog(t *testing.T) {
 	seedSiteDefs(t, db, created.ID)
 
 	var catalog []struct {
-		Type      string         `json:"type"`
-		Label     string         `json:"label"`
-		Container bool           `json:"container"`
-		Schema    map[string]any `json:"schema"`
+		Type               string         `json:"type"`
+		Label              string         `json:"label"`
+		Container          bool           `json:"container"`
+		AcceptsPageContent bool           `json:"acceptsPageContent"`
+		Schema             map[string]any `json:"schema"`
 	}
 	decodeResponse(t, request(t, handler, http.MethodGet, "/api/sites/"+created.ID+"/components", nil), &catalog)
 
 	want := []struct {
-		Type      string
-		Container bool
+		Type               string
+		Container          bool
+		AcceptsPageContent bool
 	}{
-		{"Container", true},
-		{"Text", false},
-		{"Image", false},
-		{"Button", false},
-		// Seeded site definitions are appended after the builtins.
-		{"Container", false},
-		{"Text", false},
+		{"Container", true, false},
+		{"Text", false, false},
+		{"Image", false, false},
+		{"Button", false, false},
+		// Seeded site definitions (sections) are appended after the builtins and
+		// report their container/acceptsPageContent flags (R10 P1): each def is
+		// a section here, so container is true.
+		{"Container", true, false},
+		{"Text", true, false},
 	}
 	if len(catalog) != len(want) {
 		t.Fatalf("catalog len = %d, want %d (%#v)", len(catalog), len(want), catalog)
 	}
 	for i, w := range want {
-		if catalog[i].Type != w.Type || catalog[i].Container != w.Container {
-			t.Fatalf("catalog[%d] = {type:%q container:%v}, want {type:%q container:%v}", i, catalog[i].Type, catalog[i].Container, w.Type, w.Container)
+		if catalog[i].Type != w.Type || catalog[i].Container != w.Container || catalog[i].AcceptsPageContent != w.AcceptsPageContent {
+			t.Fatalf("catalog[%d] = {type:%q container:%v acceptsPageContent:%v}, want {type:%q container:%v acceptsPageContent:%v}",
+				i, catalog[i].Type, catalog[i].Container, catalog[i].AcceptsPageContent, w.Type, w.Container, w.AcceptsPageContent)
 		}
 	}
 	// Every entry is inspector-ready.

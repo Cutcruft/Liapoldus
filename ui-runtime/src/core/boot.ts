@@ -1,5 +1,5 @@
 import { DescriptorValidationError, TransportError } from '../errors';
-import type { OperationDescriptor } from '../types/descriptor';
+import type { OperationDescriptor, SiteHead } from '../types/descriptor';
 import type { PageDeclaration, PageDescriptor } from '../types/page';
 import { ApiClient } from './api-client';
 import { AssetResolver } from './assets';
@@ -57,6 +57,10 @@ export interface BootRuntime {
   readonly assets: AssetResolver;
   /** страницы контракта (лист элементов на страницу, §1.3) */
   readonly pages: PageDescriptor[];
+  /** R10 P1: site-wide head defaults (для client-side merge) */
+  readonly siteHead: SiteHead | undefined;
+  /** R10 P1: default layout section id (для client-side layout resolution) */
+  readonly defaultLayoutSectionId: string | undefined;
   /** полный сброс: закрыть dev-канал, снять poll, выгрузить транспорты и сессию */
   dispose(): void;
 }
@@ -84,6 +88,8 @@ class BootSession {
   forms!: FormRuntime;
   assets!: AssetResolver;
   pages: PageDescriptor[] = [];
+  siteHead: SiteHead | undefined;
+  defaultLayoutSectionId: string | undefined;
 
   ready = false;
   private factory!: TransportFactory;
@@ -114,6 +120,8 @@ class BootSession {
     const text = await res.text();
     const parsed = parseDescriptors(text);
     this.pages = parsed.pages;
+    this.siteHead = parsed.contract.head;
+    this.defaultLayoutSectionId = parsed.contract.defaultLayoutSectionId;
 
     for (const p of parsed.providers) {
       if (!this.registry.hasProvider(p.id)) this.registry.registerProvider(p);
@@ -179,7 +187,12 @@ class BootSession {
   }
 
   private pageDeclaration(page: PageDescriptor): PageDeclaration {
-    return { pageId: page.id, elements: page.elements };
+    return {
+      pageId: page.id,
+      elements: page.elements,
+      layoutSectionId: page.layoutSectionId ?? this.defaultLayoutSectionId,
+      head: page.head,
+    };
   }
 
   runtime(): BootRuntime {
@@ -198,6 +211,8 @@ class BootSession {
       forms: this.forms,
       assets: this.assets,
       pages: this.pages,
+      siteHead: this.siteHead,
+      defaultLayoutSectionId: this.defaultLayoutSectionId,
       dispose: () => this.dispose(),
     };
   }

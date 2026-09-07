@@ -54,26 +54,44 @@ type Capabilities struct {
 // props/bindings/values always present (non-null) so the ui-runtime crawler can
 // iterate them safely.
 type ElementDescriptor struct {
-	ID          string                    `json:"id"`
-	ComponentID string                    `json:"componentId"`
+	ID          string                           `json:"id"`
+	ComponentID string                           `json:"componentId"`
 	Props       map[string]ElementPropDescriptor `json:"props"`
-	Bindings    []domain.BindingSource    `json:"bindings"`
+	Bindings    []domain.BindingSource           `json:"bindings"`
 }
 
 // ElementPropDescriptor is a literal or binding wire property value.
 type ElementPropDescriptor struct {
-	Kind   string                 `json:"kind"` // "literal" | "binding"
-	Value  any                    `json:"value,omitempty"`
-	Source *domain.BindingSource  `json:"source,omitempty"`
+	Kind   string                `json:"kind"` // "literal" | "binding"
+	Value  any                   `json:"value,omitempty"`
+	Source *domain.BindingSource `json:"source,omitempty"`
 }
 
 // PageDescriptor mirrors the runtime page descriptor: the linear element list
 // that renders in order. Routes reference pages by pageId; the boot contract
 // carries the assembled page (array of components) per §1.3.
+//
+// R10 P1: LayoutSectionID/Head are the RAW page-level overrides from the pinned
+// page version. The client merges them over the site-wide defaults
+// (Contract.Head / Contract.DefaultLayoutSectionID), so navigation can resolve
+// the effective layout and document head without a round trip.
 type PageDescriptor struct {
-	ID       string              `json:"id"`
-	Name     string              `json:"name"`
-	Elements []ElementDescriptor `json:"elements"`
+	ID              string              `json:"id"`
+	Name            string              `json:"name"`
+	Elements        []ElementDescriptor `json:"elements"`
+	LayoutSectionID string              `json:"layoutSectionId,omitempty"`
+	Head            *PageHead           `json:"head,omitempty"`
+}
+
+// PageHead mirrors the runtime per-page head override (docs/ui-runtime/spec.md
+// §2.4). Scalar fields override the site defaults; OG/Meta merge by key.
+type PageHead struct {
+	Title       string            `json:"title,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Robots      string            `json:"robots,omitempty"`
+	Canonical   string            `json:"canonical,omitempty"`
+	OG          map[string]string `json:"og,omitempty"`
+	Meta        map[string]string `json:"meta,omitempty"`
 }
 
 // TreeDeclaration is removed in R7a — pages are flat element lists
@@ -115,18 +133,24 @@ type FallbackDescriptor struct {
 }
 
 // Contract is the snapshot-pinned boot contract served at GET /runtime/contract.
+//
+// R10 P1: Head/DefaultLayoutSectionID are site-wide presentation defaults that
+// pages inherit unless they override them (see PageDescriptor.LayoutSectionID /
+// PageDescriptor.Head). The client applies them client-side to the live page.
 type Contract struct {
-	SiteID          string              `json:"siteId"`
-	Environment     string              `json:"environment"`
-	Version         string              `json:"version"`
-	Locale          string              `json:"locale"`
-	Providers       []any               `json:"providers"`
-	Operations      []OperationDescriptor `json:"operations"`
-	Endpoints       []EndpointDescriptor   `json:"endpoints"`
-	Routes          []RouteDescriptor   `json:"routes"`
-	Themes          []ThemeDescriptor   `json:"themes"`
-	Fallback        *FallbackDescriptor `json:"fallback,omitempty"`
-	EnabledChannels EnabledChannels     `json:"enabledChannels"`
-	Capabilities    Capabilities        `json:"capabilities"`
-	Pages           []PageDescriptor    `json:"pages,omitempty"`
+	SiteID                 string                `json:"siteId"`
+	Environment            string                `json:"environment"`
+	Version                string                `json:"version"`
+	Locale                 string                `json:"locale"`
+	Providers              []any                 `json:"providers"`
+	Operations             []OperationDescriptor `json:"operations"`
+	Endpoints              []EndpointDescriptor  `json:"endpoints"`
+	Routes                 []RouteDescriptor     `json:"routes"`
+	Themes                 []ThemeDescriptor     `json:"themes"`
+	Fallback               *FallbackDescriptor   `json:"fallback,omitempty"`
+	EnabledChannels        EnabledChannels       `json:"enabledChannels"`
+	Capabilities           Capabilities          `json:"capabilities"`
+	Head                   domain.SiteHead       `json:"head,omitempty"`
+	DefaultLayoutSectionID string                `json:"defaultLayoutSectionId,omitempty"`
+	Pages                  []PageDescriptor      `json:"pages,omitempty"`
 }

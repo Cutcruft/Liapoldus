@@ -165,4 +165,44 @@ describe('18. render (PageRenderer / RouteOutlet)', () => {
     act(() => runtime.store.getState().setTree(treeB()));
     await waitFor(() => expect(screen.getByTestId('item')).toBe(elBefore));
   });
+
+  it('7. layout-section оборачивает лист в layout-компонент с children (§1.3)', async () => {
+    const { runtime } = await bootFromContract();
+    const withLayout = { ...treeB(), layoutSectionId: 'layout.shell' };
+    act(() => runtime.store.getState().setTree(withLayout));
+
+    const Layout = ({ children }: { children?: ReactNode }) => (
+      <div data-testid="layout">
+        <header>header</header>
+        {children}
+        <footer>footer</footer>
+      </div>
+    );
+    const map = { ...ROOT, 'layout.shell': Layout };
+
+    render(
+      <Scaffold runtime={runtime}>
+        <PageRenderer components={map} />
+      </Scaffold>,
+    );
+    await waitFor(() => expect(screen.getByTestId('layout')).toBeTruthy());
+    expect(screen.getByTestId('layout').textContent).toContain('header');
+    // лист страницы внутри layout (children)
+    expect(screen.getByTestId('layout').querySelector('[data-testid="root"]')).not.toBeNull();
+    expect(screen.getByTestId('layout').textContent).toContain('footer');
+  });
+
+  it('8. layout с неизвестным компонентом → голый лист (не падает)', async () => {
+    const { runtime } = await bootFromContract();
+    act(() => runtime.store.getState().setTree({ ...treeB(), layoutSectionId: 'layout.missing' }));
+
+    render(
+      <Scaffold runtime={runtime}>
+        <PageRenderer components={ROOT} />
+      </Scaffold>,
+    );
+    await waitFor(() => expect(screen.getByTestId('root')).toBeTruthy());
+    // лист рендерится без обёртки layout
+    expect(screen.queryByTestId('layout')).toBeNull();
+  });
 });

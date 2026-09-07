@@ -9,11 +9,12 @@ import type {
   RouteAction,
   RouteDescriptor,
   RouteDescriptorKind,
+  SiteHead,
   ThemeDescriptor,
   ThemeDescriptorKind,
   ThemeTokenDef,
 } from '../types/descriptor';
-import type { BindingSource, ElementNode, ElementProp, PageDescriptor } from '../types/page';
+import type { BindingSource, ElementNode, ElementProp, PageDescriptor, PageHead } from '../types/page';
 
 const BADGE_RE = /^([A-Za-z0-9._/-]+)#([a-z]+)$/;
 
@@ -304,11 +305,43 @@ export function validatePageDescriptor(raw: unknown): PageDescriptor {
   if (!Array.isArray(elementsRaw)) {
     throw new DescriptorValidationError('page.elements должен быть массивом', { entityId: id, path: 'elements' });
   }
-  return {
+  const result: PageDescriptor = {
     id,
     name,
     elements: elementsRaw.map(validateElementDescriptor),
   };
+  // R10 P1: per-page layout override
+  if (typeof raw.layoutSectionId === 'string' && raw.layoutSectionId !== '') {
+    result.layoutSectionId = raw.layoutSectionId;
+  }
+  // R10 P1: per-page head override
+  if (isRecord(raw.head)) {
+    result.head = parsePageHead(raw.head);
+  }
+  return result;
+}
+
+/** Парсит per-page head override: толерантно к отсутствию полей. */
+function parsePageHead(raw: Record<string, unknown>): PageHead {
+  const head: PageHead = {};
+  if (typeof raw.title === 'string') head.title = raw.title;
+  if (typeof raw.description === 'string') head.description = raw.description;
+  if (typeof raw.robots === 'string') head.robots = raw.robots;
+  if (typeof raw.canonical === 'string') head.canonical = raw.canonical;
+  if (isRecord(raw.og)) head.og = raw.og as Record<string, string>;
+  if (isRecord(raw.meta)) head.meta = raw.meta as Record<string, string>;
+  return head;
+}
+
+/** Парсит site-wide head: толерантно к отсутствию полей. */
+function parseSiteHead(raw: Record<string, unknown>): SiteHead {
+  const head: SiteHead = {};
+  if (typeof raw.titleTemplate === 'string') head.titleTemplate = raw.titleTemplate;
+  if (typeof raw.description === 'string') head.description = raw.description;
+  if (typeof raw.faviconAssetId === 'string') head.faviconAssetId = raw.faviconAssetId;
+  if (isRecord(raw.og)) head.og = raw.og as Record<string, string>;
+  if (isRecord(raw.meta)) head.meta = raw.meta as Record<string, string>;
+  return head;
 }
 
 export function validateThemeDescriptor(raw: unknown): ThemeDescriptorKind {
@@ -404,6 +437,13 @@ export function parseDescriptors(json: string): ParseResult {
       ...(typeof raw.fallback.definition === 'string' ? { definition: raw.fallback.definition } : {}),
       ...(isRecord(raw.fallback.params) ? { params: raw.fallback.params as Record<string, string> } : {}),
     };
+  }
+  // R10 P1: site-wide presentation defaults for client-side head/layout merge
+  if (isRecord(raw.head)) {
+    contract.head = parseSiteHead(raw.head);
+  }
+  if (typeof raw.defaultLayoutSectionId === 'string' && raw.defaultLayoutSectionId !== '') {
+    contract.defaultLayoutSectionId = raw.defaultLayoutSectionId;
   }
 
   return { contract, providers, operations, endpoints, routes, themes, pages };

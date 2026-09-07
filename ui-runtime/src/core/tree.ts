@@ -72,6 +72,8 @@ function resolveDeclaration(declaration: PageDeclaration, ctx: BindingContext): 
     versionId: declaration.versionId,
     pageId: declaration.pageId,
     elements: declaration.elements.map((el) => resolveElement(el, ctx)),
+    layoutSectionId: declaration.layoutSectionId,
+    head: declaration.head,
   };
 }
 

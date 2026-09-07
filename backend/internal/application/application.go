@@ -104,7 +104,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Builds:       builds,
 		Deploys:      deploy.NewService(storage, storage, storage, builds),
 		BuildEvents:  buildEvents,
-		Runtime:      runtime.NewService(storage, storage, storage, routes, builds, storage, storage, storage),
+		Runtime:      runtime.NewService(storage, storage, storage, routes, builds, storage, storage, storage, sitesettings.NewService(storage, storage, storage)),
 		Contents:     content.NewService(storage),
 		Assets: asset.NewService(storage, blobs, storage, asset.Settings{
 			MasterVariant: cfg.MasterVariantName,

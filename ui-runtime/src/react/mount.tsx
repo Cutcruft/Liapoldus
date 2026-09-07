@@ -5,6 +5,7 @@ import { componentMapFromRegistry } from './builtin';
 import { PageLoader, getPageTree, hasPageTree, resolveBuildBase } from '../core/pages';
 import { RuntimeProvider, useRuntime } from './context';
 import { PageRenderer, pageIdOf, type ComponentMap } from './render';
+import { HeadController } from './head-controller';
 import { useRoute } from './hooks';
 
 export interface MountOptions extends BootOptions {
@@ -89,7 +90,12 @@ function CodeSplitPages({ runtime, loader, components, fallback }: CodeSplitPage
       if (!alive) return;
       const decl = getPageTree(pageId);
       if (decl && runtime.store.getState().tree?.pageId !== pageId) {
-        runtime.tree.load(decl);
+        // R10 P1: чанк несёт raw layout/head per-page; site-дефолт layout
+        // подмешивается здесь (у контрактного пути это делает boot.pageDeclaration).
+        runtime.tree.load({
+          ...decl,
+          layoutSectionId: decl.layoutSectionId ?? runtime.defaultLayoutSectionId,
+        });
       }
     });
     return () => {
@@ -146,6 +152,7 @@ function ReadyPages(props: Omit<CodeSplitPagesProps, 'runtime'>) {
   return (
     <>
       <BindingRefresh />
+      <HeadController />
       <CodeSplitPages runtime={runtime} {...props} />
     </>
   );

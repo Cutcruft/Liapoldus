@@ -25,19 +25,33 @@ export interface PageRendererProps {
 /**
  * PageRenderer (§18#1-#3): рендерит линейный лист элементов страницы в порядке
  * (позиция в листе = порядок рендера); неизвестный componentId → placeholder (не падает).
+ *
+ * R10 P1: если у страницы есть layout (effective layoutSectionId из
+ * ResolvedPageDeclaration — per-page override уже смержен с site-дефолтом на
+ * уровне декларации), лист оборачивается в layout-компонент с `children`
+ * (спека §1.3: layout — section с `acceptsPageContent`, получает готовый
+ * линейный список) или рендерится голым, когда layout-компонент неизвестен.
  * Ключи по element.id — без remount при rebuild.
  */
 export function PageRenderer({ components, elements }: PageRendererProps) {
   const tree = useTree();
   const actual = elements ?? tree?.elements ?? null;
   if (!actual || actual.length === 0) return null;
-  return (
+
+  const list = (
     <>
       {actual.map((element) => (
         <ElementNode key={element.id} element={element} components={components} />
       ))}
     </>
   );
+
+  const layoutId = elements ? undefined : tree?.layoutSectionId;
+  const Layout = layoutId ? components[layoutId] : undefined;
+  if (Layout) {
+    return createElement(Layout, { children: list });
+  }
+  return list;
 }
 
 export interface RouteOutletProps {

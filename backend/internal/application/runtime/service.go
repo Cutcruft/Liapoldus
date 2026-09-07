@@ -8,6 +8,7 @@ import (
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/build"
 	routeapp "github.com/liapoldus/liapoldus/backend/internal/application/route"
+	"github.com/liapoldus/liapoldus/backend/internal/application/sitesettings"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
@@ -17,22 +18,24 @@ import (
 // к версии/снапшоту… Если версия не указана — берётся текущая published
 // Билда окружения»).
 type Service struct {
-	sites     domain.SiteRepository
-	snapshots domain.SnapshotRepository
-	pages     domain.PageRepository
-	routes    *routeapp.Service
-	builds    *build.Service
-	tokens    domain.TokenRepository
+	sites      domain.SiteRepository
+	snapshots  domain.SnapshotRepository
+	pages      domain.PageRepository
+	routes     *routeapp.Service
+	builds     *build.Service
+	tokens     domain.TokenRepository
 	operations domain.OperationRepository
 	endpoints  domain.EndpointRepository
+	settings   *sitesettings.Service
 }
 
 func NewService(sites domain.SiteRepository, snapshots domain.SnapshotRepository,
 	pages domain.PageRepository, routes *routeapp.Service, builds *build.Service,
-	tokens domain.TokenRepository, operations domain.OperationRepository, endpoints domain.EndpointRepository) *Service {
+	tokens domain.TokenRepository, operations domain.OperationRepository, endpoints domain.EndpointRepository,
+	settings *sitesettings.Service) *Service {
 	return &Service{
 		sites: sites, snapshots: snapshots, pages: pages, routes: routes, builds: builds, tokens: tokens,
-		operations: operations, endpoints: endpoints,
+		operations: operations, endpoints: endpoints, settings: settings,
 	}
 }
 
@@ -75,6 +78,20 @@ func (s *Service) BootContract(ctx context.Context, site domain.Site, environmen
 		return Contract{}, err
 	}
 
+	// Site-wide presentation defaults the client merges over per-page
+	// overrides (R10 P1, client-side head/layout resolution).
+	var head domain.SiteHead
+	var defaultLayout string
+	if s.settings != nil {
+		if settings, err := s.settings.Get(ctx, site.ID); err == nil && settings != nil {
+			head = settings.Head
+			if head.Meta == nil {
+				head.Meta = map[string]string{}
+			}
+			defaultLayout = settings.DefaultLayoutSectionID
+		}
+	}
+
 	return Contract{
 		SiteID:      site.ID,
 		Environment: environment,
@@ -93,7 +110,9 @@ func (s *Service) BootContract(ctx context.Context, site domain.Site, environmen
 			FormSubmissions: true,
 			Dev:             environment == domain.EnvironmentDevelopment,
 		},
-		Pages: pages,
+		Head:                   head,
+		DefaultLayoutSectionID: defaultLayout,
+		Pages:                  pages,
 	}, nil
 }
 
@@ -139,11 +158,7 @@ func (s *Service) PageDescriptors(ctx context.Context, site domain.Site, environ
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, PageDescriptor{
-			ID:       p.PageID,
-			Name:     page.Name,
-			Elements: toElementDescriptors(version.List),
-		})
+		out = append(out, *s.pageDescriptor(p.PageID, page, version))
 	}
 	return out, nil
 }
@@ -179,11 +194,48 @@ func (s *Service) Page(ctx context.Context, site domain.Site, environment, versi
 	if err != nil {
 		return nil, err
 	}
-	return &PageDescriptor{
-		ID:       selected.PageID,
+	return s.pageDescriptor(selected.PageID, page, version), nil
+}
+
+// pageDescriptor assembles a PageDescriptor from the pinned page version,
+// carrying the raw per-page layout override and head (R10 P1). The version is
+// the released source of truth for layout/head; page-level fields are the
+// fallback so pre-R10 pages (where the version predates the columns) still
+// resolve their current values.
+func (s *Service) pageDescriptor(pageID string, page domain.Page, version domain.PageVersion) *PageDescriptor {
+	d := PageDescriptor{
+		ID:       pageID,
 		Name:     page.Name,
 		Elements: toElementDescriptors(version.List),
-	}, nil
+	}
+	layout := version.LayoutSectionID
+	if layout == "" {
+		layout = page.LayoutSectionID
+	}
+	if layout != "" {
+		d.LayoutSectionID = layout
+	}
+	head := version.Head
+	if headIsEmpty(head) && !headIsEmpty(page.Head) {
+		head = page.Head
+	}
+	if !headIsEmpty(head) {
+		w := PageHead{
+			Title:       head.Title,
+			Description: head.Description,
+			Robots:      head.Robots,
+			Canonical:   head.Canonical,
+			OG:          head.OG,
+			Meta:        head.Meta,
+		}
+		d.Head = &w
+	}
+	return &d
+}
+
+func headIsEmpty(h domain.PageHead) bool {
+	return h.Title == "" && h.Description == "" && h.Robots == "" && h.Canonical == "" &&
+		len(h.OG) == 0 && len(h.Meta) == 0
 }
 
 func (s *Service) selectPage(ctx context.Context, siteID string, snapshot domain.Snapshot, pageID, routeID string) (domain.SnapshotPage, error) {

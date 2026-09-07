@@ -73,10 +73,11 @@ func (h *ComponentHandler) Define(w http.ResponseWriter, r *http.Request) {
 // GET /api/sites/{id}/components: builtin platform components plus the site's
 // defined components, each shaped for the editor palette/inspector.
 type editorComponent struct {
-	Type      string         `json:"type"`
-	Label     string         `json:"label"`
-	Container bool           `json:"container"`
-	Schema    map[string]any `json:"schema"`
+	Type               string         `json:"type"`
+	Label              string         `json:"label"`
+	Container          bool           `json:"container"`
+	AcceptsPageContent bool           `json:"acceptsPageContent"`
+	Schema             map[string]any `json:"schema"`
 }
 
 // List returns the unified editor catalog for a site: platform builtin
@@ -98,7 +99,7 @@ func (h *ComponentHandler) List(w http.ResponseWriter, r *http.Request) {
 		if l, ok := stringMeta(d.Metadata, "label"); ok && l != "" {
 			label = l
 		}
-		catalog = append(catalog, editorComponent{Type: d.ID, Label: label, Container: false, Schema: d.Schema})
+		catalog = append(catalog, editorComponent{Type: d.ID, Label: label, Container: d.IsSection, AcceptsPageContent: d.AcceptsPageContent, Schema: d.Schema})
 	}
 	httpapi.RespondJSON(w, http.StatusOK, catalog)
 }

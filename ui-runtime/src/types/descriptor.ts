@@ -153,6 +153,22 @@ export interface ContractDescriptor {
     formSubmissions: boolean;
     dev: boolean;
   };
+  /** R10 P1: site-wide presentation defaults for head resolution */
+  head?: SiteHead;
+  /** R10 P1: default layout section id (pages inherit unless they override) */
+  defaultLayoutSectionId?: string;
+}
+
+/**
+ * Site-wide presentation defaults (R10 P1). Pages inherit these via client-side
+ * merge (scalars override, OG/Meta merge by key).
+ */
+export interface SiteHead {
+  titleTemplate?: string;
+  description?: string;
+  faviconAssetId?: string;
+  og?: Record<string, string>;
+  meta?: Record<string, string>;
 }
 
 /** `type` беджится в конце id: `op#query`, `endpoint#server`, `provider#ws`, `route`, `theme`. */

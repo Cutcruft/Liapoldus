@@ -20,6 +20,8 @@ export type { ComponentDefinition } from './core/component-registry';
 export { SyncEngine } from './core/sync';
 export type { Channel, SubscriptionMeta, SyncOptions } from './core/sync';
 export { TreeController } from './core/tree';
+export { resolvePageHead, resolvedHeadHasContent } from './core/head';
+export type { ResolvedHead } from './core/head';
 export {
   PageLoader,
   getPageTree,

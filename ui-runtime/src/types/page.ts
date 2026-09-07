@@ -28,11 +28,28 @@ export interface ElementNode {
   bindings?: BindingSource[];
 }
 
+/**
+ * Per-page head override (§2.4). Scalar fields override site-wide defaults;
+ * OG/Meta merge by key (site → page).
+ */
+export interface PageHead {
+  title?: string;
+  description?: string;
+  robots?: string;
+  canonical?: string;
+  og?: Record<string, string>;
+  meta?: Record<string, string>;
+}
+
 /** Страница в runtime-контракте (/runtime/contract `pages[]`). */
 export interface PageDescriptor {
   id: string;
   name: string;
   elements: ElementNode[];
+  /** raw per-page layout override (R10 P1) */
+  layoutSectionId?: string;
+  /** raw per-page head override (R10 P1) */
+  head?: PageHead;
 }
 
 /** Декларация страницы для загрузки в стор/контроллер (чанк или контракт). */
@@ -42,6 +59,10 @@ export interface PageDeclaration {
   /** страница, которой принадлежит лист (home-page для контракта) */
   pageId?: string;
   elements: ElementNode[];
+  /** raw per-page layout override (R10 P1) */
+  layoutSectionId?: string;
+  /** raw per-page head override (R10 P1) */
+  head?: PageHead;
 }
 
 /** Элемент с резолвленными bindings (props = static + значения из контекста). */
@@ -59,6 +80,10 @@ export interface ResolvedPageDeclaration {
   versionId?: string;
   pageId?: string;
   elements: ResolvedElementNode[];
+  /** resolved layout section id (page override merged with site default) */
+  layoutSectionId?: string;
+  /** resolved head (page head merged with site head defaults) */
+  head?: PageHead;
 }
 
 /** Контекст разрешения bindings (срез стора). */
