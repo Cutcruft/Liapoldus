@@ -72,6 +72,8 @@ export const STRINGS = {
   'site.open': 'Открыть',
   'site.delete.confirm': 'Удалить сайт',
   'site.notFound': 'Сайт не найден',
+  'site.pages.page': 'Страница',
+  'site.pages.testPath': 'Тестовый path (превью групп)',
   'site.sections': 'Разделы',
 
   'page.title': 'Страницы',

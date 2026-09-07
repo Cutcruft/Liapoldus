@@ -34,6 +34,7 @@ import { FormsSection } from './forms/FormsSection';
 import { MediaSection } from './media/MediaSection';
 import { ComponentsSection } from './components/ComponentsSection';
 import { InfraSection } from './infra/InfraSection';
+import { PagesSection } from './pages/PagesSection';
 
 /** Режим вкладки сайта (из URL `?view=`). */
 export type SiteTabMode = 'maintenance' | 'editor';
@@ -268,6 +269,8 @@ export function SiteTab() {
                   <ComponentsSection />
                 ) : activeEditorSection === 'infra' ? (
                   <InfraSection />
+                ) : activeEditorSection === 'pages' ? (
+                  <PagesSection />
                 ) : (
                   <SectionPlaceholder
                     title={t(sectionNavLabel(activeEditorSection))}

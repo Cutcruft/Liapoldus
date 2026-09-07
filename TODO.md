@@ -83,19 +83,30 @@ Frontend на модель R7. Роут-API на бэке уже есть (`rout
 `admin/src/app/components/*`, `admin/src/app/pages/SiteRoutesPage.tsx`/`RouteEditorPage.tsx`
 (legacy, dev-only — можно переиспользовать логику).
 
-- [ ] **P0 [F]** Раздел «Страницы» в редакторе (SiteTab `section=pages`): реестр роутов —
-      list/get/update/delete; поля matcher (regex), priority, action
+- [x] **P0 [F]** Раздел «Страницы» в редакторе (SiteTab `section=pages`): реестр роутов —
+      list/create/update/delete; поля matcher (regex), priority, action
       (`renderPage` → pageId | `redirect` + status + keepQuery).
-- [ ] **P1 [F]** Таблица «группы regex → props»: предпросмотр захваченных групп матчера
+      *(Реализован `admin/src/app/pages/PagesSection.tsx`: реестр с формой создания и
+      удалением через ConfirmButton; delete/update — через `runOperation`. Редактирование
+      пока ведёт в legacy `RouteEditorPage` (`route.edit`); связку с контент-редактором
+      переимпортирует R13.)*
+- [x] **P1 [F]** Таблица «группы regex → props»: предпросмотр захваченных групп матчера
       против тестового path (map `$1, $2…` → props, ср. `routeGroup.index` в ui-runtime).
-- [ ] **P1 [F]** Связка роут→страница: из `renderPage.pageId` переход в контент-редактор
-      (создаётся в R13; на этом слайсе — ссылка/дизейбл с пометкой).
+      *(Филд «Тестовый path (превью групп)» в форме создания: `matchGroups()` раскрывает
+      `$1 → value` для валидного матчера; привязки групп к пропсам — в контент-редакторе R13.)*
+- [x] **P1 [F]** Связка роут→страница: из `renderPage.pageId` переход в контент-редактор
+      (создаётся в R13; на этом слайсе — колонка «Страница» с pageId; переход появится в R13).
 - [ ] **P1 [B]** (если дельты найдутся в e2e) роут-CRUD валидации по спеке §3.8.
-- [ ] **P2 [F]** Респонсив/UX: конфликт overlapping матчеров через `overlapWarnings`
-      (admin route-utils) в UI.
-- [ ] Тесты: `SiteTab.test` (раздел pages), CRUD роутов, валидация матчера, связка роут→страница.
+- [x] **P2 [F]** Респонсив/UX: конфликт overlapping матчеров через `overlapWarnings`
+      (admin route-utils) в UI. *(Блок предупреждений в форме создания; для legacy-редактора
+      уже было в RouteEditorPage.)*
+- [x] Тесты: `SiteTab.test` (раздел pages), CRUD роутов, валидация матчера, связка роут→страница.
+      *(`PagesSection.test.tsx`: реестр + колонка страницы, POST `{matcher,priority,action}`,
+      валидация regex и якорности, превью групп `$1 → 42`, переход; тема дублей — статические
+      тесты `route-utils.test.ts`)*
 
-**Done**: реестр маршрутов управляется из нового раздела; legacy роут-страницы можно закрыть.
+**Done**: реестр маршрутов управляется из нового раздела; legacy роут-страницы можно закрыть
+(остаются в AppRoutes для редактирования деталей и back-nav, пока не готов переезд на inline-редактор R13).
 
 ---
 
