@@ -106,7 +106,6 @@ class BootSession {
       });
       this.transport = new CompoundTransport(this.factory);
     }
-    registerBuiltin(this.registry);
 
     const res = await this.fetchContract();
     const text = await res.text();
@@ -123,6 +122,12 @@ class BootSession {
     for (const ep of parsed.endpoints) {
       if (!this.registry.hasEndpoint(ep.id)) this.registry.registerEndpoint(ep);
     }
+
+    // Builtin fallback AFTER contract registration (R6): the contract now
+    // carries the descriptor set from the backend DB (system + site rows), so
+    // builtins only fill gaps for ids the site hasn't defined. registerBuiltin
+    // is idempotent — any descriptor already registered by the contract wins.
+    registerBuiltin(this.registry);
 
     this.i18n = new I18n(
       { defaultLocale: parsed.contract.locale, ...this.opts.i18n },

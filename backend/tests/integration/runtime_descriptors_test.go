@@ -148,3 +148,74 @@ func TestRuntimeTokensDescriptors(t *testing.T) {
 		t.Fatalf("themeId override: status %d body %#v", status, body)
 	}
 }
+
+// TestRuntimeOperationsDescriptors asserts the boot contract carries the
+// operation/endpoint descriptors (R6): system rows (SiteID "") plus site rows
+// are merged, system operations keep their providerId, and endpoints resolve
+// to their operationId.
+func TestRuntimeOperationsDescriptors(t *testing.T) {
+	mem, site, _, builds := runtimeContractFixture(t, "site_rops")
+	routes := route.NewService(mem, route.Settings{DefaultStatus: 301, Allowed: map[int]bool{301: true}})
+	ctx := context.Background()
+
+	if err := mem.CreateOperation(ctx, domain.Operation{
+		ID: "content.get", SiteID: "", System: true, Provider: "liapoldus.builtin",
+		TypeOp: "query", Method: "GET", Path: "/lib/api/content/get", Cache: "immutable",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mem.CreateOperation(ctx, domain.Operation{
+		ID: "contact.save", SiteID: site.ID, System: false,
+		TypeOp: "mutation", Method: "POST", Path: "/api/contact/save", Cache: "disabled",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mem.CreateEndpoint(ctx, domain.Endpoint{
+		ID: "booking", SiteID: site.ID, Method: "POST",
+		Path: "/api/forms/booking", OperationID: "contact.save",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := runtimeClientServer(t, mem, routes, builds)
+	status, body := getContractJSON(t, srv.URL, site.ID, domain.EnvironmentProduction, "")
+	if status != http.StatusOK {
+		t.Fatalf("contract status = %d body %#v", status, body)
+	}
+
+	operations, _ := body["operations"].([]any)
+	if len(operations) != 2 {
+		t.Fatalf("operations = %#v", body["operations"])
+	}
+	byID := make(map[string]map[string]any)
+	for _, op := range operations {
+		m, _ := op.(map[string]any)
+		id, _ := m["id"].(string)
+		byID[id] = m
+	}
+	systemOp := byID["content.get"]
+	if systemOp == nil {
+		t.Fatalf("content.get missing: %#v", byID)
+	}
+	if systemOp["typeOp"] != "query" || systemOp["method"] != "GET" ||
+		systemOp["providerId"] != "liapoldus.builtin" {
+		t.Fatalf("system operation descriptor = %#v", systemOp)
+	}
+	siteOp := byID["contact.save"]
+	if siteOp == nil {
+		t.Fatalf("contact.save missing: %#v", byID)
+	}
+	if siteOp["typeOp"] != "mutation" || siteOp["method"] != "POST" {
+		t.Fatalf("site operation descriptor = %#v", siteOp)
+	}
+
+	endpoints, _ := body["endpoints"].([]any)
+	if len(endpoints) != 1 {
+		t.Fatalf("endpoints = %#v", body["endpoints"])
+	}
+	endpoint := endpoints[0].(map[string]any)
+	if endpoint["id"] != "booking" || endpoint["operationId"] != "contact.save" ||
+		endpoint["method"] != "POST" || endpoint["path"] != "/api/forms/booking" {
+		t.Fatalf("endpoint descriptor = %#v", endpoint)
+	}
+}

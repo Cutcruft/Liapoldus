@@ -12,6 +12,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
+	"github.com/liapoldus/liapoldus/backend/internal/application/infra"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
@@ -32,6 +33,7 @@ type App struct {
 	Builds     *buildapp.Service
 	Deps       *deps.Service
 	Tokens     *token.Service
+	Infra      *infra.Service
 	Logger     *slog.Logger
 	AdminToken string
 	// DefaultLocale and RedirectDefaultStatus mirror server configuration so
@@ -60,6 +62,7 @@ func NewRouter(app App) http.Handler {
 	dashboardHandler := NewDashboardHandler(app.Sites, app.Builds, app.Snapshots, app.Git)
 	settingsHandler := NewSettingsHandler(app.AdminToken, app.DefaultLocale, app.RedirectDefaultStatus)
 	authHandler := NewAuthHandler(app.AdminToken)
+	infraHandler := NewInfraHandler(app.Infra)
 
 	var gitHandler *GitHandler
 	if app.Git != nil {
@@ -164,6 +167,18 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/history", componentHandler.History)
 	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/usage", componentHandler.Usage)
 	protected.HandleFunc("POST /api/sites/{siteID}/components/{componentID}/commit", componentHandler.Commit)
+
+	protected.HandleFunc("POST /api/sites/{siteID}/operations", infraHandler.CreateOperation)
+	protected.HandleFunc("GET /api/sites/{siteID}/operations", infraHandler.ListOperations)
+	protected.HandleFunc("GET /api/sites/{siteID}/operations/{operationID}", infraHandler.GetOperation)
+	protected.HandleFunc("PUT /api/sites/{siteID}/operations/{operationID}", infraHandler.UpdateOperation)
+	protected.HandleFunc("DELETE /api/sites/{siteID}/operations/{operationID}", infraHandler.DeleteOperation)
+
+	protected.HandleFunc("POST /api/sites/{siteID}/endpoints", infraHandler.CreateEndpoint)
+	protected.HandleFunc("GET /api/sites/{siteID}/endpoints", infraHandler.ListEndpoints)
+	protected.HandleFunc("GET /api/sites/{siteID}/endpoints/{endpointID}", infraHandler.GetEndpoint)
+	protected.HandleFunc("PUT /api/sites/{siteID}/endpoints/{endpointID}", infraHandler.UpdateEndpoint)
+	protected.HandleFunc("DELETE /api/sites/{siteID}/endpoints/{endpointID}", infraHandler.DeleteEndpoint)
 
 	protected.HandleFunc("POST /api/sites/{siteID}/builds", buildHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/builds", buildHandler.List)

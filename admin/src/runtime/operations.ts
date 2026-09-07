@@ -71,7 +71,17 @@ export type OperationKind =
   | 'updateComponent'
   | 'componentHistory'
   | 'componentUsage'
-  | 'componentCommit';
+  | 'componentCommit'
+  | 'listOperations'
+  | 'getOperation'
+  | 'createOperation'
+  | 'updateOperation'
+  | 'deleteOperation'
+  | 'listEndpoints'
+  | 'getEndpoint'
+  | 'createEndpoint'
+  | 'updateEndpoint'
+  | 'deleteEndpoint';
 
 export interface OperationSpec<TArgs extends Record<string, unknown> = Record<string, unknown>> {
   kind: OperationKind;
@@ -785,6 +795,136 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
         typeof b === 'object' && b !== null && 'sha' in b ? String((b as { sha: unknown }).sha) : '';
       return sha ? t('result.saved.sha', { sha: sha.slice(0, 8) }) : 'OK';
     },
+  },
+
+  listOperations: {
+    kind: 'listOperations',
+    labelKey: 'op.listOperations',
+    method: 'GET',
+    route: () => `/api/sites/{siteId}/operations`,
+    detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
+  },
+
+  getOperation: {
+    kind: 'getOperation',
+    labelKey: 'op.getOperation',
+    method: 'GET',
+    route: () => `/api/sites/{siteId}/operations/{operationId}`,
+    detail: (b, t) => {
+      const id = typeof b === 'object' && b !== null && 'id' in b ? String((b as { id: unknown }).id) : '';
+      return id || t('result.count', { n: 0 });
+    },
+  },
+
+  createOperation: {
+    kind: 'createOperation',
+    labelKey: 'op.createOperation',
+    method: 'POST',
+    route: () => `/api/sites/{siteId}/operations`,
+    body: (args) => ({
+      id: String(args.id ?? ''),
+      provider: String(args.provider ?? ''),
+      typeOp: String(args.typeOp ?? 'query'),
+      method: String(args.method ?? 'GET'),
+      path: String(args.path ?? ''),
+      cache: String(args.cache ?? 'disabled'),
+      ttl: args.ttl ?? null,
+      scope: String(args.scope ?? 'public'),
+      resultType: String(args.resultType ?? ''),
+      params: args.params ?? {},
+      poll: args.poll ?? {},
+      subscribe: args.subscribe ?? {},
+    }),
+    detail: (b) => {
+      const id = typeof b === 'object' && b !== null && 'id' in b ? String((b as { id: unknown }).id) : '';
+      return id || 'OK';
+    },
+  },
+
+  updateOperation: {
+    kind: 'updateOperation',
+    labelKey: 'op.updateOperation',
+    method: 'PUT',
+    route: () => `/api/sites/{siteId}/operations/{operationId}`,
+    body: (args) => ({
+      provider: String(args.provider ?? ''),
+      typeOp: String(args.typeOp ?? 'query'),
+      method: String(args.method ?? 'GET'),
+      path: String(args.path ?? ''),
+      cache: String(args.cache ?? 'disabled'),
+      ttl: args.ttl ?? null,
+      scope: String(args.scope ?? 'public'),
+      resultType: String(args.resultType ?? ''),
+      params: args.params ?? {},
+      poll: args.poll ?? {},
+      subscribe: args.subscribe ?? {},
+    }),
+    detail: () => 'OK',
+  },
+
+  deleteOperation: {
+    kind: 'deleteOperation',
+    labelKey: 'op.deleteOperation',
+    method: 'DELETE',
+    route: () => `/api/sites/{siteId}/operations/{operationId}`,
+    detail: () => 'OK',
+  },
+
+  listEndpoints: {
+    kind: 'listEndpoints',
+    labelKey: 'op.listEndpoints',
+    method: 'GET',
+    route: () => `/api/sites/{siteId}/endpoints`,
+    detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
+  },
+
+  getEndpoint: {
+    kind: 'getEndpoint',
+    labelKey: 'op.getEndpoint',
+    method: 'GET',
+    route: () => `/api/sites/{siteId}/endpoints/{endpointId}`,
+    detail: (b, t) => {
+      const id = typeof b === 'object' && b !== null && 'id' in b ? String((b as { id: unknown }).id) : '';
+      return id || t('result.count', { n: 0 });
+    },
+  },
+
+  createEndpoint: {
+    kind: 'createEndpoint',
+    labelKey: 'op.createEndpoint',
+    method: 'POST',
+    route: () => `/api/sites/{siteId}/endpoints`,
+    body: (args) => ({
+      id: String(args.id ?? ''),
+      method: String(args.method ?? 'POST'),
+      path: String(args.path ?? ''),
+      operationId: String(args.operationId ?? ''),
+    }),
+    detail: (b) => {
+      const id = typeof b === 'object' && b !== null && 'id' in b ? String((b as { id: unknown }).id) : '';
+      return id || 'OK';
+    },
+  },
+
+  updateEndpoint: {
+    kind: 'updateEndpoint',
+    labelKey: 'op.updateEndpoint',
+    method: 'PUT',
+    route: () => `/api/sites/{siteId}/endpoints/{endpointId}`,
+    body: (args) => ({
+      method: String(args.method ?? 'POST'),
+      path: String(args.path ?? ''),
+      operationId: String(args.operationId ?? ''),
+    }),
+    detail: () => 'OK',
+  },
+
+  deleteEndpoint: {
+    kind: 'deleteEndpoint',
+    labelKey: 'op.deleteEndpoint',
+    method: 'DELETE',
+    route: () => `/api/sites/{siteId}/endpoints/{endpointId}`,
+    detail: () => 'OK',
   },
 };
 

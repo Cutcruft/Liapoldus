@@ -14,6 +14,10 @@ import (
 // Settings carries the email validation pattern used for "email" form fields.
 type Settings struct {
 	EmailPattern *regexp.Regexp
+	// SubmitTargetValidator, when set, checks that a form definition's
+	// submit target (spec §4.2 / ui-runtime types/form.ts) resolves against
+	// the operation/endpoint registry (wired with infra.Service, R6).
+	SubmitTargetValidator func(ctx context.Context, siteID, target string) error
 }
 
 type Service struct {
@@ -35,6 +39,11 @@ func (s *Service) Create(ctx context.Context, siteID, name string, definition ma
 	}
 	if definition == nil {
 		return domain.Form{}, fmt.Errorf("%w: definition is required", domain.ErrInvalidRequest)
+	}
+	if target := submitTarget(definition); target != "" && s.settings.SubmitTargetValidator != nil {
+		if err := s.settings.SubmitTargetValidator(ctx, siteID, target); err != nil {
+			return domain.Form{}, err
+		}
 	}
 	id, err := id.New(id.Form)
 	if err != nil {
@@ -59,6 +68,8 @@ func (s *Service) List(ctx context.Context, siteID string) ([]domain.Form, error
 	return s.repo.ListFormsBySite(ctx, siteID)
 }
 
+// Update validates the new definition's submit target, then overwrites the
+// form's name/definition. A definition nil patch keeps the current values.
 func (s *Service) Update(ctx context.Context, siteID, id string, name string, definition map[string]any) (domain.Form, error) {
 	current, err := s.repo.GetForm(ctx, siteID, id)
 	if err != nil {
@@ -68,6 +79,11 @@ func (s *Service) Update(ctx context.Context, siteID, id string, name string, de
 		current.Name = name
 	}
 	if definition != nil {
+		if target := submitTarget(definition); target != "" && s.settings.SubmitTargetValidator != nil {
+			if err := s.settings.SubmitTargetValidator(ctx, siteID, target); err != nil {
+				return domain.Form{}, err
+			}
+		}
 		current.Definition = definition
 	}
 	current.UpdatedAt = time.Now().UTC()
@@ -164,4 +180,17 @@ func isEmpty(v any) bool {
 		return strings.TrimSpace(x) == ""
 	}
 	return false
+}
+
+// submitTarget extracts a definition's explicit submit target
+// ("endpoint.<id>" / "operation.<id>", spec §4.2). The legacy
+// "submit.endpoint" form (a bare form id) is deliberately not validated here —
+// it predates the descriptor registry and defaults are not real endpoint ids.
+func submitTarget(definition map[string]any) string {
+	submit, ok := definition["submit"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	target, _ := submit["target"].(string)
+	return strings.TrimSpace(target)
 }

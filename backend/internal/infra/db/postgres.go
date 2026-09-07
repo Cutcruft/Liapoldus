@@ -16,7 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql
 var migrationFiles embed.FS
 
 type Postgres struct {

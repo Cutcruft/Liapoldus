@@ -19,6 +19,8 @@ type Storage interface {
 	DependencyRepository
 	DepPackageRepository
 	TokenRepository
+	OperationRepository
+	EndpointRepository
 }
 
 type SiteRepository interface {
@@ -137,4 +139,26 @@ type DepPackageRepository interface {
 type TokenRepository interface {
 	GetTokens(context.Context, string) (*TokenSet, error)
 	UpsertTokens(context.Context, string, *TokenSet) error
+}
+
+// OperationRepository persists ui-runtime operation descriptors (R6).
+// Get/List/Update/Delete resolve system rows (SiteID "") in addition to site
+// rows; row identity is the descriptor id — a site row with the same id as a
+// system row is rejected at create time.
+type OperationRepository interface {
+	CreateOperation(context.Context, Operation) error
+	GetOperation(context.Context, string, string) (Operation, error)
+	ListOperationsBySite(context.Context, string) ([]Operation, error)
+	UpdateOperation(context.Context, Operation) error
+	DeleteOperation(context.Context, string, string) error
+}
+
+// EndpointRepository persists ui-runtime endpoint descriptors (R6), with the
+// same system/site row semantics as OperationRepository.
+type EndpointRepository interface {
+	CreateEndpoint(context.Context, Endpoint) error
+	GetEndpoint(context.Context, string, string) (Endpoint, error)
+	ListEndpointsBySite(context.Context, string) ([]Endpoint, error)
+	UpdateEndpoint(context.Context, Endpoint) error
+	DeleteEndpoint(context.Context, string, string) error
 }

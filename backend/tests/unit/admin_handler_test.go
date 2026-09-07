@@ -19,6 +19,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
+	"github.com/liapoldus/liapoldus/backend/internal/application/infra"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
@@ -62,6 +63,7 @@ func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 		}),
 		Forms:      form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
 		Components: component.NewService(db),
+		Infra:      infra.NewService(db, db),
 		Git: gitsnapshot.NewService(
 			gitRepo, db, db, db, db, db, db, db, db, nil,
 		),

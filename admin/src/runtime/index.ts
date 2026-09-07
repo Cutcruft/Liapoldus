@@ -53,6 +53,9 @@ export type {
   TokenGroup,
   TokenSet,
   AdminComponent,
+  AdminEndpoint,
+  AdminOperation,
+  OperationParamSpec,
 } from './types';
 export { TOKEN_GROUPS } from './types';
 export { createAdminApi } from './api';

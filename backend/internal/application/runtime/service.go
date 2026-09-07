@@ -23,11 +23,17 @@ type Service struct {
 	routes    *routeapp.Service
 	builds    *build.Service
 	tokens    domain.TokenRepository
+	operations domain.OperationRepository
+	endpoints  domain.EndpointRepository
 }
 
 func NewService(sites domain.SiteRepository, snapshots domain.SnapshotRepository,
-	pages domain.PageRepository, routes *routeapp.Service, builds *build.Service, tokens domain.TokenRepository) *Service {
-	return &Service{sites: sites, snapshots: snapshots, pages: pages, routes: routes, builds: builds, tokens: tokens}
+	pages domain.PageRepository, routes *routeapp.Service, builds *build.Service,
+	tokens domain.TokenRepository, operations domain.OperationRepository, endpoints domain.EndpointRepository) *Service {
+	return &Service{
+		sites: sites, snapshots: snapshots, pages: pages, routes: routes, builds: builds, tokens: tokens,
+		operations: operations, endpoints: endpoints,
+	}
 }
 
 var validEnvironments = map[string]bool{
@@ -60,14 +66,23 @@ func (s *Service) BootContract(ctx context.Context, site domain.Site, environmen
 		return Contract{}, err
 	}
 
+	ops, err := s.operations.ListOperationsBySite(ctx, site.ID)
+	if err != nil {
+		return Contract{}, err
+	}
+	eps, err := s.endpoints.ListEndpointsBySite(ctx, site.ID)
+	if err != nil {
+		return Contract{}, err
+	}
+
 	return Contract{
 		SiteID:      site.ID,
 		Environment: environment,
 		Version:     snapshot.ID,
 		Locale:      site.DefaultLocale,
 		Providers:   []any{},
-		Operations:  []any{},
-		Endpoints:   []any{},
+		Operations:  toOperationDescriptors(ops),
+		Endpoints:   toEndpointDescriptors(eps),
 		Routes:      toRouteDescriptors(routes),
 		Themes:      []ThemeDescriptor{},
 		EnabledChannels: EnabledChannels{
@@ -282,6 +297,59 @@ func matchHomePage(pages []domain.SnapshotPage, routes []domain.Route) (domain.S
 		}
 	}
 	return domain.SnapshotPage{}, false
+}
+
+// toOperationDescriptors maps stored operation rows onto the ui-runtime
+// descriptor form. Invalid rows (empty id/typeOp/method/cache) are skipped, so
+// a single bad system row cannot break boot — the site's descriptors still
+// load (the client falls back to its builtin list for gaps).
+func toOperationDescriptors(ops []domain.Operation) []OperationDescriptor {
+	out := make([]OperationDescriptor, 0, len(ops))
+	for _, op := range ops {
+		if op.ID == "" || op.TypeOp == "" || op.Method == "" || op.Cache == "" {
+			continue
+		}
+		provider := op.Provider
+		if provider == "" {
+			provider = "liapoldus.builtin"
+		}
+		out = append(out, OperationDescriptor{
+			Kind:       "operation",
+			ID:         op.ID,
+			TypeOp:     op.TypeOp,
+			ProviderID: provider,
+			Method:     op.Method,
+			Path:       op.Path,
+			Params:     op.Params,
+			Type:       op.ResultType,
+			Cache:      op.Cache,
+			TTL:        op.TTL,
+			Scope:      op.Scope,
+			Poll:       op.Poll,
+			Subscribe:  op.Subscribe,
+		})
+	}
+	return out
+}
+
+// toEndpointDescriptors maps stored endpoint rows onto the ui-runtime
+// descriptor form (skipping rows without an operation id — they cannot resolve
+// to a callable operation).
+func toEndpointDescriptors(eps []domain.Endpoint) []EndpointDescriptor {
+	out := make([]EndpointDescriptor, 0, len(eps))
+	for _, ep := range eps {
+		if ep.ID == "" || ep.OperationID == "" {
+			continue
+		}
+		out = append(out, EndpointDescriptor{
+			Kind:        "endpoint",
+			ID:          ep.ID,
+			Path:        ep.Path,
+			Method:      ep.Method,
+			OperationID: ep.OperationID,
+		})
+	}
+	return out
 }
 
 // toRouteDescriptors maps domain routes onto ui-runtime RouteDescriptors,

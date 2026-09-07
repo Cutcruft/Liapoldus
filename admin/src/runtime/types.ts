@@ -423,3 +423,42 @@ export type InferredProp = {
   required: boolean;
   default?: string;
 };
+
+/** Управляемый дескриптор операции (R6, `GET /sites/{id}/operations`). */
+export type AdminOperation = {
+  id: string;
+  siteId: string;
+  /** Системные строки (siteId пустой у исходника) редактировать нельзя. */
+  system: boolean;
+  provider: string;
+  typeOp: 'query' | 'mutation';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  cache: 'immutable' | 'disabled' | 'ttl';
+  ttl?: number;
+  scope?: string;
+  resultType?: string;
+  params?: Record<string, unknown>;
+  poll?: Record<string, unknown>;
+  subscribe?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/** Управляемый дескриптор эндпоинта (R6, `GET /sites/{id}/endpoints`). */
+export type AdminEndpoint = {
+  id: string;
+  siteId: string;
+  system: boolean;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  operationId: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/** Форма дескриптора операции для предпросмотра вызова. */
+export type OperationParamSpec = {
+  in: 'query' | 'path' | 'body';
+  fields?: Record<string, { required?: boolean }>;
+};

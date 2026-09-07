@@ -125,6 +125,20 @@ func (mr *MockStorageMockRecorder) CreateDependency(arg0, arg1 any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDependency", reflect.TypeOf((*MockStorage)(nil).CreateDependency), arg0, arg1)
 }
 
+// CreateEndpoint mocks base method.
+func (m *MockStorage) CreateEndpoint(arg0 context.Context, arg1 domain.Endpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateEndpoint", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateEndpoint indicates an expected call of CreateEndpoint.
+func (mr *MockStorageMockRecorder) CreateEndpoint(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateEndpoint", reflect.TypeOf((*MockStorage)(nil).CreateEndpoint), arg0, arg1)
+}
+
 // CreateForm mocks base method.
 func (m *MockStorage) CreateForm(arg0 context.Context, arg1 domain.Form) error {
 	m.ctrl.T.Helper()
@@ -137,6 +151,20 @@ func (m *MockStorage) CreateForm(arg0 context.Context, arg1 domain.Form) error {
 func (mr *MockStorageMockRecorder) CreateForm(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateForm", reflect.TypeOf((*MockStorage)(nil).CreateForm), arg0, arg1)
+}
+
+// CreateOperation mocks base method.
+func (m *MockStorage) CreateOperation(arg0 context.Context, arg1 domain.Operation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOperation", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateOperation indicates an expected call of CreateOperation.
+func (mr *MockStorageMockRecorder) CreateOperation(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOperation", reflect.TypeOf((*MockStorage)(nil).CreateOperation), arg0, arg1)
 }
 
 // CreatePage mocks base method.
@@ -265,6 +293,20 @@ func (mr *MockStorageMockRecorder) DeleteDependency(arg0, arg1, arg2 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDependency", reflect.TypeOf((*MockStorage)(nil).DeleteDependency), arg0, arg1, arg2)
 }
 
+// DeleteEndpoint mocks base method.
+func (m *MockStorage) DeleteEndpoint(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteEndpoint", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteEndpoint indicates an expected call of DeleteEndpoint.
+func (mr *MockStorageMockRecorder) DeleteEndpoint(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEndpoint", reflect.TypeOf((*MockStorage)(nil).DeleteEndpoint), arg0, arg1, arg2)
+}
+
 // DeleteForm mocks base method.
 func (m *MockStorage) DeleteForm(arg0 context.Context, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
@@ -277,6 +319,20 @@ func (m *MockStorage) DeleteForm(arg0 context.Context, arg1, arg2 string) error 
 func (mr *MockStorageMockRecorder) DeleteForm(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteForm", reflect.TypeOf((*MockStorage)(nil).DeleteForm), arg0, arg1, arg2)
+}
+
+// DeleteOperation mocks base method.
+func (m *MockStorage) DeleteOperation(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOperation", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOperation indicates an expected call of DeleteOperation.
+func (mr *MockStorageMockRecorder) DeleteOperation(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOperation", reflect.TypeOf((*MockStorage)(nil).DeleteOperation), arg0, arg1, arg2)
 }
 
 // DeletePage mocks base method.
@@ -485,6 +541,21 @@ func (mr *MockStorageMockRecorder) GetDependency(arg0, arg1, arg2 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDependency", reflect.TypeOf((*MockStorage)(nil).GetDependency), arg0, arg1, arg2)
 }
 
+// GetEndpoint mocks base method.
+func (m *MockStorage) GetEndpoint(arg0 context.Context, arg1, arg2 string) (domain.Endpoint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEndpoint", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Endpoint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEndpoint indicates an expected call of GetEndpoint.
+func (mr *MockStorageMockRecorder) GetEndpoint(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEndpoint", reflect.TypeOf((*MockStorage)(nil).GetEndpoint), arg0, arg1, arg2)
+}
+
 // GetForm mocks base method.
 func (m *MockStorage) GetForm(arg0 context.Context, arg1, arg2 string) (domain.Form, error) {
 	m.ctrl.T.Helper()
@@ -498,6 +569,21 @@ func (m *MockStorage) GetForm(arg0 context.Context, arg1, arg2 string) (domain.F
 func (mr *MockStorageMockRecorder) GetForm(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetForm", reflect.TypeOf((*MockStorage)(nil).GetForm), arg0, arg1, arg2)
+}
+
+// GetOperation mocks base method.
+func (m *MockStorage) GetOperation(arg0 context.Context, arg1, arg2 string) (domain.Operation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOperation", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Operation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOperation indicates an expected call of GetOperation.
+func (mr *MockStorageMockRecorder) GetOperation(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOperation", reflect.TypeOf((*MockStorage)(nil).GetOperation), arg0, arg1, arg2)
 }
 
 // GetPage mocks base method.
@@ -710,6 +796,21 @@ func (mr *MockStorageMockRecorder) ListDependenciesBySite(arg0, arg1 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDependenciesBySite", reflect.TypeOf((*MockStorage)(nil).ListDependenciesBySite), arg0, arg1)
 }
 
+// ListEndpointsBySite mocks base method.
+func (m *MockStorage) ListEndpointsBySite(arg0 context.Context, arg1 string) ([]domain.Endpoint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListEndpointsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Endpoint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListEndpointsBySite indicates an expected call of ListEndpointsBySite.
+func (mr *MockStorageMockRecorder) ListEndpointsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEndpointsBySite", reflect.TypeOf((*MockStorage)(nil).ListEndpointsBySite), arg0, arg1)
+}
+
 // ListFormsBySite mocks base method.
 func (m *MockStorage) ListFormsBySite(arg0 context.Context, arg1 string) ([]domain.Form, error) {
 	m.ctrl.T.Helper()
@@ -723,6 +824,21 @@ func (m *MockStorage) ListFormsBySite(arg0 context.Context, arg1 string) ([]doma
 func (mr *MockStorageMockRecorder) ListFormsBySite(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListFormsBySite", reflect.TypeOf((*MockStorage)(nil).ListFormsBySite), arg0, arg1)
+}
+
+// ListOperationsBySite mocks base method.
+func (m *MockStorage) ListOperationsBySite(arg0 context.Context, arg1 string) ([]domain.Operation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOperationsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Operation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOperationsBySite indicates an expected call of ListOperationsBySite.
+func (mr *MockStorageMockRecorder) ListOperationsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOperationsBySite", reflect.TypeOf((*MockStorage)(nil).ListOperationsBySite), arg0, arg1)
 }
 
 // ListPageVersions mocks base method.
@@ -928,6 +1044,20 @@ func (mr *MockStorageMockRecorder) UpdateDependency(arg0, arg1 any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDependency", reflect.TypeOf((*MockStorage)(nil).UpdateDependency), arg0, arg1)
 }
 
+// UpdateEndpoint mocks base method.
+func (m *MockStorage) UpdateEndpoint(arg0 context.Context, arg1 domain.Endpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateEndpoint", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateEndpoint indicates an expected call of UpdateEndpoint.
+func (mr *MockStorageMockRecorder) UpdateEndpoint(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateEndpoint", reflect.TypeOf((*MockStorage)(nil).UpdateEndpoint), arg0, arg1)
+}
+
 // UpdateForm mocks base method.
 func (m *MockStorage) UpdateForm(arg0 context.Context, arg1 domain.Form) error {
 	m.ctrl.T.Helper()
@@ -940,6 +1070,20 @@ func (m *MockStorage) UpdateForm(arg0 context.Context, arg1 domain.Form) error {
 func (mr *MockStorageMockRecorder) UpdateForm(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateForm", reflect.TypeOf((*MockStorage)(nil).UpdateForm), arg0, arg1)
+}
+
+// UpdateOperation mocks base method.
+func (m *MockStorage) UpdateOperation(arg0 context.Context, arg1 domain.Operation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateOperation", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateOperation indicates an expected call of UpdateOperation.
+func (mr *MockStorageMockRecorder) UpdateOperation(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOperation", reflect.TypeOf((*MockStorage)(nil).UpdateOperation), arg0, arg1)
 }
 
 // UpdatePage mocks base method.
@@ -2241,4 +2385,196 @@ func (m *MockTokenRepository) UpsertTokens(arg0 context.Context, arg1 string, ar
 func (mr *MockTokenRepositoryMockRecorder) UpsertTokens(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertTokens", reflect.TypeOf((*MockTokenRepository)(nil).UpsertTokens), arg0, arg1, arg2)
+}
+
+// MockOperationRepository is a mock of OperationRepository interface.
+type MockOperationRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockOperationRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockOperationRepositoryMockRecorder is the mock recorder for MockOperationRepository.
+type MockOperationRepositoryMockRecorder struct {
+	mock *MockOperationRepository
+}
+
+// NewMockOperationRepository creates a new mock instance.
+func NewMockOperationRepository(ctrl *gomock.Controller) *MockOperationRepository {
+	mock := &MockOperationRepository{ctrl: ctrl}
+	mock.recorder = &MockOperationRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOperationRepository) EXPECT() *MockOperationRepositoryMockRecorder {
+	return m.recorder
+}
+
+// CreateOperation mocks base method.
+func (m *MockOperationRepository) CreateOperation(arg0 context.Context, arg1 domain.Operation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOperation", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateOperation indicates an expected call of CreateOperation.
+func (mr *MockOperationRepositoryMockRecorder) CreateOperation(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOperation", reflect.TypeOf((*MockOperationRepository)(nil).CreateOperation), arg0, arg1)
+}
+
+// DeleteOperation mocks base method.
+func (m *MockOperationRepository) DeleteOperation(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOperation", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOperation indicates an expected call of DeleteOperation.
+func (mr *MockOperationRepositoryMockRecorder) DeleteOperation(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOperation", reflect.TypeOf((*MockOperationRepository)(nil).DeleteOperation), arg0, arg1, arg2)
+}
+
+// GetOperation mocks base method.
+func (m *MockOperationRepository) GetOperation(arg0 context.Context, arg1, arg2 string) (domain.Operation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOperation", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Operation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOperation indicates an expected call of GetOperation.
+func (mr *MockOperationRepositoryMockRecorder) GetOperation(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOperation", reflect.TypeOf((*MockOperationRepository)(nil).GetOperation), arg0, arg1, arg2)
+}
+
+// ListOperationsBySite mocks base method.
+func (m *MockOperationRepository) ListOperationsBySite(arg0 context.Context, arg1 string) ([]domain.Operation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOperationsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Operation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOperationsBySite indicates an expected call of ListOperationsBySite.
+func (mr *MockOperationRepositoryMockRecorder) ListOperationsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOperationsBySite", reflect.TypeOf((*MockOperationRepository)(nil).ListOperationsBySite), arg0, arg1)
+}
+
+// UpdateOperation mocks base method.
+func (m *MockOperationRepository) UpdateOperation(arg0 context.Context, arg1 domain.Operation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateOperation", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateOperation indicates an expected call of UpdateOperation.
+func (mr *MockOperationRepositoryMockRecorder) UpdateOperation(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOperation", reflect.TypeOf((*MockOperationRepository)(nil).UpdateOperation), arg0, arg1)
+}
+
+// MockEndpointRepository is a mock of EndpointRepository interface.
+type MockEndpointRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockEndpointRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockEndpointRepositoryMockRecorder is the mock recorder for MockEndpointRepository.
+type MockEndpointRepositoryMockRecorder struct {
+	mock *MockEndpointRepository
+}
+
+// NewMockEndpointRepository creates a new mock instance.
+func NewMockEndpointRepository(ctrl *gomock.Controller) *MockEndpointRepository {
+	mock := &MockEndpointRepository{ctrl: ctrl}
+	mock.recorder = &MockEndpointRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockEndpointRepository) EXPECT() *MockEndpointRepositoryMockRecorder {
+	return m.recorder
+}
+
+// CreateEndpoint mocks base method.
+func (m *MockEndpointRepository) CreateEndpoint(arg0 context.Context, arg1 domain.Endpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateEndpoint", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateEndpoint indicates an expected call of CreateEndpoint.
+func (mr *MockEndpointRepositoryMockRecorder) CreateEndpoint(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateEndpoint", reflect.TypeOf((*MockEndpointRepository)(nil).CreateEndpoint), arg0, arg1)
+}
+
+// DeleteEndpoint mocks base method.
+func (m *MockEndpointRepository) DeleteEndpoint(arg0 context.Context, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteEndpoint", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteEndpoint indicates an expected call of DeleteEndpoint.
+func (mr *MockEndpointRepositoryMockRecorder) DeleteEndpoint(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEndpoint", reflect.TypeOf((*MockEndpointRepository)(nil).DeleteEndpoint), arg0, arg1, arg2)
+}
+
+// GetEndpoint mocks base method.
+func (m *MockEndpointRepository) GetEndpoint(arg0 context.Context, arg1, arg2 string) (domain.Endpoint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEndpoint", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Endpoint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEndpoint indicates an expected call of GetEndpoint.
+func (mr *MockEndpointRepositoryMockRecorder) GetEndpoint(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEndpoint", reflect.TypeOf((*MockEndpointRepository)(nil).GetEndpoint), arg0, arg1, arg2)
+}
+
+// ListEndpointsBySite mocks base method.
+func (m *MockEndpointRepository) ListEndpointsBySite(arg0 context.Context, arg1 string) ([]domain.Endpoint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListEndpointsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Endpoint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListEndpointsBySite indicates an expected call of ListEndpointsBySite.
+func (mr *MockEndpointRepositoryMockRecorder) ListEndpointsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEndpointsBySite", reflect.TypeOf((*MockEndpointRepository)(nil).ListEndpointsBySite), arg0, arg1)
+}
+
+// UpdateEndpoint mocks base method.
+func (m *MockEndpointRepository) UpdateEndpoint(arg0 context.Context, arg1 domain.Endpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateEndpoint", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateEndpoint indicates an expected call of UpdateEndpoint.
+func (mr *MockEndpointRepositoryMockRecorder) UpdateEndpoint(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateEndpoint", reflect.TypeOf((*MockEndpointRepository)(nil).UpdateEndpoint), arg0, arg1)
 }

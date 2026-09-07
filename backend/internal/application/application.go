@@ -10,6 +10,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
+	"github.com/liapoldus/liapoldus/backend/internal/application/infra"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/runtime"
@@ -46,6 +47,7 @@ type Services struct {
 	Runtime      *runtime.Service
 	Deps         *deps.Service
 	Tokens       *token.Service
+	Infra        *infra.Service
 	// BuildEvents relays build lifecycle events to admin WS subscribers.
 	BuildEvents buildapp.DevEventHub
 }
@@ -83,6 +85,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 	})
 	depsSvc := deps.NewService(storage, storage, registryAdapter{client: reg}).WithTarballCache(depsStore)
 	tokensSvc := token.NewService(storage, storage)
+	infraSvc := infra.NewService(storage, storage)
 	gitSnaps := gitapp.NewService(gitRepo, storage, storage, storage, storage, storage, storage, storage, storage, depsSvc)
 	return &Services{
 		Store: storage,
@@ -96,7 +99,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Snapshots:    snapshot.NewService(storage, storage, storage, depsSvc).WithGit(gitSnaps),
 		Builds:       builds,
 		BuildEvents:  buildEvents,
-		Runtime:      runtime.NewService(storage, storage, storage, routes, builds, storage),
+		Runtime:      runtime.NewService(storage, storage, storage, routes, builds, storage, storage, storage),
 		Contents:     content.NewService(storage),
 		Assets: asset.NewService(storage, blobs, storage, asset.Settings{
 			MasterVariant: cfg.MasterVariantName,
@@ -105,9 +108,13 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 			URLTemplate:   cfg.AssetFileURLTemplate,
 		}),
 		Routes: routes,
-		Forms:  form.NewService(storage, storage, form.Settings{EmailPattern: cfg.EmailPattern}),
+		Forms:  form.NewService(storage, storage, form.Settings{
+			EmailPattern:          cfg.EmailPattern,
+			SubmitTargetValidator: infraSvc.ValidateSubmitTarget,
+		}),
 		Deps:   depsSvc,
 		Tokens: tokensSvc,
+		Infra:  infraSvc,
 	}
 }
 

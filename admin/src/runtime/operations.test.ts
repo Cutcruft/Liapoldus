@@ -322,6 +322,137 @@ describe('runOperation: формы', () => {
   });
 });
 
+describe('runOperation: операции/эндпоинты (R6)', () => {
+  it('listOperations: GET → count в detail', async () => {
+    const api = fixtureApi(async (url) => {
+      expect(url).toBe('/api/sites/s1/operations');
+      return json(200, [{ id: 'content.get' }, { id: 'reviews.list' }]);
+    });
+    const res = await runOperation(api, 'listOperations', { siteId: 's1' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.label).toBe('Операции');
+    expect(res.detail).toBe('2 шт.');
+  });
+
+  it('createOperation: POST с телом дескриптора', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/operations');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toEqual({
+        id: 'reviews.list',
+        provider: 'cms',
+        typeOp: 'query',
+        method: 'GET',
+        path: '/api/reviews',
+        cache: 'disabled',
+        ttl: null,
+        scope: 'public',
+        resultType: 'review[]',
+        params: { in: 'query' },
+        poll: {},
+        subscribe: {},
+      });
+      return json(201, { id: 'reviews.list', siteId: 's1', system: false, method: 'GET', path: '/api/reviews' });
+    });
+    const res = await runOperation(
+      api,
+      'createOperation',
+      {
+        siteId: 's1',
+        id: 'reviews.list',
+        provider: 'cms',
+        typeOp: 'query',
+        method: 'GET',
+        path: '/api/reviews',
+        cache: 'disabled',
+        scope: 'public',
+        resultType: 'review[]',
+        params: { in: 'query' },
+      },
+      t,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('reviews.list');
+  });
+
+  it('updateOperation: PUT по operationId с id в URL (не в теле)', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/operations/form.submit');
+      expect(init.method).toBe('PUT');
+      expect(JSON.parse(init.body as string)).not.toHaveProperty('id');
+      return json(200, { id: 'form.submit', siteId: 's1', system: false });
+    });
+    const res = await runOperation(api, 'updateOperation', { siteId: 's1', operationId: 'form.submit', path: '/api/forms/x' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+  });
+
+  it('deleteOperation: DELETE по operationId → 204', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/operations/reviews.list');
+      expect(init.method).toBe('DELETE');
+      return noBody(204);
+    });
+    const res = await runOperation(api, 'deleteOperation', { siteId: 's1', operationId: 'reviews.list' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+  });
+
+  it('createEndpoint: POST {id, method, path, operationId}', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/endpoints');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toEqual({
+        id: 'booking',
+        method: 'POST',
+        path: '/booking',
+        operationId: 'contact.save',
+      });
+      return json(201, { id: 'booking', siteId: 's1', system: false });
+    });
+    const res = await runOperation(
+      api,
+      'createEndpoint',
+      { siteId: 's1', id: 'booking', method: 'POST', path: '/booking', operationId: 'contact.save' },
+      t,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('booking');
+  });
+
+  it('listEndpoints: GET → count в detail', async () => {
+    const api = fixtureApi(async (url) => {
+      expect(url).toBe('/api/sites/s1/endpoints');
+      return json(200, [{ id: 'booking' }]);
+    });
+    const res = await runOperation(api, 'listEndpoints', { siteId: 's1' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('1 шт.');
+  });
+
+  it('updateEndpoint: PUT по endpointId', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/endpoints/booking');
+      expect(init.method).toBe('PUT');
+      expect(JSON.parse(init.body as string)).not.toHaveProperty('id');
+      return json(200, { id: 'booking', siteId: 's1', system: false });
+    });
+    const res = await runOperation(api, 'updateEndpoint', { siteId: 's1', endpointId: 'booking', path: '/book' }, t);
+    expect(res.ok).toBe(true);
+    expect(res.detail).toBe('OK');
+  });
+
+  it('deleteEndpoint: DELETE по endpointId → 204', async () => {
+    const api = fixtureApi(async (url, init) => {
+      expect(url).toBe('/api/sites/s1/endpoints/booking');
+      expect(init.method).toBe('DELETE');
+      return noBody(204);
+    });
+    const res = await runOperation(api, 'deleteEndpoint', { siteId: 's1', endpointId: 'booking' }, t);
+    expect(res.ok).toBe(true);
+  });
+});
+
 describe('OPERS_PATH (pathWithQuery через executor)', () => {
   it('подставляет siteId и убирает его из query', async () => {
     const api = fixtureApi(async (url) => {

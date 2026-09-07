@@ -29,6 +29,8 @@ type Memory struct {
 	cacheConfig map[string]domain.SiteCacheConfig
 	tarballAcc  map[string]domain.TarballAccess
 	tokens      map[string]*domain.TokenSet
+	operations  map[string]domain.Operation
+	endpoints   map[string]domain.Endpoint
 }
 
 var _ domain.Storage = (*Memory)(nil)
@@ -52,6 +54,8 @@ func NewMemory() *Memory {
 		cacheConfig: make(map[string]domain.SiteCacheConfig),
 		tarballAcc:  make(map[string]domain.TarballAccess),
 		tokens:      make(map[string]*domain.TokenSet),
+		operations:  make(map[string]domain.Operation),
+		endpoints:   make(map[string]domain.Endpoint),
 	}
 }
 
@@ -156,6 +160,16 @@ func (m *Memory) DeleteSite(_ context.Context, id string) error {
 	for k, dep := range m.deps {
 		if dep.SiteID == id {
 			delete(m.deps, k)
+		}
+	}
+	for k, op := range m.operations {
+		if op.SiteID == id {
+			delete(m.operations, k)
+		}
+	}
+	for k, ep := range m.endpoints {
+		if ep.SiteID == id {
+			delete(m.endpoints, k)
 		}
 	}
 	delete(m.tokens, id)
@@ -836,6 +850,124 @@ func (m *Memory) GetTokens(_ context.Context, siteID string) (*domain.TokenSet, 
 		return nil, nil
 	}
 	return clone(tokens), nil
+}
+
+func (m *Memory) CreateOperation(_ context.Context, op domain.Operation) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.defKey(op.SiteID, op.ID)
+	if _, ok := m.operations[key]; ok {
+		return domain.ErrAlreadyExists
+	}
+	m.operations[key] = clone(op)
+	return nil
+}
+
+func (m *Memory) GetOperation(_ context.Context, siteID, id string) (domain.Operation, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	op, ok := m.operations[m.defKey(siteID, id)]
+	if !ok {
+		op, ok = m.operations[m.defKey("", id)]
+	}
+	if !ok {
+		return domain.Operation{}, domain.ErrNotFound
+	}
+	return clone(op), nil
+}
+
+func (m *Memory) ListOperationsBySite(_ context.Context, siteID string) ([]domain.Operation, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]domain.Operation, 0)
+	for _, op := range m.operations {
+		if op.SiteID == siteID || op.SiteID == "" {
+			result = append(result, clone(op))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result, nil
+}
+
+func (m *Memory) UpdateOperation(_ context.Context, op domain.Operation) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.defKey(op.SiteID, op.ID)
+	if _, ok := m.operations[key]; !ok {
+		return domain.ErrNotFound
+	}
+	m.operations[key] = clone(op)
+	return nil
+}
+
+func (m *Memory) DeleteOperation(_ context.Context, siteID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.defKey(siteID, id)
+	if _, ok := m.operations[key]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(m.operations, key)
+	return nil
+}
+
+func (m *Memory) CreateEndpoint(_ context.Context, ep domain.Endpoint) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.defKey(ep.SiteID, ep.ID)
+	if _, ok := m.endpoints[key]; ok {
+		return domain.ErrAlreadyExists
+	}
+	m.endpoints[key] = clone(ep)
+	return nil
+}
+
+func (m *Memory) GetEndpoint(_ context.Context, siteID, id string) (domain.Endpoint, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	ep, ok := m.endpoints[m.defKey(siteID, id)]
+	if !ok {
+		ep, ok = m.endpoints[m.defKey("", id)]
+	}
+	if !ok {
+		return domain.Endpoint{}, domain.ErrNotFound
+	}
+	return clone(ep), nil
+}
+
+func (m *Memory) ListEndpointsBySite(_ context.Context, siteID string) ([]domain.Endpoint, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]domain.Endpoint, 0)
+	for _, ep := range m.endpoints {
+		if ep.SiteID == siteID || ep.SiteID == "" {
+			result = append(result, clone(ep))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result, nil
+}
+
+func (m *Memory) UpdateEndpoint(_ context.Context, ep domain.Endpoint) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.defKey(ep.SiteID, ep.ID)
+	if _, ok := m.endpoints[key]; !ok {
+		return domain.ErrNotFound
+	}
+	m.endpoints[key] = clone(ep)
+	return nil
+}
+
+func (m *Memory) DeleteEndpoint(_ context.Context, siteID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := m.defKey(siteID, id)
+	if _, ok := m.endpoints[key]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(m.endpoints, key)
+	return nil
 }
 
 func (m *Memory) UpsertTokens(_ context.Context, siteID string, tokens *domain.TokenSet) error {

@@ -71,7 +71,7 @@ func runtimeContractFixture(t *testing.T, siteID string) (*storage.Memory, domai
 func runtimeClientServer(t *testing.T, mem *storage.Memory, routes *route.Service, builds *build.Service) *httptest.Server {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	rt := appruntime.NewService(mem, mem, mem, routes, builds, mem)
+	rt := appruntime.NewService(mem, mem, mem, routes, builds, mem, mem, mem)
 	handler := client.NewRouter(&client.App{
 		Sites:   siteapp.NewService(mem, siteapp.Settings{DefaultLocale: "ru"}),
 		Routes:  routes,
@@ -192,7 +192,7 @@ func TestRuntimeContractVersionIdOverridesEnvironment(t *testing.T) {
 
 	routes := route.NewService(mem, route.Settings{DefaultStatus: 301, Allowed: map[int]bool{301: true}})
 	siteSvc := siteapp.NewService(mem, siteapp.Settings{DefaultLocale: "ru"})
-	rt := appruntime.NewService(mem, mem, mem, routes, builds, mem)
+	rt := appruntime.NewService(mem, mem, mem, routes, builds, mem, mem, mem)
 	srv := httptest.NewServer(client.NewRouter(&client.App{
 		Sites: siteSvc, Routes: routes, Forms: form.NewService(mem, mem, form.Settings{}),
 		Runtime: rt, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -226,7 +226,7 @@ func TestRuntimeContractErrors(t *testing.T) {
 	// A bare client server with no published build → 404.
 	empty := storage.NewMemory()
 	rt := appruntime.NewService(empty, empty, empty, routes,
-		build.NewService(empty, empty, empty, nil, nil, artifactstore.New(filepath.Join(t.TempDir(), "build"))), empty)
+		build.NewService(empty, empty, empty, nil, nil, artifactstore.New(filepath.Join(t.TempDir(), "build"))), empty, empty, empty)
 	other := httptest.NewServer(client.NewRouter(&client.App{
 		Sites: siteapp.NewService(empty, siteapp.Settings{}), Routes: routes,
 		Forms:   form.NewService(empty, empty, form.Settings{}),
