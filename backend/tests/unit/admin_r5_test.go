@@ -15,10 +15,11 @@ const cardSourceV2 = `export default function Card({ title, subtitle }: { title:
 
 func r5CardRequest() map[string]any {
 	return map[string]any{
-		"id":   "card",
-		"name": "Карточка",
-		"kind": "component",
-		"source": cardSourceV1,
+		"id":        "card",
+		"name":      "Карточка",
+		"kind":      "component",
+		"isSection": true,
+		"source":    cardSourceV1,
 		"schema": map[string]any{
 			"type":       "object",
 			"required":   []any{"title"},
@@ -90,10 +91,10 @@ func TestAdminComponentRegistryCommitHistory(t *testing.T) {
 		t.Fatalf("get status = %d, body = %s", get.Code, get.Body.String())
 	}
 	var got struct {
-		ID        string `json:"id"`
-		Source    string `json:"source"`
+		ID         string `json:"id"`
+		Source     string `json:"source"`
 		CurrentSHA string `json:"currentSha"`
-		Committed bool   `json:"committed"`
+		Committed  bool   `json:"committed"`
 	}
 	decodeResponse(t, get, &got)
 	if got.Source != cardSourceV1 || !got.Committed || got.CurrentSHA != committed.SHA {

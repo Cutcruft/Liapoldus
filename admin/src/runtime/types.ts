@@ -390,6 +390,8 @@ export type RegistryComponent = {
   id: string;
   name: string;
   kind: string;
+  /** section = каркас страницы; primitive = кирпичик, живёт внутри секции. */
+  isSection: boolean;
   currentSha?: string;
   /** false = исходник отличается от dev-HEAD (или git ещё нет) → «грязно». */
   committed: boolean;
@@ -409,6 +411,12 @@ export type AdminComponent = {
   siteId: string;
   name: string;
   kind: string;
+  /** section = каркас страницы; primitive = кирпичик внутри секции. */
+  isSection: boolean;
+  /** Секция-обёртка контента страницы (page shell); только для section. */
+  acceptsPageContent?: boolean;
+  /** Примитивы, которые секция может импортировать; пусто = deny-by-default. */
+  allowedPrimitiveIds?: string[];
   source: string;
   schema: Record<string, unknown>;
   metadata?: Record<string, unknown>;

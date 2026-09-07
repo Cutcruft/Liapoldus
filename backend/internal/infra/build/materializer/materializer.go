@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/build"
+	componentapp "github.com/liapoldus/liapoldus/backend/internal/application/component"
 	routeapp "github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
@@ -111,15 +112,24 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		declaredSet[name] = true
 	}
 
-	// Resolve sources from the registry and write definition files.
-	refs := make(map[string]build.DefinitionRef, len(definitionIds))
+	// Resolve sources from the registry and write definition files. Under the
+	// R10 hierarchy page elements reference sections only, so the set is
+	// expanded transitively through @site/components/<id> imports (sections →
+	// their allowlisted primitives) before writing. The whole import graph is
+	// validated: an inconsistent snapshot fails the build instead of emitting
+	// a broken page chunk.
+	definitions, err := expandDefinitions(ctx, m.defs, req.SiteID, definitionIds)
+	if err != nil {
+		return fail("definitions", err)
+	}
+	if err := componentapp.ValidateGraph(definitions); err != nil {
+		return fail("definitions", err)
+	}
+	refs := make(map[string]build.DefinitionRef, len(definitions))
 	srcDir := filepath.Join(req.Dir, "src", "definitions")
 	var subpathImports []string
-	for _, id := range definitionIds {
-		def, err := m.defs.Get(ctx, req.SiteID, id)
-		if err != nil {
-			return fail("definition "+id, err)
-		}
+	for _, def := range definitions {
+		id := def.ID
 		if strings.TrimSpace(def.Source) == "" {
 			return fail("definition "+id, fmt.Errorf("%w: definition has no source", domain.ErrInvalidRequest))
 		}
@@ -228,6 +238,46 @@ func collectElementDefs(list []domain.Element, seen map[string]bool) {
 	}
 }
 
+// expandDefinitions returns every definition reachable from roots by
+// transitively following @site/components/<id> imports (sections → their
+// allowlisted primitives). Roots are page-level section ids; the closure adds
+// each section's imports until nothing new is found. Unknown imported ids are
+// allowed through here — ValidateGraph reports them as a specific error.
+func expandDefinitions(ctx context.Context, defs domain.ComponentDefinitionRepository, siteID string, roots []string) ([]domain.ComponentDefinition, error) {
+	byID := make(map[string]domain.ComponentDefinition)
+	var order []string
+	var visit func(string) error
+	visited := make(map[string]bool)
+	visit = func(id string) error {
+		if visited[id] {
+			return nil
+		}
+		visited[id] = true
+		def, err := defs.Get(ctx, siteID, id)
+		if err != nil {
+			return err
+		}
+		byID[id] = *def
+		order = append(order, id)
+		for _, child := range componentapp.SiteComponentImports(def.Source) {
+			if err := visit(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, id := range roots {
+		if err := visit(id); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]domain.ComponentDefinition, 0, len(order))
+	for _, id := range order {
+		out = append(out, byID[id])
+	}
+	return out, nil
+}
+
 func sortedKeys(m map[string]bool) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
@@ -290,19 +340,19 @@ func homePage(siteID string, pages []domain.SnapshotPage, routes domain.RouteRep
 // pageElements is the wire shape registerPage stores for a page (matches the
 // ui-runtime page descriptor; Elements is the flat element list).
 type pageElements struct {
-	SnapshotID string          `json:"snapshotId"`
-	VersionID  string          `json:"versionId"`
-	PageID     string          `json:"pageId"`
-	Elements   []wireElement   `json:"elements"`
+	SnapshotID string        `json:"snapshotId"`
+	VersionID  string        `json:"versionId"`
+	PageID     string        `json:"pageId"`
+	Elements   []wireElement `json:"elements"`
 }
 
 // wireElement mirrors the runtime ElementDescriptor: props/bindings are always
 // objects/arrays (never null) because the ui-runtime crawler iterates them.
 type wireElement struct {
-	ID          string                            `json:"id"`
-	ComponentID string                            `json:"componentId"`
-	Props       map[string]domain.ElementProp      `json:"props"`
-	Bindings    []domain.BindingSource             `json:"bindings"`
+	ID          string                        `json:"id"`
+	ComponentID string                        `json:"componentId"`
+	Props       map[string]domain.ElementProp `json:"props"`
+	Bindings    []domain.BindingSource        `json:"bindings"`
 }
 
 func wireElements(list []domain.Element) []wireElement {

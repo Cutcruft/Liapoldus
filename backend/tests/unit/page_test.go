@@ -30,6 +30,7 @@ func pageDefs(t *testing.T, siteID string, ids ...string) domain.ComponentDefini
 		} else {
 			def.Schema = mustJSONMap(`{"type":"object","properties":{"gap":{"type":"number"}}}`)
 		}
+		def.IsSection = true
 		if err := repo.Save(context.Background(), &def); err != nil {
 			t.Fatalf("seed definition %s: %v", id, err)
 		}

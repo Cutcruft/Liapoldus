@@ -16,7 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql migrations/011_pages_list.sql migrations/012_deployments.sql migrations/013_site_settings.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql migrations/011_pages_list.sql migrations/012_deployments.sql migrations/013_site_settings.sql migrations/014_component_structure.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -929,18 +929,25 @@ func (p *Postgres) Save(ctx context.Context, def *domain.ComponentDefinition) er
 	if err != nil {
 		return fmt.Errorf("marshal definition metadata: %w", err)
 	}
+	allowedJSON, err := json.Marshal(def.AllowedPrimitiveIDs)
+	if err != nil {
+		return fmt.Errorf("marshal definition allowed primitives: %w", err)
+	}
 	if _, err := p.pool.Exec(ctx, `
-		INSERT INTO component_definitions (site_id, id, name, kind, source, schema, metadata, current_sha, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO component_definitions (site_id, id, name, kind, is_section, allowed_primitive_ids, accepts_page_content, source, schema, metadata, current_sha, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (site_id, id) DO UPDATE SET
 			name = EXCLUDED.name,
 			kind = EXCLUDED.kind,
+			is_section = EXCLUDED.is_section,
+			allowed_primitive_ids = EXCLUDED.allowed_primitive_ids,
+			accepts_page_content = EXCLUDED.accepts_page_content,
 			source = EXCLUDED.source,
 			schema = EXCLUDED.schema,
 			metadata = EXCLUDED.metadata,
 			current_sha = EXCLUDED.current_sha,
 			updated_at = EXCLUDED.updated_at
-	`, def.SiteID, def.ID, def.Name, def.Kind, def.Source, schemaJSON, metadataJSON, def.CurrentSHA, def.CreatedAt, def.UpdatedAt); err != nil {
+	`, def.SiteID, def.ID, def.Name, def.Kind, def.IsSection, allowedJSON, def.AcceptsPageContent, def.Source, schemaJSON, metadataJSON, def.CurrentSHA, def.CreatedAt, def.UpdatedAt); err != nil {
 		if isForeignKeyViolation(err) {
 			return domain.ErrNotFound
 		}
@@ -951,7 +958,7 @@ func (p *Postgres) Save(ctx context.Context, def *domain.ComponentDefinition) er
 
 func (p *Postgres) Get(ctx context.Context, siteID, id string) (*domain.ComponentDefinition, error) {
 	row := p.pool.QueryRow(ctx, `
-		SELECT site_id, id, name, kind, source, schema, metadata, current_sha, created_at, updated_at
+		SELECT site_id, id, name, kind, is_section, allowed_primitive_ids, accepts_page_content, source, schema, metadata, current_sha, created_at, updated_at
 		FROM component_definitions WHERE site_id = $1 AND id = $2
 	`, siteID, id)
 	def, err := scanDefinition(row)
@@ -966,7 +973,7 @@ func (p *Postgres) Get(ctx context.Context, siteID, id string) (*domain.Componen
 
 func (p *Postgres) List(ctx context.Context, siteID string) ([]domain.ComponentDefinition, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT site_id, id, name, kind, source, schema, metadata, current_sha, created_at, updated_at
+		SELECT site_id, id, name, kind, is_section, allowed_primitive_ids, accepts_page_content, source, schema, metadata, current_sha, created_at, updated_at
 		FROM component_definitions WHERE site_id = $1 ORDER BY id
 	`, siteID)
 	if err != nil {
@@ -1000,8 +1007,8 @@ func (p *Postgres) Delete(ctx context.Context, siteID, id string) error {
 
 func scanDefinition(row rowScanner) (*domain.ComponentDefinition, error) {
 	var def domain.ComponentDefinition
-	var schemaJSON, metadataJSON []byte
-	if err := row.Scan(&def.SiteID, &def.ID, &def.Name, &def.Kind, &def.Source, &schemaJSON, &metadataJSON, &def.CurrentSHA, &def.CreatedAt, &def.UpdatedAt); err != nil {
+	var schemaJSON, metadataJSON, allowedJSON []byte
+	if err := row.Scan(&def.SiteID, &def.ID, &def.Name, &def.Kind, &def.IsSection, &allowedJSON, &def.AcceptsPageContent, &def.Source, &schemaJSON, &metadataJSON, &def.CurrentSHA, &def.CreatedAt, &def.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(schemaJSON, &def.Schema); err != nil {
@@ -1009,6 +1016,9 @@ func scanDefinition(row rowScanner) (*domain.ComponentDefinition, error) {
 	}
 	if err := json.Unmarshal(metadataJSON, &def.Metadata); err != nil {
 		return nil, fmt.Errorf("unmarshal definition metadata: %w", err)
+	}
+	if err := json.Unmarshal(allowedJSON, &def.AllowedPrimitiveIDs); err != nil {
+		return nil, fmt.Errorf("unmarshal definition allowed primitives: %w", err)
 	}
 	return &def, nil
 }

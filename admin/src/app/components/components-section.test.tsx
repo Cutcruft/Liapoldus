@@ -14,6 +14,7 @@ let REGISTRY: ComponentRegistry = {
       id: 'comp:card',
       name: 'Card',
       kind: 'component',
+      isSection: false,
       currentSha: 'abc123def456',
       committed: true,
       usageCount: 2,
@@ -23,6 +24,7 @@ let REGISTRY: ComponentRegistry = {
       id: 'comp:hero',
       name: 'Hero',
       kind: 'section',
+      isSection: true,
       currentSha: null as unknown as undefined,
       committed: false,
       usageCount: 0,
@@ -45,6 +47,7 @@ const CARD: AdminComponent = {
   siteId: 's1',
   name: 'Card',
   kind: 'component',
+  isSection: false,
   source: CARD_SOURCE,
   schema: {},
   currentSha: 'abc123def456',
@@ -73,12 +76,13 @@ function componentsHandler() {
     if (method === 'GET' && path === '/api/sites/s1/components/registry')
       return jsonResponse(200, registry);
     if (method === 'POST' && path === '/api/sites/s1/components') {
-      const body = JSON.parse(String(init.body)) as { name: string; kind: string; source: string };
+      const body = JSON.parse(String(init.body)) as { name: string; kind: string; source: string; isSection?: boolean };
       const created: AdminComponent = {
         id: `comp:${body.name.toLowerCase()}`,
         siteId: 's1',
         name: body.name,
         kind: body.kind,
+        isSection: Boolean(body.isSection),
         source: body.source,
         schema: {},
         createdAt: '2026-01-03T00:00:00Z',

@@ -782,6 +782,9 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
         source: String(args.source ?? ''),
         schema: args.schema ?? {},
       };
+      if (typeof args.isSection === 'boolean') body.isSection = args.isSection;
+      if (typeof args.acceptsPageContent === 'boolean') body.acceptsPageContent = args.acceptsPageContent;
+      if (args.allowedPrimitiveIds) body.allowedPrimitiveIds = args.allowedPrimitiveIds;
       if (args.id) body.id = args.id;
       return body;
     },
@@ -793,13 +796,19 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     labelKey: 'op.updateComponent',
     method: 'PUT',
     route: (args) => `/api/sites/{siteId}/components/{componentId}`,
-    body: (args) => ({
-      name: String(args.name),
-      kind: String(args.kind ?? 'component'),
-      source: String(args.source ?? ''),
-      schema: args.schema ?? {},
-      metadata: args.metadata ?? {},
-    }),
+    body: (args) => {
+      const body: Record<string, unknown> = {
+        name: String(args.name),
+        kind: String(args.kind ?? 'component'),
+        source: String(args.source ?? ''),
+        schema: args.schema ?? {},
+        metadata: args.metadata ?? {},
+      };
+      if (typeof args.isSection === 'boolean') body.isSection = args.isSection;
+      if (typeof args.acceptsPageContent === 'boolean') body.acceptsPageContent = args.acceptsPageContent;
+      if (args.allowedPrimitiveIds) body.allowedPrimitiveIds = args.allowedPrimitiveIds;
+      return body;
+    },
     detail: () => 'OK',
   },
 

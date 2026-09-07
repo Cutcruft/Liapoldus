@@ -126,6 +126,8 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 // validateList checks a page's element list before writing:
 //   - element count within the configured cap
 //   - every element has a stable id and a known componentId in the site registry
+//   - only sections may appear on a page (primitives are composed inside a
+//     section's source, R10 component hierarchy)
 //   - props follow the §1.3 contract (literal or binding with a valid source)
 func (s *Service) validateList(ctx context.Context, siteID string, list []domain.Element) error {
 	maxElements := s.settings.MaxElements
@@ -154,6 +156,9 @@ func (s *Service) validateList(ctx context.Context, siteID string, list []domain
 				return fmt.Errorf("%w: unknown componentId %q referenced at %s", domain.ErrNotFound, el.ComponentID, path)
 			}
 			return err
+		}
+		if !def.IsSection {
+			return fmt.Errorf("%w: componentId %q at %s is not a section — page elements may only reference sections", domain.ErrInvalidRequest, el.ComponentID, path)
 		}
 		if err := validateElementProps(el.Props, def.Schema); err != nil {
 			return fmt.Errorf("%w: props of %s (componentId %q) invalid: %v", domain.ErrInvalidRequest, path, el.ComponentID, err)

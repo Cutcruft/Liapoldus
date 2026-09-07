@@ -30,7 +30,7 @@ func NewService(defs domain.ComponentDefinitionRepository) *Service {
 // All validation happens before any write, so a rejected define leaves the
 // registry untouched.
 func (s *Service) Define(ctx context.Context, d domain.ComponentDefinition) (domain.ComponentVersion, error) {
-	if err := validate(d); err != nil {
+	if err := validate(d, s.defs, ctx); err != nil {
 		return domain.ComponentVersion{}, err
 	}
 	if _, err := s.defs.Get(ctx, d.SiteID, d.ID); err == nil {
@@ -38,14 +38,17 @@ func (s *Service) Define(ctx context.Context, d domain.ComponentDefinition) (dom
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		return domain.ComponentVersion{}, err
 	}
+	d.AllowedPrimitiveIDs = NormalizeAllowlist(d.AllowedPrimitiveIDs)
 	return s.saveNewVersion(ctx, d, "initial version")
 }
 
 // Update overwrites name/source/schema/metadata of an existing definition and
-// records a new Version. Page trees are validated lazily at assembly time, so
-// a stricter schema is accepted here (soft content rules, R4).
+// records a new Version. The whole site graph is re-validated against the
+// update so a save can never leave another definition's imports or allowlist
+// dangling. Page trees are validated lazily at assembly time, so a stricter
+// schema is accepted here (soft content rules, R4).
 func (s *Service) Update(ctx context.Context, d domain.ComponentDefinition) (domain.ComponentVersion, error) {
-	if err := validate(d); err != nil {
+	if err := validate(d, s.defs, ctx); err != nil {
 		return domain.ComponentVersion{}, err
 	}
 	prior, err := s.defs.Get(ctx, d.SiteID, d.ID)
@@ -58,6 +61,7 @@ func (s *Service) Update(ctx context.Context, d domain.ComponentDefinition) (dom
 	if d.Kind == "" {
 		d.Kind = prior.Kind
 	}
+	d.AllowedPrimitiveIDs = NormalizeAllowlist(d.AllowedPrimitiveIDs)
 	return s.saveNewVersion(ctx, d, "updated version")
 }
 
@@ -123,7 +127,7 @@ func (s *Service) saveNewVersion(ctx context.Context, d domain.ComponentDefiniti
 	}, nil
 }
 
-func validate(d domain.ComponentDefinition) error {
+func validate(d domain.ComponentDefinition, defs domain.ComponentDefinitionRepository, ctx context.Context) error {
 	if strings.TrimSpace(d.ID) == "" {
 		return fmt.Errorf("%w: component id is required", domain.ErrInvalidRequest)
 	}
@@ -142,5 +146,33 @@ func validate(d domain.ComponentDefinition) error {
 	if err := schema.ValidateSchema(d.Schema); err != nil {
 		return err
 	}
-	return nil
+	graph, err := siteGraph(ctx, defs, &d)
+	if err != nil {
+		return err
+	}
+	return ValidateGraph(graph)
+}
+
+// siteGraph returns every definition of the site with candidate applied
+// (replacing the definition of the same id when present, otherwise appended),
+// so Define/Update validate the whole graph transactionally.
+func siteGraph(ctx context.Context, defs domain.ComponentDefinitionRepository, candidate *domain.ComponentDefinition) ([]domain.ComponentDefinition, error) {
+	list, err := defs.List(ctx, candidate.SiteID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.ComponentDefinition, 0, len(list)+1)
+	applied := false
+	for _, existing := range list {
+		if candidate != nil && existing.ID == candidate.ID {
+			out = append(out, *candidate)
+			applied = true
+			continue
+		}
+		out = append(out, existing)
+	}
+	if candidate != nil && !applied {
+		out = append(out, *candidate)
+	}
+	return out, nil
 }

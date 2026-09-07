@@ -26,23 +26,29 @@ func NewComponentHandler(components *component.Service, pages *page.Service, git
 // componentRequest mirrors ComponentDefinition but keeps Source explicit (the
 // domain field is json:"-" and must not leak into other payloads).
 type componentRequest struct {
-	ID       string         `json:"id"`
-	Name     string         `json:"name"`
-	Kind     string         `json:"kind"`
-	Source   string         `json:"source"`
-	Schema   map[string]any `json:"schema"`
-	Metadata map[string]any `json:"metadata"`
+	ID                  string         `json:"id"`
+	Name                string         `json:"name"`
+	Kind                string         `json:"kind"`
+	IsSection           bool           `json:"isSection"`
+	AllowedPrimitiveIDs []string       `json:"allowedPrimitiveIds"`
+	AcceptsPageContent  bool           `json:"acceptsPageContent"`
+	Source              string         `json:"source"`
+	Schema              map[string]any `json:"schema"`
+	Metadata            map[string]any `json:"metadata"`
 }
 
 func (req componentRequest) toDomain(siteID string) domain.ComponentDefinition {
 	def := domain.ComponentDefinition{
-		SiteID:   siteID,
-		ID:       req.ID,
-		Name:     req.Name,
-		Kind:     req.Kind,
-		Source:   req.Source,
-		Schema:   req.Schema,
-		Metadata: req.Metadata,
+		SiteID:              siteID,
+		ID:                  req.ID,
+		Name:                req.Name,
+		Kind:                req.Kind,
+		IsSection:           req.IsSection,
+		AllowedPrimitiveIDs: req.AllowedPrimitiveIDs,
+		AcceptsPageContent:  req.AcceptsPageContent,
+		Source:              req.Source,
+		Schema:              req.Schema,
+		Metadata:            req.Metadata,
 	}
 	if def.Kind == "" {
 		def.Kind = "component"
@@ -109,31 +115,37 @@ func stringMeta(m map[string]any, key string) (string, bool) {
 // plus its source (kept out of ComponentDefinition JSON) and the committed
 // flag computed against the dev HEAD.
 type componentResponse struct {
-	ID         string         `json:"id"`
-	SiteID     string         `json:"siteId"`
-	Name       string         `json:"name"`
-	Kind       string         `json:"kind"`
-	Source     string         `json:"source"`
-	Schema     map[string]any `json:"schema"`
-	Metadata   map[string]any `json:"metadata,omitempty"`
-	CurrentSHA string         `json:"currentSha"`
-	Committed  bool           `json:"committed"`
-	CreatedAt  time.Time      `json:"createdAt"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
+	ID                  string         `json:"id"`
+	SiteID              string         `json:"siteId"`
+	Name                string         `json:"name"`
+	Kind                string         `json:"kind"`
+	IsSection           bool           `json:"isSection"`
+	AllowedPrimitiveIDs []string       `json:"allowedPrimitiveIds"`
+	AcceptsPageContent  bool           `json:"acceptsPageContent"`
+	Source              string         `json:"source"`
+	Schema              map[string]any `json:"schema"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
+	CurrentSHA          string         `json:"currentSha"`
+	Committed           bool           `json:"committed"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
 }
 
 func toComponentResponse(d *domain.ComponentDefinition) componentResponse {
 	return componentResponse{
-		ID:         d.ID,
-		SiteID:     d.SiteID,
-		Name:       d.Name,
-		Kind:       d.Kind,
-		Source:     d.Source,
-		Schema:     d.Schema,
-		Metadata:   d.Metadata,
-		CurrentSHA: d.CurrentSHA,
-		CreatedAt:  d.CreatedAt,
-		UpdatedAt:  d.UpdatedAt,
+		ID:                  d.ID,
+		SiteID:              d.SiteID,
+		Name:                d.Name,
+		Kind:                d.Kind,
+		IsSection:           d.IsSection,
+		AllowedPrimitiveIDs: d.AllowedPrimitiveIDs,
+		AcceptsPageContent:  d.AcceptsPageContent,
+		Source:              d.Source,
+		Schema:              d.Schema,
+		Metadata:            d.Metadata,
+		CurrentSHA:          d.CurrentSHA,
+		CreatedAt:           d.CreatedAt,
+		UpdatedAt:           d.UpdatedAt,
 	}
 }
 
@@ -225,6 +237,7 @@ type registryComponent struct {
 	ID         string    `json:"id"`
 	Name       string    `json:"name"`
 	Kind       string    `json:"kind"`
+	IsSection  bool      `json:"isSection"`
 	CurrentSHA string    `json:"currentSha,omitempty"`
 	Committed  bool      `json:"committed"`
 	UsageCount int       `json:"usageCount"`
@@ -259,6 +272,7 @@ func (h *ComponentHandler) Registry(w http.ResponseWriter, r *http.Request) {
 			ID:         d.ID,
 			Name:       d.Name,
 			Kind:       d.Kind,
+			IsSection:  d.IsSection,
 			CurrentSHA: d.CurrentSHA,
 			Committed:  h.committed(ctx, d),
 			UsageCount: usage[d.ID],

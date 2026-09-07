@@ -87,12 +87,17 @@ func seedSiteDefs(t *testing.T, db domain.Storage, siteID string) {
 		"Text":      `{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}`,
 	} {
 		if err := db.Save(ctx, &domain.ComponentDefinition{
-			SiteID: siteID, ID: id, Name: id, Kind: "component",
+			SiteID:    siteID,
+			ID:        id,
+			Name:      id,
+			Kind:      "component",
+			IsSection: true,
+			Source:    "export default () => null;",
 			Schema:    mustJSONMap(schema),
 			Metadata:  map[string]any{"label": id},
 			CreatedAt: time.Now().UTC(),
 		}); err != nil {
-			t.Fatalf("seed definition %s: %v", id, err)
+			t.Fatalf("seed component %s: %v", id, err)
 		}
 	}
 }
@@ -157,9 +162,9 @@ func TestSiteAndPageFlow(t *testing.T) {
 
 	// Version history carries the flat element list per version (§1.3/§3.7).
 	type versionEntry struct {
-		ID      string `json:"id"`
-		Number  int    `json:"number"`
-		List    []any  `json:"list"`
+		ID     string `json:"id"`
+		Number int    `json:"number"`
+		List   []any  `json:"list"`
 	}
 	var versions []versionEntry
 	listVersionsResponse := request(t, handler, http.MethodGet, "/api/pages/"+createdPage.ID+"/versions", nil)

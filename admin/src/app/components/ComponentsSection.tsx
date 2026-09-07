@@ -8,7 +8,7 @@ import { EntityTable } from './EntityTable';
 import { Field } from './Field';
 import { TsxEditor } from './TsxEditor';
 import { inferProps, inferComponentName } from './schema-utils';
-import { validateTsx, type TsxDiagnostic } from './tsx-validate';
+import { validateImportPolicy, validateTsx, siteComponentImports, type TsxDiagnostic, type ImportPolicyRegistryEntry } from './tsx-validate';
 
 const INPUT_CLASS =
   'rounded border border-neutral-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:outline-none';
@@ -64,6 +64,7 @@ export function ComponentsRegistry() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState('');
+  const [newSection, setNewSection] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -79,7 +80,7 @@ export function ComponentsRegistry() {
     const res = await runOperation(
       api,
       'createComponent',
-      { siteId, name: clean, kind: 'component', source: DEFAULT_SNIPPET, schema: {} },
+      { siteId, name: clean, kind: 'component', isSection: newSection, source: DEFAULT_SNIPPET, schema: {} },
       t,
     );
     setSubmitting(false);
@@ -147,6 +148,17 @@ export function ComponentsRegistry() {
                 onChange={(e) => setName(e.target.value)}
               />
             </Field>
+            <Field label={t('components.kind')}>
+              <select
+                className={INPUT_CLASS}
+                value={newSection ? 'section' : 'primitive'}
+                onChange={(e) => setNewSection(e.target.value === 'section')}
+                aria-label={t('components.kind')}
+              >
+                <option value="primitive">{t('components.isPrimitive')}</option>
+                <option value="section">{t('components.isSection')}</option>
+              </select>
+            </Field>
             <Inline gap={2}>
               <button
                 type="submit"
@@ -193,13 +205,22 @@ export function ComponentsRegistry() {
                 key: 'name',
                 label: t('components.name'),
                 render: (c) => (
-                  <button
-                    type="button"
-                    onClick={() => open(c)}
-                    className="truncate text-left font-medium text-neutral-900 hover:text-blue-600"
-                  >
-                    {c.name}
-                  </button>
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => open(c)}
+                      className="truncate text-left font-medium text-neutral-900 hover:text-blue-600"
+                    >
+                      {c.name}
+                    </button>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
+                        c.isSection ? 'bg-violet-50 text-violet-700' : 'bg-neutral-100 text-neutral-500'
+                      }`}
+                    >
+                      {t(c.isSection ? 'components.badge.section' : 'components.badge.primitive')}
+                    </span>
+                  </span>
                 ),
               },
               { key: 'kind', label: t('components.kind'), render: (c) => <code className="text-xs">{c.kind}</code> },
@@ -298,9 +319,13 @@ export function ComponentDetail({ componentId }: { componentId: string }) {
   const current = useOperation<AdminComponent | null>('getComponent', { siteId, componentId }, coerceComponent);
   const history = useOperation<ComponentHistoryEntry[]>('componentHistory', { siteId, componentId }, coerceHistory);
   const usage = useOperation<ComponentUsage>('componentUsage', { siteId, componentId }, (d) => coerceUsage(d, componentId));
+  const registry = useOperation<ComponentRegistry>('componentRegistry', { siteId }, coerceRegistry);
 
   const [source, setSource] = useState('');
   const [name, setName] = useState('');
+  const [isSection, setIsSection] = useState(false);
+  const [acceptsPageContent, setAcceptsPageContent] = useState(false);
+  const [allowedIds, setAllowedIds] = useState<string[]>([]);
   const [viewSha, setViewSha] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -316,10 +341,25 @@ export function ComponentDetail({ componentId }: { componentId: string }) {
     if (current.state.status === 'success' && current.state.data) {
       setSource(current.state.data.source);
       setName(current.state.data.name);
+      setIsSection(!!current.state.data.isSection);
+      setAcceptsPageContent(!!current.state.data.acceptsPageContent);
+      setAllowedIds(current.state.data.allowedPrimitiveIds ?? []);
     }
   }, [current.state.status, componentId]);
 
-  const dirty = !viewSha && comp != null && source !== comp.source;
+  const dirty =
+    !viewSha &&
+    comp != null &&
+    (source !== comp.source ||
+      name !== comp.name ||
+      isSection !== !!comp.isSection ||
+      acceptsPageContent !== !!comp.acceptsPageContent ||
+      allowedIds.join('|') !== (comp.allowedPrimitiveIds ?? []).join('|'));
+
+  const regEntries: ImportPolicyRegistryEntry[] =
+    registry.state.status === 'success' ? registry.state.data.components.map((c) => ({ id: c.id, isSection: c.isSection })) : [];
+  const policyErrors = comp ? validateImportPolicy(source, regEntries, isSection, acceptsPageContent, allowedIds) : [];
+  const blocked = !diag.ok || policyErrors.length > 0;
 
   const back = () => {
     setSearchParams((p) => {
@@ -335,7 +375,18 @@ export function ComponentDetail({ componentId }: { componentId: string }) {
     const res = await runOperation(
       api,
       'updateComponent',
-      { siteId, componentId, name, kind: comp.kind, source, schema: comp.schema ?? {}, metadata: comp.metadata ?? {} },
+      {
+        siteId,
+        componentId,
+        name,
+        kind: comp.kind,
+        isSection,
+        acceptsPageContent,
+        allowedPrimitiveIds: allowedIds,
+        source,
+        schema: comp.schema ?? {},
+        metadata: comp.metadata ?? {},
+      },
       t,
     );
     setSaving(false);
@@ -412,7 +463,7 @@ export function ComponentDetail({ componentId }: { componentId: string }) {
               onClick={() => {
                 void save();
               }}
-              disabled={saving || (diag && !diag.ok)}
+              disabled={saving || blocked}
               className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {t('components.save')}
@@ -448,8 +499,35 @@ export function ComponentDetail({ componentId }: { componentId: string }) {
                           message: diag.message ?? '',
                         })}
                   </span>
+                  <span
+                    className={`hidden align-middle text-xs sm:inline ${policyErrors.length === 0 ? 'text-green-700' : 'text-red-600'}`}
+                    data-testid="import-policy-diagnostic"
+                  >
+                    {policyErrors.length === 0
+                      ? t('components.policy.ok')
+                      : t('components.policy.error')}
+                  </span>
                   {saveError && <span className="text-xs text-red-600">{saveError}</span>}
                 </Inline>
+                {policyErrors.length > 0 && (
+                  <ul className="space-y-1 rounded border border-red-200 bg-red-50 p-2" data-testid="policy-errors">
+                    {policyErrors.map((msg) => (
+                      <li key={msg} className="text-xs text-red-700">
+                        {msg}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {isSection && (
+                  <p className="text-xs text-neutral-400">
+                    {t('components.imports')}:{' '}
+                    <code className="text-neutral-600">
+                      {siteComponentImports(source).length > 0
+                        ? siteComponentImports(source).map((i) => `@site/components/${i}`).join(', ')
+                        : t('components.imports.none')}
+                    </code>
+                  </p>
+                )}
               </>
             )}
           </Stack>
@@ -479,6 +557,88 @@ export function ComponentDetail({ componentId }: { componentId: string }) {
                 </ul>
               )}
             </section>
+
+            {!viewSha && (
+              <section className="rounded border border-neutral-200 p-3">
+                <h2 className="mb-2 text-sm font-medium text-neutral-800">{t('components.policy.title')}</h2>
+                <div role="radiogroup" aria-label={t('components.policy.title')} className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { value: false, label: t('components.isPrimitive'), hint: t('components.isPrimitive.hint') },
+                      { value: true, label: t('components.isSection'), hint: t('components.isSection.hint') },
+                    ] as const
+                  ).map((opt) => (
+                    <label
+                      key={opt.label}
+                      className={`cursor-pointer rounded border p-2 text-xs ${
+                        isSection === opt.value ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-neutral-200 text-neutral-600'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        className="sr-only"
+                        name="component-role"
+                        checked={isSection === opt.value}
+                        onChange={() => {
+                          setIsSection(opt.value);
+                          if (!opt.value) setAcceptsPageContent(false);
+                        }}
+                      />
+                      <span className="block font-medium">{opt.label}</span>
+                      <span className="mt-1 block text-neutral-400">{opt.hint}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {isSection && (
+                  <Stack gap={3}>
+                    <label className="mt-2 flex items-start gap-2 text-xs text-neutral-700">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={acceptsPageContent}
+                        onChange={(e) => setAcceptsPageContent(e.target.checked)}
+                      />
+                      <span>
+                        <span className="block font-medium">{t('components.acceptsPageContent')}</span>
+                        <span className="block text-neutral-400">{t('components.acceptsPageContent.hint')}</span>
+                      </span>
+                    </label>
+
+                    <div>
+                      <p className="mb-1 text-xs font-medium text-neutral-800">{t('components.allowlist')}</p>
+                      <p className="mb-2 text-[11px] text-neutral-400">{t('components.allowlist.hint')}</p>
+                      {regEntries.filter((r) => !r.isSection).length === 0 ? (
+                        <p className="text-[11px] text-neutral-400">
+                          {t('components.usage.none')}
+                        </p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {regEntries
+                            .filter((r) => !r.isSection)
+                            .map((r) => (
+                              <li key={r.id} className="flex items-center gap-2 text-xs text-neutral-700">
+                                <input
+                                  type="checkbox"
+                                  checked={allowedIds.includes(r.id)}
+                                  onChange={(e) => {
+                                    setAllowedIds((prev) =>
+                                      e.target.checked
+                                        ? [...new Set([...prev, r.id])]
+                                        : prev.filter((id) => id !== r.id),
+                                    );
+                                  }}
+                                />
+                                <code>{r.id}</code>
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </div>
+                  </Stack>
+                )}
+              </section>
+            )}
 
             <section className="rounded border border-neutral-200 p-3">
               <h2 className="mb-2 text-sm font-medium text-neutral-800">{t('components.version')}</h2>

@@ -81,16 +81,19 @@ type BindingSource struct {
 // never leaks into page/snapshot payloads — it is served explicitly by the
 // component get/history endpoints.
 type ComponentDefinition struct {
-	SiteID     string         `json:"siteId"`
-	ID         string         `json:"id"`
-	Name       string         `json:"name"`
-	Kind       string         `json:"kind"`
-	Source     string         `json:"-"`
-	Schema     map[string]any `json:"schema"`
-	Metadata   map[string]any `json:"metadata,omitempty"`
-	CurrentSHA string         `json:"currentSha"`
-	CreatedAt  time.Time      `json:"createdAt"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
+	SiteID              string         `json:"siteId"`
+	ID                  string         `json:"id"`
+	Name                string         `json:"name"`
+	Kind                string         `json:"kind"`
+	IsSection           bool           `json:"isSection"`
+	AllowedPrimitiveIDs []string       `json:"allowedPrimitiveIds"`
+	AcceptsPageContent  bool           `json:"acceptsPageContent"`
+	Source              string         `json:"-"`
+	Schema              map[string]any `json:"schema"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
+	CurrentSHA          string         `json:"currentSha"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
 }
 
 // ComponentVersion is a released definition of a component. Its ID is a
