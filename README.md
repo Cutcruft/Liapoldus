@@ -761,5 +761,5 @@ Component
 
 Подробное правило описано в [docs/direct-integrations.md](docs/direct-integrations.md).
 
-Актуальное состояние реализации и список доступных для проверки функций находятся в [docs/feature-status.md](docs/feature-status.md).
+Единая спецификация редизайна админки (решения R1–R19, доменная модель, API, интерфейс, план R0–R13) — в [docs/redesign/spec.md](docs/redesign/spec.md).
 

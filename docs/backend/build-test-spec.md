@@ -1,8 +1,7 @@
 # Backend — Сборщик (esbuild) и Build-сервис. Тест-контракт (Этап 3)
 
-Статус: **черновик** — уточняем до реализации.
-Дизайн: `docs/design/frontend.md` (R2, R3, R6, R9), `README.md` §24–27, `docs/ui-runtime/spec.md` (boot).
-Предыдущий этап: `docs/backend/components-test-spec.md` (git-модель, реализована).
+Статус: этап реализован (см. `TODO.md` Этап 3 в истории; актуальный план — `docs/redesign/spec.md` §8).
+Дизайн: `README.md` §24–27, `docs/ui-runtime/spec.md` (boot).
 
 ## Границы этапа (что входит / не входит)
 
@@ -106,7 +105,7 @@ vitest (`tests/e2e/build.test.ts`, шаблон `api.test.ts` с Bearer-auth): �
 3. `internal/infra/build/materializer` (§2 unit) и прогон через §1-моки в service.
 4. `internal/infra/build/builder` (real esbuild) + `internal/infra/build/artifactstore` (§3, §4).
 5. admin API: `CreateBuild`/`GetBuild` (§6 e2e).
-6. Обновить `docs/feature-status.md` и закрыть пункты Этапа 3 в `TODO.md`.
+6. Обновить `docs/redesign/spec.md` (состояние сборки) и закрыть пункты Этапа 3 в плане.
 7. Dev-пересборщик (`fsnotify`+`Incremental`+WS) — §7 ниже.
 
 Каждый шаг зелёный независимо.
