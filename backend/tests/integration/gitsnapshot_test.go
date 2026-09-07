@@ -30,10 +30,10 @@ func seedSnapshotSite(t *testing.T, db *storage.Memory, siteID string) {
 		t.Fatalf("save def: %v", err)
 	}
 	now := time.Now().UTC()
-	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "card", Props: map[string]any{"title": "Hello"}}
+	root := []domain.Element{{ID: "root", ComponentID: "card", Props: map[string]domain.ElementProp{"title": {Kind: "literal", Value: "Hello"}}}}
 	if err := db.CreatePage(ctx, domain.Page{
-		ID: "p_home", SiteID: siteID, Name: "Home", Slug: "home", Root: root, Version: 1, CreatedAt: now, UpdatedAt: now,
-	}, domain.PageVersion{ID: "pv_1", PageID: "p_home", Number: 1, Root: root, CreatedAt: now}); err != nil {
+		ID: "p_home", SiteID: siteID, Name: "Home", Slug: "home", List: root, Version: 1, CreatedAt: now, UpdatedAt: now,
+	}, domain.PageVersion{ID: "pv_1", PageID: "p_home", Number: 1, List: root, CreatedAt: now}); err != nil {
 		t.Fatalf("create page: %v", err)
 	}
 	if err := db.CreateContent(ctx, domain.Content{

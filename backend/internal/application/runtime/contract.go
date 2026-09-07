@@ -19,10 +19,11 @@ type RouteAction struct {
 	KeepQuery bool   `json:"keepQuery,omitempty"`
 }
 
-// RouteDescriptor mirrors ui-runtime RouteDescriptor (id, full ^…$ matcher,
+// RouteDescriptor mirrors ui-runtime RouteDescriptor (id, name, full ^…$ matcher,
 // priority, action).
 type RouteDescriptor struct {
 	ID       string      `json:"id"`
+	Name     string      `json:"name,omitempty"`
 	Matcher  string      `json:"matcher"`
 	Priority int         `json:"priority"`
 	Action   RouteAction `json:"action"`
@@ -49,25 +50,34 @@ type Capabilities struct {
 	Dev             bool `json:"dev"`
 }
 
-// TreeNode — wire-форма дерева контракта. props/bindings/children всегда
-// присутствуют (не omitempty): resolveInstance() в ui-runtime итерирует
-// bindings/children напрямую и падает на undefined.
-type TreeNode struct {
-	InstanceID   string                    `json:"instanceId"`
-	DefinitionID string                    `json:"definitionId"`
-	Props        map[string]any            `json:"props"`
-	Bindings     []domain.ComponentBinding `json:"bindings"`
-	Children     []TreeNode                `json:"children"`
+// ElementDescriptor — wire-форма элемента страницы в контракте (§1.3).
+// props/bindings/values always present (non-null) so the ui-runtime crawler can
+// iterate them safely.
+type ElementDescriptor struct {
+	ID          string                    `json:"id"`
+	ComponentID string                    `json:"componentId"`
+	Props       map[string]ElementPropDescriptor `json:"props"`
+	Bindings    []domain.BindingSource    `json:"bindings"`
 }
 
-// TreeDeclaration mirrors ui-runtime TreeDeclaration; Root is the page
-// composition (wire tree, см. TreeNode).
-type TreeDeclaration struct {
-	SnapshotID string    `json:"snapshotId,omitempty"`
-	VersionID  string    `json:"versionId,omitempty"`
-	PageID     string    `json:"pageId,omitempty"`
-	Root       *TreeNode `json:"root"`
+// ElementPropDescriptor is a literal or binding wire property value.
+type ElementPropDescriptor struct {
+	Kind   string                 `json:"kind"` // "literal" | "binding"
+	Value  any                    `json:"value,omitempty"`
+	Source *domain.BindingSource  `json:"source,omitempty"`
 }
+
+// PageDescriptor mirrors the runtime page descriptor: the linear element list
+// that renders in order. Routes reference pages by pageId; the boot contract
+// carries the assembled page (array of components) per §1.3.
+type PageDescriptor struct {
+	ID       string              `json:"id"`
+	Name     string              `json:"name"`
+	Elements []ElementDescriptor `json:"elements"`
+}
+
+// TreeDeclaration is removed in R7a — pages are flat element lists
+// (PageDescriptor), not nested trees.
 
 // OperationDescriptor mirrors ui-runtime OperationDescriptor (descriptor.ts):
 // a managed operation the runtime can invoke query- or mutation-style.
@@ -118,5 +128,5 @@ type Contract struct {
 	Fallback        *FallbackDescriptor `json:"fallback,omitempty"`
 	EnabledChannels EnabledChannels     `json:"enabledChannels"`
 	Capabilities    Capabilities        `json:"capabilities"`
-	Tree            *TreeDeclaration    `json:"tree,omitempty"`
+	Pages           []PageDescriptor    `json:"pages,omitempty"`
 }

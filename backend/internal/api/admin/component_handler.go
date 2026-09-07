@@ -328,14 +328,15 @@ func (h *ComponentHandler) Usage(w http.ResponseWriter, r *http.Request) {
 	}
 	usage := componentUsage{ComponentID: componentID, Pages: []pageUsageItem{}}
 	for _, p := range pages {
-		if count := countNode(p.Root, componentID); count > 0 {
+		if count := countElement(p.List, componentID); count > 0 {
 			usage.Pages = append(usage.Pages, pageUsageItem{ID: p.ID, Name: p.Name, Count: count})
 		}
 	}
 	httpapi.RespondJSON(w, http.StatusOK, usage)
 }
 
-// usageCounts tallies every definition's references across all page trees.
+// usageCounts tallies every definition's references across all page element
+// lists.
 func (h *ComponentHandler) usageCounts(ctx context.Context, siteID string) (map[string]int, error) {
 	counts := map[string]int{}
 	if h.pages == nil {
@@ -346,27 +347,21 @@ func (h *ComponentHandler) usageCounts(ctx context.Context, siteID string) (map[
 		return nil, err
 	}
 	for _, p := range pages {
-		var walk func(node domain.ComponentNode)
-		walk = func(node domain.ComponentNode) {
-			if node.DefinitionID != "" {
-				counts[node.DefinitionID]++
-			}
-			for _, child := range node.Children {
-				walk(child)
+		for _, el := range p.List {
+			if el.ComponentID != "" {
+				counts[el.ComponentID]++
 			}
 		}
-		walk(p.Root)
 	}
 	return counts, nil
 }
 
-func countNode(node domain.ComponentNode, componentID string) int {
+func countElement(list []domain.Element, componentID string) int {
 	count := 0
-	if node.DefinitionID == componentID {
-		count++
-	}
-	for _, child := range node.Children {
-		count += countNode(child, componentID)
+	for _, el := range list {
+		if el.ComponentID == componentID {
+			count++
+		}
 	}
 	return count
 }

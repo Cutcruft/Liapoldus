@@ -92,7 +92,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Sites: site.NewService(storage, site.Settings{DefaultLocale: cfg.DefaultLocale}),
 		Pages: page.NewService(storage, storage, storage, page.Settings{
 			InitialVersion: cfg.PageInitialVersion,
-			MaxDepth:       cfg.ComponentMaxDepth,
+			MaxElements:    cfg.ComponentMaxDepth,
 		}),
 		Components:   comps,
 		GitSnapshots: gitSnaps,

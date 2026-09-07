@@ -36,18 +36,14 @@ func seedDef(t *testing.T, mem *storage.Memory, siteID, id string, source string
 
 func seedMaterializedPage(t *testing.T, mem *storage.Memory, siteID, pageID string) {
 	t.Helper()
-	root := domain.ComponentNode{
-		InstanceID:   "root",
-		DefinitionID: "container",
-		Props:        map[string]any{},
-		Children: []domain.ComponentNode{
-			{InstanceID: "kids", DefinitionID: "text"},
-			{InstanceID: "hidden", DefinitionID: "hero"},
-		},
+	list := []domain.Element{
+		{ID: "root", ComponentID: "container", Props: map[string]domain.ElementProp{}},
+		{ID: "kids", ComponentID: "text", Props: map[string]domain.ElementProp{}},
+		{ID: "hidden", ComponentID: "hero", Props: map[string]domain.ElementProp{}},
 	}
-	page := domain.Page{ID: pageID, SiteID: siteID, Name: "Home", Slug: "index", Root: root, Version: 1,
+	page := domain.Page{ID: pageID, SiteID: siteID, Name: "Home", Slug: "index", List: list, Version: 1,
 		CreatedAt: testNow(), UpdatedAt: testNow()}
-	version := domain.PageVersion{ID: "pagever_1", PageID: pageID, Number: 1, Root: root, CreatedAt: testNow()}
+	version := domain.PageVersion{ID: "pagever_1", PageID: pageID, Number: 1, List: list, CreatedAt: testNow()}
 	if err := mem.CreatePage(context.Background(), page, version); err != nil {
 		t.Fatal(err)
 	}
@@ -131,8 +127,8 @@ func TestMaterializeCreatesWorkspace(t *testing.T) {
 	if !strings.Contains(chunk, `registerPage("page_1"`) {
 		t.Fatalf("page chunk must hand the tree to registerPage: %s", chunk)
 	}
-	if !strings.Contains(chunk, `"snapshotId":"snapshot_m1"`) || !strings.Contains(chunk, `"root":{"instanceId":"root"`) {
-		t.Fatalf("page chunk tree JSON missing: %s", chunk)
+	if !strings.Contains(chunk, `"snapshotId":"snapshot_m1"`) || !strings.Contains(chunk, `"elements":[`) {
+		t.Fatalf("page chunk elements JSON missing: %s", chunk)
 	}
 
 	// manifest.json on disk matches the returned manifest.
@@ -260,12 +256,12 @@ func TestMaterializeErrors(t *testing.T) {
 
 	seedDef(t, mem, site.ID, "container", "export default (p) => p.children;\n", "sha_c")
 
-	// Unknown definition referenced by the tree.
+	// Unknown definition referenced by the element list.
 	snapshot2 := domain.Snapshot{ID: "snapshot_m3b", SiteID: site.ID, CreatedAt: testNow()}
 	_ = snapshot2
-	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "missing"}
-	page := domain.Page{ID: "page_2", SiteID: site.ID, Name: "Miss", Slug: "miss", Root: root, Version: 1, CreatedAt: testNow(), UpdatedAt: testNow()}
-	version := domain.PageVersion{ID: "pagever_2", PageID: "page_2", Number: 1, Root: root, CreatedAt: testNow()}
+	root := []domain.Element{{ID: "root", ComponentID: "missing", Props: map[string]domain.ElementProp{}}}
+	page := domain.Page{ID: "page_2", SiteID: site.ID, Name: "Miss", Slug: "miss", List: root, Version: 1, CreatedAt: testNow(), UpdatedAt: testNow()}
+	version := domain.PageVersion{ID: "pagever_2", PageID: "page_2", Number: 1, List: root, CreatedAt: testNow()}
 	if err := mem.CreatePage(ctx, page, version); err != nil {
 		t.Fatal(err)
 	}
@@ -294,9 +290,9 @@ func TestMaterializeErrors(t *testing.T) {
 	if err := mem.CreateSnapshot(ctx, snapEmpty); err != nil {
 		t.Fatal(err)
 	}
-	heroRoot := domain.ComponentNode{InstanceID: "r", DefinitionID: "text2"}
-	page3 := domain.Page{ID: "page_3", SiteID: site.ID, Name: "P", Slug: "p", Root: heroRoot, Version: 1, CreatedAt: testNow(), UpdatedAt: testNow()}
-	version3 := domain.PageVersion{ID: "pagever_3", PageID: "page_3", Number: 1, Root: heroRoot, CreatedAt: testNow()}
+	heroRoot := []domain.Element{{ID: "r", ComponentID: "text2", Props: map[string]domain.ElementProp{}}}
+	page3 := domain.Page{ID: "page_3", SiteID: site.ID, Name: "P", Slug: "p", List: heroRoot, Version: 1, CreatedAt: testNow(), UpdatedAt: testNow()}
+	version3 := domain.PageVersion{ID: "pagever_3", PageID: "page_3", Number: 1, List: heroRoot, CreatedAt: testNow()}
 	if err := mem.CreatePage(ctx, page3, version3); err != nil {
 		t.Fatal(err)
 	}
@@ -396,16 +392,16 @@ func TestMaterializePageChunksPerPageAndHomeByRoute(t *testing.T) {
 	seedDef(t, mem, site.ID, "text", "export default (props) => props.title;\n", "sha_text")
 	seedDef(t, mem, site.ID, "hero", "export default (props) => props.title;\n", "sha_hero")
 
-	rootA := domain.ComponentNode{InstanceID: "root_a", DefinitionID: "text"}
-	pageA := domain.Page{ID: "page_a", SiteID: site.ID, Name: "A", Slug: "a", Root: rootA, Version: 1,
+	rootA := []domain.Element{{ID: "root_a", ComponentID: "text", Props: map[string]domain.ElementProp{}}}
+	pageA := domain.Page{ID: "page_a", SiteID: site.ID, Name: "A", Slug: "a", List: rootA, Version: 1,
 		CreatedAt: testNow(), UpdatedAt: testNow()}
-	if err := mem.CreatePage(ctx, pageA, domain.PageVersion{ID: "pagever_a", PageID: "page_a", Number: 1, Root: rootA, CreatedAt: testNow()}); err != nil {
+	if err := mem.CreatePage(ctx, pageA, domain.PageVersion{ID: "pagever_a", PageID: "page_a", Number: 1, List: rootA, CreatedAt: testNow()}); err != nil {
 		t.Fatal(err)
 	}
-	rootB := domain.ComponentNode{InstanceID: "root_b", DefinitionID: "hero"}
-	pageB := domain.Page{ID: "page_b", SiteID: site.ID, Name: "B", Slug: "b", Root: rootB, Version: 1,
+	rootB := []domain.Element{{ID: "root_b", ComponentID: "hero", Props: map[string]domain.ElementProp{}}}
+	pageB := domain.Page{ID: "page_b", SiteID: site.ID, Name: "B", Slug: "b", List: rootB, Version: 1,
 		CreatedAt: testNow(), UpdatedAt: testNow()}
-	if err := mem.CreatePage(ctx, pageB, domain.PageVersion{ID: "pagever_b", PageID: "page_b", Number: 1, Root: rootB, CreatedAt: testNow()}); err != nil {
+	if err := mem.CreatePage(ctx, pageB, domain.PageVersion{ID: "pagever_b", PageID: "page_b", Number: 1, List: rootB, CreatedAt: testNow()}); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := domain.Snapshot{ID: "snapshot_pages", SiteID: site.ID,

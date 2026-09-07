@@ -178,20 +178,14 @@ func TestAdminComponentUsage(t *testing.T) {
 		t.Fatalf("define status = %d, body = %s", define.Code, define.Body.String())
 	}
 
-	tree := domain.ComponentNode{
-		InstanceID:   "r1",
-		DefinitionID: "card",
-		Props:        map[string]any{"title": "Главная"},
-		Children: []domain.ComponentNode{{
-			InstanceID:   "c1",
-			DefinitionID: "card",
-			Props:        map[string]any{"title": "Вложенная"},
-		}},
+	list := []domain.Element{
+		{ID: "r1", ComponentID: "card", Props: map[string]domain.ElementProp{"title": {Kind: "literal", Value: "Главная"}}},
+		{ID: "c1", ComponentID: "card", Props: map[string]domain.ElementProp{"title": {Kind: "literal", Value: "Вложенная"}}},
 	}
 	createPage := request(t, handler, http.MethodPost, "/api/sites/"+site.ID+"/pages", map[string]any{
 		"name": "Главная",
 		"slug": "/",
-		"root": tree,
+		"list": list,
 	})
 	if createPage.Code != http.StatusCreated {
 		t.Fatalf("create page status = %d, body = %s", createPage.Code, createPage.Body.String())

@@ -20,6 +20,7 @@ const (
 	Submission   = "submission"
 	Build        = "build"
 	ComponentVer = "componentver"
+	Element      = "el"
 )
 
 func New(prefix string) (string, error) {

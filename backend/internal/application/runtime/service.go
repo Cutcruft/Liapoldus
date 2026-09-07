@@ -61,7 +61,7 @@ func (s *Service) BootContract(ctx context.Context, site domain.Site, environmen
 		return Contract{}, err
 	}
 
-	tree, err := s.PageTree(ctx, site, environment, versionID, "", "")
+	pages, err := s.PageDescriptors(ctx, site, environment, versionID)
 	if err != nil {
 		return Contract{}, err
 	}
@@ -93,7 +93,7 @@ func (s *Service) BootContract(ctx context.Context, site domain.Site, environmen
 			FormSubmissions: true,
 			Dev:             environment == domain.EnvironmentDevelopment,
 		},
-		Tree: tree,
+		Pages: pages,
 	}, nil
 }
 
@@ -115,14 +115,45 @@ func (s *Service) resolveSnapshot(ctx context.Context, siteID, environment, vers
 	return s.snapshots.GetSnapshot(ctx, build.SnapshotID)
 }
 
-// PageTree returns the wire tree of a page in a snapshot release: `pageID`
-// selects the page directly (must belong to the snapshot), `routeID` resolves a
-// renderPage route to its page, and with neither the boot heuristic applies —
-// the renderPage route with the highest priority referencing a snapshot page
-// (the home page); otherwise the first page in snapshot order. A snapshot with
-// no pages yields nil without error (endpoints return an empty reply, the boot
-// contract keeps `tree` omitted).
-func (s *Service) PageTree(ctx context.Context, site domain.Site, environment, versionID, pageID, routeID string) (*TreeDeclaration, error) {
+// PageDescriptors returns the assembled element-list page descriptors for every
+// page pinned by the snapshot release (§1.3): pages are separate entities from
+// routes; each page carries its flat, order-significant element list.
+func (s *Service) PageDescriptors(ctx context.Context, site domain.Site, environment, versionID string) ([]PageDescriptor, error) {
+	if environment == "" {
+		environment = domain.EnvironmentProduction
+	}
+	if !validEnvironments[environment] {
+		return nil, fmt.Errorf("%w: environment must be one of development, production", domain.ErrInvalidRequest)
+	}
+	snapshot, err := s.resolveSnapshot(ctx, site.ID, environment, versionID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PageDescriptor, 0, len(snapshot.Pages))
+	for _, p := range snapshot.Pages {
+		version, err := s.pages.GetPageVersion(ctx, p.PageID, p.VersionID)
+		if err != nil {
+			return nil, err
+		}
+		page, err := s.pages.GetPage(ctx, p.PageID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, PageDescriptor{
+			ID:       p.PageID,
+			Name:     page.Name,
+			Elements: toElementDescriptors(version.List),
+		})
+	}
+	return out, nil
+}
+
+// Page returns the assembled element-list page descriptor for a page in a
+// snapshot release: `pageID` selects the page directly (must belong to the
+// snapshot), `routeID` resolves a renderPage route to its page, and with
+// neither the boot home-page heuristic applies. A snapshot with no pages yields
+// nil without error.
+func (s *Service) Page(ctx context.Context, site domain.Site, environment, versionID, pageID, routeID string) (*PageDescriptor, error) {
 	if environment == "" {
 		environment = domain.EnvironmentProduction
 	}
@@ -144,11 +175,14 @@ func (s *Service) PageTree(ctx context.Context, site domain.Site, environment, v
 	if err != nil {
 		return nil, err
 	}
-	return &TreeDeclaration{
-		SnapshotID: snapshot.ID,
-		VersionID:  version.ID,
-		PageID:     selected.PageID,
-		Root:       toTreeNode(version.Root),
+	page, err := s.pages.GetPage(ctx, selected.PageID)
+	if err != nil {
+		return nil, err
+	}
+	return &PageDescriptor{
+		ID:       selected.PageID,
+		Name:     page.Name,
+		Elements: toElementDescriptors(version.List),
 	}, nil
 }
 
@@ -232,45 +266,39 @@ func tokenSetMap(t *domain.TokenSet) map[string]any {
 	}
 }
 
-// toTreeNode converts a domain tree into the wire tree that always carries
-// props/bindings/children arrays: resolveInstance() in ui-runtime iterates
-// bindings/children directly and would crash on undefined.
-func toTreeNode(node domain.ComponentNode) *TreeNode {
-	return &TreeNode{
-		InstanceID:   node.InstanceID,
-		DefinitionID: node.DefinitionID,
-		Props:        cloneProps(node.Props),
-		Bindings:     nonNilBindings(node.Bindings),
-		Children:     toTreeNodes(node.Children),
+// toElementDescriptors converts a page's element list into the wire element
+// descriptors. props/bindings are always present (non-null) so the ui-runtime
+// crawler can iterate them safely.
+func toElementDescriptors(list []domain.Element) []ElementDescriptor {
+	out := make([]ElementDescriptor, 0, len(list))
+	for _, el := range list {
+		out = append(out, ElementDescriptor{
+			ID:          el.ID,
+			ComponentID: el.ComponentID,
+			Props:       toPropDescriptors(el.Props),
+			Bindings:    nonNilBindings(el.Bindings),
+		})
 	}
+	return out
 }
 
-// toTreeNodes always returns a non-nil slice so JSON emits `children: []`.
-func toTreeNodes(nodes []domain.ComponentNode) []TreeNode {
-	out := make([]TreeNode, 0, len(nodes))
-	for _, n := range nodes {
-		out = append(out, *toTreeNode(n))
+func toPropDescriptors(props map[string]domain.ElementProp) map[string]ElementPropDescriptor {
+	if len(props) == 0 {
+		return map[string]ElementPropDescriptor{}
+	}
+	out := make(map[string]ElementPropDescriptor, len(props))
+	for k, p := range props {
+		out[k] = ElementPropDescriptor{Kind: p.Kind, Value: p.Value, Source: p.Source}
 	}
 	return out
 }
 
 // nonNilBindings guarantees `bindings: []` in JSON instead of null.
-func nonNilBindings(bindings []domain.ComponentBinding) []domain.ComponentBinding {
+func nonNilBindings(bindings []domain.BindingSource) []domain.BindingSource {
 	if bindings == nil {
-		return []domain.ComponentBinding{}
+		return []domain.BindingSource{}
 	}
 	return bindings
-}
-
-func cloneProps(p map[string]any) map[string]any {
-	if len(p) == 0 {
-		return map[string]any{}
-	}
-	out := make(map[string]any, len(p))
-	for k, v := range p {
-		out[k] = v
-	}
-	return out
 }
 
 // matchHomePage returns the snapshot page targeted by the most specific
@@ -364,6 +392,7 @@ func toRouteDescriptors(routes []domain.Route) []RouteDescriptor {
 		}
 		out = append(out, RouteDescriptor{
 			ID:       r.ID,
+			Name:     r.Name,
 			Matcher:  r.Matcher,
 			Priority: r.Priority,
 			Action: RouteAction{

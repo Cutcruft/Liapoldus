@@ -59,26 +59,27 @@ func TestRuntimeTreeDescriptors(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("tree by routeId: status %d body %#v", status, body)
 	}
-	tree, _ := body["tree"].(map[string]any)
-	if tree["pageId"] != "page_boot" || tree["snapshotId"] != snapshot.ID {
-		t.Fatalf("tree by routeId = %#v", tree)
+	page, _ := body["page"].(map[string]any)
+	if page["id"] != "page_boot" {
+		t.Fatalf("page by routeId = %#v", page)
 	}
-	if root := tree["root"].(map[string]any); root["instanceId"] != "root" || root["definitionId"] != "container" {
-		t.Fatalf("tree root = %#v", tree["root"])
+	elements, _ := page["elements"].([]any)
+	if len(elements) != 2 || elements[0].(map[string]any)["componentId"] != "container" {
+		t.Fatalf("page elements = %#v", page["elements"])
 	}
 
 	// Explicit pageId.
 	status, body = getRuntimeJSON(t, srv.URL, "/runtime/tree", site.ID,
 		map[string]string{"versionId": snapshot.ID, "pageId": "page_boot"})
-	if status != http.StatusOK || body["tree"].(map[string]any)["pageId"] != "page_boot" {
-		t.Fatalf("tree by pageId: status %d body %#v", status, body)
+	if status != http.StatusOK || body["page"].(map[string]any)["id"] != "page_boot" {
+		t.Fatalf("page by pageId: status %d body %#v", status, body)
 	}
 
 	// No pageId/routeId → the boot home-page heuristic resolves the page.
 	status, body = getRuntimeJSON(t, srv.URL, "/runtime/tree", site.ID,
 		map[string]string{"versionId": snapshot.ID})
-	if status != http.StatusOK || body["tree"].(map[string]any)["pageId"] != "page_boot" {
-		t.Fatalf("tree home: status %d body %#v", status, body)
+	if status != http.StatusOK || body["page"].(map[string]any)["id"] != "page_boot" {
+		t.Fatalf("page home: status %d body %#v", status, body)
 	}
 
 	// A page outside the snapshot is not found.

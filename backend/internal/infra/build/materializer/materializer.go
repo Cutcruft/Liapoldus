@@ -78,7 +78,7 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 			return fail("page "+p.PageID, err)
 		}
 		pageDefs := map[string]bool{}
-		collectNodeDefs(version.Root, pageDefs)
+		collectElementDefs(version.List, pageDefs)
 		for id := range pageDefs {
 			seenDefs[id] = true
 		}
@@ -176,16 +176,16 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		}
 	}
 	for _, p := range pages {
-		treeJSON, err := json.Marshal(pageTree{
+		elementsJSON, err := json.Marshal(pageElements{
 			SnapshotID: req.SnapshotID,
 			VersionID:  p.Version.ID,
 			PageID:     p.Page.PageID,
-			Root:       wireTreeNode(p.Version.Root),
+			Elements:   wireElements(p.Version.List),
 		})
 		if err != nil {
-			return fail("tree "+p.Page.PageID, err)
+			return fail("elements "+p.Page.PageID, err)
 		}
-		chunk := generatePageChunk(p.Page.PageID, string(treeJSON), p.Definitions)
+		chunk := generatePageChunk(p.Page.PageID, string(elementsJSON), p.Definitions)
 		if err := os.WriteFile(filepath.Join(pagesDir, p.Page.PageID+".tsx"), []byte(chunk), 0o644); err != nil {
 			return fail("write page "+p.Page.PageID, err)
 		}
@@ -218,13 +218,13 @@ type pageSlice struct {
 	Definitions []string
 }
 
-// collectNodeDefs records every definition id referenced by a tree.
-func collectNodeDefs(node domain.ComponentNode, seen map[string]bool) {
-	if node.DefinitionID != "" {
-		seen[node.DefinitionID] = true
-	}
-	for _, child := range node.Children {
-		collectNodeDefs(child, seen)
+// collectElementDefs records every component id referenced by a page's element
+// list.
+func collectElementDefs(list []domain.Element, seen map[string]bool) {
+	for _, el := range list {
+		if el.ComponentID != "" {
+			seen[el.ComponentID] = true
+		}
 	}
 }
 
@@ -287,55 +287,49 @@ func homePage(siteID string, pages []domain.SnapshotPage, routes domain.RouteRep
 	return pages[0].PageID
 }
 
-// pageTree is the wire shape registerPage stores for a page (matches the
-// ui-runtime TreeDeclaration; Root is the wire tree).
-type pageTree struct {
-	SnapshotID string    `json:"snapshotId"`
-	VersionID  string    `json:"versionId"`
-	PageID     string    `json:"pageId"`
-	Root       *wireNode `json:"root"`
+// pageElements is the wire shape registerPage stores for a page (matches the
+// ui-runtime page descriptor; Elements is the flat element list).
+type pageElements struct {
+	SnapshotID string          `json:"snapshotId"`
+	VersionID  string          `json:"versionId"`
+	PageID     string          `json:"pageId"`
+	Elements   []wireElement   `json:"elements"`
 }
 
-// wireNode mirrors the runtime TreeNode: props/bindings/children are always
-// arrays/objects (never null) because the ui-runtime crawler iterates them.
-type wireNode struct {
-	InstanceID   string                    `json:"instanceId"`
-	DefinitionID string                    `json:"definitionId"`
-	Props        map[string]any            `json:"props"`
-	Bindings     []domain.ComponentBinding `json:"bindings"`
-	Children     []*wireNode               `json:"children"`
+// wireElement mirrors the runtime ElementDescriptor: props/bindings are always
+// objects/arrays (never null) because the ui-runtime crawler iterates them.
+type wireElement struct {
+	ID          string                            `json:"id"`
+	ComponentID string                            `json:"componentId"`
+	Props       map[string]domain.ElementProp      `json:"props"`
+	Bindings    []domain.BindingSource             `json:"bindings"`
 }
 
-func wireTreeNode(node domain.ComponentNode) *wireNode {
-	return &wireNode{
-		InstanceID:   node.InstanceID,
-		DefinitionID: node.DefinitionID,
-		Props:        wireProps(node.Props),
-		Bindings:     wireBindings(node.Bindings),
-		Children:     wireTreeNodes(node.Children),
-	}
-}
-
-func wireTreeNodes(nodes []domain.ComponentNode) []*wireNode {
-	out := make([]*wireNode, 0, len(nodes))
-	for _, n := range nodes {
-		out = append(out, wireTreeNode(n))
+func wireElements(list []domain.Element) []wireElement {
+	out := make([]wireElement, 0, len(list))
+	for _, el := range list {
+		out = append(out, wireElement{
+			ID:          el.ID,
+			ComponentID: el.ComponentID,
+			Props:       wireElementProps(el.Props),
+			Bindings:    wireElementBindings(el.Bindings),
+		})
 	}
 	return out
 }
 
-func wireBindings(bindings []domain.ComponentBinding) []domain.ComponentBinding {
+func wireElementBindings(bindings []domain.BindingSource) []domain.BindingSource {
 	if bindings == nil {
-		return []domain.ComponentBinding{}
+		return []domain.BindingSource{}
 	}
 	return bindings
 }
 
-func wireProps(props map[string]any) map[string]any {
+func wireElementProps(props map[string]domain.ElementProp) map[string]domain.ElementProp {
 	if len(props) == 0 {
-		return map[string]any{}
+		return map[string]domain.ElementProp{}
 	}
-	out := make(map[string]any, len(props))
+	out := make(map[string]domain.ElementProp, len(props))
 	for k, v := range props {
 		out[k] = v
 	}
@@ -385,9 +379,10 @@ func generateEntry(siteID, environment string) string {
 }
 
 // generatePageChunk builds src/pages/<pageID>.tsx: the chunk registers the
-// page's definitions in the ComponentRegistry and hands the page tree to the
-// runtime PageRegistry. tree is a DSL JSON object literal (already marshalled).
-func generatePageChunk(pageID, tree string, definitionIds []string) string {
+// page's definitions in the ComponentRegistry and hands the page element list
+// to the runtime PageRegistry. elements is a DSL JSON object literal (already
+// marshalled).
+func generatePageChunk(pageID, elements string, definitionIds []string) string {
 	var builder strings.Builder
 	builder.WriteString("import { ComponentRegistry, registerPage } from \"@liapoldus/ui-runtime\";\n")
 	for _, id := range definitionIds {
@@ -397,6 +392,6 @@ func generatePageChunk(pageID, tree string, definitionIds []string) string {
 	for _, id := range definitionIds {
 		fmt.Fprintf(&builder, "ComponentRegistry.registerDefinition(%q, %s);\n", id, definitionName(id))
 	}
-	fmt.Fprintf(&builder, "\nregisterPage(%q, %s);\n", pageID, tree)
+	fmt.Fprintf(&builder, "\nregisterPage(%q, %s);\n", pageID, elements)
 	return builder.String()
 }

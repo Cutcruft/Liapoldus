@@ -104,7 +104,7 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("POST /api/sites/{siteID}/pages", pageHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/pages", pageHandler.List)
 	protected.HandleFunc("GET /api/pages/{pageID}", pageHandler.Get)
-	protected.HandleFunc("PUT /api/pages/{pageID}/tree", pageHandler.UpdateTree)
+	protected.HandleFunc("PUT /api/pages/{pageID}", pageHandler.Update)
 	protected.HandleFunc("DELETE /api/pages/{pageID}", pageHandler.Delete)
 	protected.HandleFunc("GET /api/pages/{pageID}/versions", pageHandler.ListVersions)
 	protected.HandleFunc("GET /api/pages/{pageID}/versions/{versionID}", pageHandler.GetVersion)

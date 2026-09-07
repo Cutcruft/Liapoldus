@@ -61,7 +61,7 @@ func (r *Rebuilder) Start(ctx context.Context) error {
 	defer r.Close()
 
 	outdir := filepath.Join(r.opts.Request.Dir, "dist")
-	entryPoints := append([]string{filepath.Join(r.opts.Request.Dir, "src", "entry.tsx")})
+	entryPoints := []string{filepath.Join(r.opts.Request.Dir, "src", "entry.tsx")}
 	for _, page := range r.workspace.Manifest.Pages {
 		entryPoints = append(entryPoints, filepath.Join(r.opts.Request.Dir, "src", "pages", page.PageID+".tsx"))
 	}

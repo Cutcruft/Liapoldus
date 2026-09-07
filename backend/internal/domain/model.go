@@ -26,31 +26,35 @@ type Site struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
-type ComponentNode struct {
-	InstanceID   string             `json:"instanceId"`
-	DefinitionID string             `json:"definitionId"`
-	Props        map[string]any     `json:"props,omitempty"`
-	Bindings     []ComponentBinding `json:"bindings,omitempty"`
-	Children     []ComponentNode    `json:"children,omitempty"`
+// Element is a single component instance in a page's linear composition list
+// (docs/redesign/backend.md §1.3). Position in Page.List is the order of
+// rendering; ID is stable (assigned by the server on create, unchanged across
+// insert/move) so bindings and drag/drop can reference it reliably.
+type Element struct {
+	ID          string                `json:"id"`
+	ComponentID string                `json:"componentId"`
+	Props       map[string]ElementProp `json:"props,omitempty"`
+	Bindings    []BindingSource       `json:"bindings,omitempty"`
 }
 
-// ComponentBinding mirrors the ui-runtime binding contract (§6 of
-// docs/ui-runtime/json-descriptors.md).
-type ComponentBinding struct {
-	Property string        `json:"property"`
-	Source   BindingSource `json:"source"`
+// ElementProp is a single property value: either a literal or a binding to a
+// runtime source (§1.3).
+type ElementProp struct {
+	Kind   string        `json:"kind"` // "literal" | "binding"
+	Value  any           `json:"value,omitempty"`
+	Source *BindingSource `json:"source,omitempty"`
 }
 
-// BindingSource identifies where an instance property value comes from.
-// Source must carry the discriminant fields of exactly one source type.
+// BindingSource identifies where a property value comes from (§1.3). It is a
+// discriminated union; exactly one variant's fields must be set.
 type BindingSource struct {
-	Type        string `json:"type"`
+	Kind        string `json:"kind"` // "content" | "form" | "operation" | "query" | "routeGroup"
 	ContentID   string `json:"contentId,omitempty"`
-	Name        string `json:"name,omitempty"`
-	OperationID string `json:"operationId,omitempty"`
+	Field       string `json:"field,omitempty"`
 	FormID      string `json:"formId,omitempty"`
-	Path        string `json:"path,omitempty"`
-	Source      string `json:"source,omitempty"`
+	OperationID string `json:"operationId,omitempty"`
+	Param       string `json:"param,omitempty"`
+	Index       *int   `json:"index,omitempty"` // routeGroup
 }
 
 // ComponentDefinition is the persisted registry entry for a component. It
@@ -83,22 +87,22 @@ type ComponentVersion struct {
 }
 
 type Page struct {
-	ID        string        `json:"id"`
-	SiteID    string        `json:"siteId"`
-	Name      string        `json:"name"`
-	Slug      string        `json:"slug"`
-	Root      ComponentNode `json:"root"`
-	Version   int32         `json:"version"`
-	CreatedAt time.Time     `json:"createdAt"`
-	UpdatedAt time.Time     `json:"updatedAt"`
+	ID        string      `json:"id"`
+	SiteID    string      `json:"siteId"`
+	Name      string      `json:"name"`
+	Slug      string      `json:"slug"`
+	List      []Element   `json:"list"`
+	Version   int32       `json:"version"`
+	CreatedAt time.Time   `json:"createdAt"`
+	UpdatedAt time.Time   `json:"updatedAt"`
 }
 
 type PageVersion struct {
-	ID        string        `json:"id"`
-	PageID    string        `json:"pageId"`
-	Number    int32         `json:"number"`
-	Root      ComponentNode `json:"root"`
-	CreatedAt time.Time     `json:"createdAt"`
+	ID        string      `json:"id"`
+	PageID    string      `json:"pageId"`
+	Number    int32       `json:"number"`
+	List      []Element   `json:"list"`
+	CreatedAt time.Time   `json:"createdAt"`
 }
 
 type SnapshotPage struct {

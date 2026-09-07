@@ -47,7 +47,7 @@ func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 		Sites: site.NewService(db, site.Settings{DefaultLocale: "ru"}),
 		Pages: page.NewService(db, db, db, page.Settings{
 			InitialVersion: 1,
-			MaxDepth:       5,
+			MaxElements:    500,
 		}),
 		Snapshots: snapshot.NewService(db, db, db),
 		Contents:  content.NewService(db),
@@ -108,8 +108,9 @@ func TestSiteAndPageFlow(t *testing.T) {
 	seedSiteDefs(t, db, created.ID)
 
 	pageResponse := request(t, handler, http.MethodPost, "/api/sites/"+created.ID+"/pages", map[string]any{
-		"name": "Home", "slug": "home", "root": map[string]any{
-			"instanceId": "root", "definitionId": "Container", "children": []any{map[string]any{"instanceId": "title", "definitionId": "Text", "props": map[string]any{"text": "Hello"}}},
+		"name": "Home", "slug": "home", "list": []any{
+			map[string]any{"componentId": "Container", "props": map[string]any{"gap": map[string]any{"kind": "literal", "value": 8}}},
+			map[string]any{"componentId": "Text", "props": map[string]any{"text": map[string]any{"kind": "literal", "value": "Hello"}}},
 		},
 	})
 	if pageResponse.Code != http.StatusCreated {
@@ -124,11 +125,11 @@ func TestSiteAndPageFlow(t *testing.T) {
 		t.Fatalf("initial page version = %d, want 1", createdPage.Version)
 	}
 
-	updateResponse := request(t, handler, http.MethodPut, "/api/pages/"+createdPage.ID+"/tree", map[string]any{
-		"root": map[string]any{"instanceId": "root", "definitionId": "Container", "children": []any{}},
+	updateResponse := request(t, handler, http.MethodPut, "/api/pages/"+createdPage.ID, map[string]any{
+		"name": "Home", "list": []any{},
 	})
 	if updateResponse.Code != http.StatusOK {
-		t.Fatalf("update tree status = %d", updateResponse.Code)
+		t.Fatalf("update page status = %d", updateResponse.Code)
 	}
 	decodeResponse(t, updateResponse, &createdPage)
 	if createdPage.Version != 2 {
@@ -208,7 +209,9 @@ func TestInvalidComponentIsRejected(t *testing.T) {
 	decodeResponse(t, request(t, handler, http.MethodPost, "/api/sites", map[string]any{"name": "Demo", "slug": "demo"}), &created)
 	seedSiteDefs(t, db, created.ID)
 	response := request(t, handler, http.MethodPost, "/api/sites/"+created.ID+"/pages", map[string]any{
-		"name": "Broken", "slug": "broken", "root": map[string]any{"instanceId": "root", "definitionId": "Unknown"},
+		"name": "Broken", "slug": "broken", "list": []any{
+			map[string]any{"componentId": "Unknown", "props": map[string]any{}},
+		},
 	})
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("invalid component status = %d, want %d", response.Code, http.StatusNotFound)

@@ -255,12 +255,12 @@ func (h *ContractHandler) Routes(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Tree serves the snapshot-pinned wire tree of one page (Этап 4 builtin
-// `tree.get`): the query param `pageId` selects a snapshot page directly,
-// `routeId` resolves a renderPage route to its page, and with neither the boot
-// home-page heuristic applies. `versionId` pins a precise snapshot; otherwise
-// the newest ready build of the environment is the release.
-func (h *ContractHandler) Tree(w http.ResponseWriter, r *http.Request) {
+// Page serves the snapshot-pinned assembled element list of one page (Этап 4
+// builtin `tree.get`): the query param `pageId` selects a snapshot page
+// directly, `routeId` resolves a renderPage route to its page, and with neither
+// the boot home-page heuristic applies. `versionId` pins a precise snapshot;
+// otherwise the newest ready build of the environment is the release.
+func (h *ContractHandler) Page(w http.ResponseWriter, r *http.Request) {
 	site, err := h.app.resolveSite(r)
 	if err != nil {
 		httpapi.RespondError(w, err)
@@ -271,7 +271,7 @@ func (h *ContractHandler) Tree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	tree, err := h.app.Runtime.PageTree(r.Context(), site, q.Get("environment"),
+	page, err := h.app.Runtime.Page(r.Context(), site, q.Get("environment"),
 		q.Get("versionId"), q.Get("pageId"), q.Get("routeId"))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -281,11 +281,11 @@ func (h *ContractHandler) Tree(w http.ResponseWriter, r *http.Request) {
 		httpapi.RespondError(w, err)
 		return
 	}
-	if tree == nil {
-		httpapi.RespondJSON(w, http.StatusOK, map[string]any{"tree": nil})
+	if page == nil {
+		httpapi.RespondJSON(w, http.StatusOK, map[string]any{"page": nil})
 		return
 	}
-	httpapi.RespondJSON(w, http.StatusOK, map[string]any{"tree": tree})
+	httpapi.RespondJSON(w, http.StatusOK, map[string]any{"page": page})
 }
 
 // Tokens serves the site's design-token set as a single runtime theme (Этап 4

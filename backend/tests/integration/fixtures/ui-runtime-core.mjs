@@ -1,4 +1,4 @@
-// ../../../ui-runtime/src/errors.ts
+// ../ui-runtime/src/errors.ts
 var RuntimeError = class extends Error {
   constructor(code, message) {
     super(message);
@@ -75,7 +75,7 @@ var AssetNotFoundError = class extends RuntimeError {
   }
 };
 
-// ../../../ui-runtime/src/core/builtin/builtin-client.ts
+// ../ui-runtime/src/core/builtin/builtin-client.ts
 var BuiltinClient = class {
   constructor(api) {
     this.api = api;
@@ -115,7 +115,7 @@ function isNotFound(e) {
   return e instanceof TransportError && e.cause?.status === 404;
 }
 
-// ../../../ui-runtime/src/core/cron.ts
+// ../ui-runtime/src/core/cron.ts
 var MONTH_NAMES = {
   JAN: 1,
   FEB: 2,
@@ -259,7 +259,7 @@ function advanceMinute(d) {
   d.setMinutes(d.getMinutes() + 1, 0, 0);
 }
 
-// ../../../ui-runtime/src/core/poll-scheduler.ts
+// ../ui-runtime/src/core/poll-scheduler.ts
 var PollScheduler = class {
   constructor(env) {
     this.jobs = /* @__PURE__ */ new Map();
@@ -356,7 +356,7 @@ var PollScheduler = class {
   }
 };
 
-// ../../../ui-runtime/src/core/sync.ts
+// ../ui-runtime/src/core/sync.ts
 var SyncEngine = class {
   constructor(registry, transport, opts) {
     this.registry = registry;
@@ -437,7 +437,7 @@ var SyncEngine = class {
   }
 };
 
-// ../../../ui-runtime/src/core/api-client.ts
+// ../ui-runtime/src/core/api-client.ts
 var ApiClient = class {
   constructor(registry, opts) {
     this.registry = registry;
@@ -519,7 +519,7 @@ function cacheKey(operationId, input) {
   return `${operationId}\0${JSON.stringify(input ?? {})}`;
 }
 
-// ../../../ui-runtime/src/core/assets.ts
+// ../ui-runtime/src/core/assets.ts
 var AssetResolver = class {
   constructor(store, assets) {
     this.store = store;
@@ -561,7 +561,7 @@ function walk(urlOf, value) {
   return value;
 }
 
-// ../../../ui-runtime/src/core/builtin/descriptors.ts
+// ../ui-runtime/src/core/builtin/descriptors.ts
 var BUILTIN_PROVIDER_ID = "liapoldus.builtin";
 var builtinProviderDescriptor = {
   kind: "provider",
@@ -719,7 +719,7 @@ function registerBuiltin(registry, opts) {
   }
 }
 
-// ../../../ui-runtime/src/core/descriptor.ts
+// ../ui-runtime/src/core/descriptor.ts
 var BADGE_RE = /^([A-Za-z0-9._/-]+)#([a-z]+)$/;
 function stripComments(json) {
   return json.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^\\:])\/\/[^\n\r]*/g, "$1").replace(/,(\s*[}\]])/g, "$1");
@@ -911,6 +911,87 @@ function validateRouteDescriptor(raw) {
   }
   return { kind: "route", id, matcher, priority, action: raw.action };
 }
+function validateBindingSource(raw) {
+  if (!isRecord(raw)) throw new DescriptorValidationError("binding source \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C");
+  const kind = raw.kind;
+  switch (kind) {
+    case "content":
+      return {
+        kind: "content",
+        contentId: requireString(raw, "contentId", "element.bindings"),
+        field: typeof raw.field === "string" ? raw.field : ""
+      };
+    case "form":
+      return { kind: "form", formId: requireString(raw, "formId", "element.bindings") };
+    case "operation":
+      return { kind: "operation", operationId: requireString(raw, "operationId", "element.bindings") };
+    case "query":
+      return { kind: "query", param: requireString(raw, "param", "element.bindings") };
+    case "routeGroup": {
+      const index = raw.index;
+      if (typeof index !== "number" || !Number.isInteger(index)) {
+        throw new DescriptorValidationError("binding routeGroup \u0442\u0440\u0435\u0431\u0443\u0435\u0442 index (integer)", {
+          entityId: "element.bindings",
+          path: "index"
+        });
+      }
+      return { kind: "routeGroup", index };
+    }
+    default:
+      throw new DescriptorValidationError(
+        `binding kind '${String(kind)}' \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C content|form|operation|query|routeGroup`,
+        { entityId: "element.bindings", path: "kind" }
+      );
+  }
+}
+function validateElementProp(raw, prop) {
+  if (!isRecord(raw) || raw.kind !== "literal" && raw.kind !== "binding") {
+    throw new DescriptorValidationError(
+      `props.${prop} \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C { kind: 'literal'|'binding', \u2026 }`,
+      { path: `props.${prop}` }
+    );
+  }
+  if (raw.kind === "binding") {
+    if (!("source" in raw)) {
+      throw new DescriptorValidationError(`props.${prop} (binding) \u0442\u0440\u0435\u0431\u0443\u0435\u0442 source`, { path: `props.${prop}` });
+    }
+    return { kind: "binding", source: validateBindingSource(raw.source) };
+  }
+  return { kind: "literal", value: raw.value };
+}
+function validateElementDescriptor(raw) {
+  if (!isRecord(raw)) throw new DescriptorValidationError("\u0414\u0435\u0441\u043A\u0440\u0438\u043F\u0442\u043E\u0440 element \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C");
+  const id = requireString(raw, "id", "element");
+  const componentId = requireString(raw, "componentId", id);
+  const props = {};
+  if (isRecord(raw.props)) {
+    for (const [name, value] of Object.entries(raw.props)) {
+      props[name] = validateElementProp(value, name);
+    }
+  }
+  const element = { id, componentId, props };
+  if (Array.isArray(raw.bindings)) {
+    element.bindings = raw.bindings.map((b) => validateBindingSource(b));
+  }
+  return element;
+}
+function validatePageDescriptor(raw) {
+  if (!isRecord(raw)) throw new DescriptorValidationError("\u0414\u0435\u0441\u043A\u0440\u0438\u043F\u0442\u043E\u0440 page \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C");
+  const id = requireString(raw, "id", "page");
+  const name = typeof raw.name === "string" ? raw.name : "";
+  const elementsRaw = raw.elements;
+  if (elementsRaw === void 0) {
+    throw new DescriptorValidationError("page \u0442\u0440\u0435\u0431\u0443\u0435\u0442 elements", { entityId: id, path: "elements" });
+  }
+  if (!Array.isArray(elementsRaw)) {
+    throw new DescriptorValidationError("page.elements \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C", { entityId: id, path: "elements" });
+  }
+  return {
+    id,
+    name,
+    elements: elementsRaw.map(validateElementDescriptor)
+  };
+}
 function validateThemeDescriptor(raw) {
   if (!isRecord(raw)) throw new DescriptorValidationError("\u0414\u0435\u0441\u043A\u0440\u0438\u043F\u0442\u043E\u0440 theme \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C");
   const themeId = requireString(raw, "themeId", "theme");
@@ -950,6 +1031,14 @@ function parseDescriptors(json) {
   const endpoints = list("endpoints").map(validateEndpointDescriptor);
   const routes = list("routes").map(validateRouteDescriptor);
   const themes = list("themes").map(validateThemeDescriptor);
+  const pagesRaw = raw.pages;
+  let pages = [];
+  if (pagesRaw !== void 0) {
+    if (!Array.isArray(pagesRaw)) {
+      throw new DescriptorValidationError(`'pages' \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C`, { path: "pages" });
+    }
+    pages = pagesRaw.map(validatePageDescriptor);
+  }
   const enabledChannels = { ws: true, sse: true };
   if (isRecord(raw.enabledChannels)) {
     if (typeof raw.enabledChannels.ws === "boolean") enabledChannels.ws = raw.enabledChannels.ws;
@@ -980,10 +1069,10 @@ function parseDescriptors(json) {
       ...isRecord(raw.fallback.params) ? { params: raw.fallback.params } : {}
     };
   }
-  return { contract, providers, operations, endpoints, routes, themes };
+  return { contract, providers, operations, endpoints, routes, themes, pages };
 }
 
-// ../../../ui-runtime/src/core/form.ts
+// ../ui-runtime/src/core/form.ts
 var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 var FormRuntime = class {
   constructor(store, api, opts) {
@@ -1108,7 +1197,7 @@ function toMap(errors) {
   return out;
 }
 
-// ../../../ui-runtime/src/core/i18n.ts
+// ../ui-runtime/src/core/i18n.ts
 function normalize(locale) {
   return locale.trim().split(/[-_]/)[0].toLowerCase();
 }
@@ -1204,7 +1293,7 @@ function interpolate(template, params) {
   });
 }
 
-// ../../../ui-runtime/src/core/registry.ts
+// ../ui-runtime/src/core/registry.ts
 var RuntimeRegistry = class {
   constructor() {
     this.providers = /* @__PURE__ */ new Map();
@@ -1454,7 +1543,7 @@ var RuntimeRegistry = class {
   }
 };
 
-// ../../../ui-runtime/src/core/matcher.ts
+// ../ui-runtime/src/core/matcher.ts
 function splitPath(path) {
   const qIdx = path.indexOf("?");
   const pathname = qIdx === -1 ? path : path.slice(0, qIdx);
@@ -1502,13 +1591,16 @@ function createMatcher(routes) {
           if (v !== void 0) params[k] = v;
         }
       }
-      return { route, params, query };
+      const groups = m.slice(1).map((g) => g === void 0 ? "" : g);
+      const resolved = { route, params, query };
+      if (groups.length > 0) resolved.groups = groups;
+      return resolved;
     }
     return null;
   };
 }
 
-// ../../../ui-runtime/src/core/router.ts
+// ../ui-runtime/src/core/router.ts
 var MAX_REDIRECT_DEPTH = 10;
 var Router = class {
   constructor(store, env) {
@@ -1575,7 +1667,7 @@ var Router = class {
   }
 };
 
-// ../../../ui-runtime/node_modules/zustand/esm/vanilla.mjs
+// ../node_modules/zustand/esm/vanilla.mjs
 var createStoreImpl = (createState) => {
   let state;
   const listeners = /* @__PURE__ */ new Set();
@@ -1607,7 +1699,7 @@ var createStoreImpl = (createState) => {
 };
 var createStore = (createState) => createState ? createStoreImpl(createState) : createStoreImpl;
 
-// ../../../ui-runtime/src/core/store.ts
+// ../ui-runtime/src/core/store.ts
 var defaultStoreState = {
   ready: false,
   tree: null,
@@ -1656,7 +1748,7 @@ function createRuntimeStore(initial) {
   return api;
 }
 
-// ../../../ui-runtime/src/core/tokens.ts
+// ../ui-runtime/src/core/tokens.ts
 function asVar(name) {
   return name.startsWith("--") ? name : `--${name}`;
 }
@@ -1733,7 +1825,7 @@ var DesignTokens = class {
   }
 };
 
-// ../../../ui-runtime/src/core/transport/compound.ts
+// ../ui-runtime/src/core/transport/compound.ts
 var CompoundTransport = class {
   constructor(factory) {
     this.factory = factory;
@@ -1753,7 +1845,7 @@ var CompoundTransport = class {
   }
 };
 
-// ../../../ui-runtime/src/core/transport/graphql.ts
+// ../ui-runtime/src/core/transport/graphql.ts
 var DEFAULT_TIMEOUT_MS = 3e4;
 var GraphqlTransport = class {
   constructor(provider, env) {
@@ -1816,7 +1908,7 @@ var GraphqlTransport = class {
   }
 };
 
-// ../../../ui-runtime/src/core/transport/http.ts
+// ../ui-runtime/src/core/transport/http.ts
 var DEFAULT_TIMEOUT_MS2 = 3e4;
 function substitutePath(template, params) {
   return template.replace(/:([A-Za-z0-9_-]+)/g, (_m, name) => String(params[name] ?? "")).replace(/\{([A-Za-z0-9_-]+)\}/g, (_m, name) => String(params[name] ?? ""));
@@ -1948,7 +2040,7 @@ var HttpTransport = class {
   }
 };
 
-// ../../../ui-runtime/src/core/transport/ws-sse.ts
+// ../ui-runtime/src/core/transport/ws-sse.ts
 function wsSubscribeUrl(operation) {
   const opUrl = operation.subscribe?.url;
   if (opUrl) return opUrl;
@@ -2162,7 +2254,7 @@ function parseFrame(data) {
   }
 }
 
-// ../../../ui-runtime/src/core/transport/transport.ts
+// ../ui-runtime/src/core/transport/transport.ts
 function pickWebSocket(env) {
   const ctor = env?.WebSocket ?? globalThis.WebSocket;
   if (typeof ctor !== "function") {
@@ -2178,7 +2270,7 @@ function pickEventSource(env) {
   return ctor;
 }
 
-// ../../../ui-runtime/src/core/transport/factory.ts
+// ../ui-runtime/src/core/transport/factory.ts
 var TransportFactory = class {
   constructor(env) {
     this.env = env;
@@ -2215,13 +2307,7 @@ var TransportFactory = class {
   }
 };
 
-// ../../../ui-runtime/src/core/tree.ts
-function resolveDeclaration(declaration, ctx, resolveRuntime) {
-  return {
-    ...declaration,
-    root: resolveInstance(declaration.root, ctx, resolveRuntime)
-  };
-}
+// ../ui-runtime/src/core/tree.ts
 function getPath(value, path) {
   const tokens = path.split(".").filter((t) => t !== "");
   let v = value;
@@ -2244,64 +2330,46 @@ function operationValue(entry) {
   if (rec.error === true) return void 0;
   return rec.data !== void 0 ? rec.data : entry;
 }
-function resolveBinding(source, ctx, parentProps, resolveRuntime) {
-  switch (source.type) {
+function resolveBinding(source, ctx) {
+  switch (source.kind) {
     case "content":
-      return getPath(ctx.content[source.contentId], source.path);
-    case "routeParam":
-      return ctx.route?.params[source.name];
-    case "routeQuery":
-      return ctx.route?.query[source.name];
-    case "operation":
-      return getPath(operationValue(ctx.operation[source.operationId]), source.path);
+      return getPath(ctx.content[source.contentId], source.field);
     case "form":
-      return getPath(ctx.form[source.formId]?.values, source.path);
-    case "props":
-      return getPath(parentProps, source.path);
-    case "runtime":
-      return resolveRuntime?.(source.source);
+      return ctx.form[source.formId]?.values;
+    case "operation":
+      return operationValue(ctx.operation[source.operationId]);
+    case "query":
+      return ctx.route?.query[source.param] ?? ctx.route?.params[source.param];
+    case "routeGroup":
+      return ctx.route?.groups[source.index];
   }
 }
-function resolveInstance(instance, ctx, resolveRuntime) {
-  let props = { ...instance.props };
-  for (const binding of instance.bindings) {
-    const value = resolveBinding(binding.source, ctx, props, resolveRuntime);
-    if (value !== void 0) {
-      props = { ...props, [binding.property]: value };
+function resolveElement(el, ctx) {
+  const props = {};
+  for (const [name, prop] of Object.entries(el.props)) {
+    if (prop.kind === "binding") {
+      const value = resolveBinding(prop.source, ctx);
+      if (value !== void 0) props[name] = value;
+    } else {
+      props[name] = prop.value;
     }
   }
-  const children = instance.children.map(
-    (child) => resolveInstance(child, ctx, resolveRuntime)
-  );
-  return {
-    instanceId: instance.instanceId,
-    definitionId: instance.definitionId,
-    props,
-    bindings: instance.bindings,
-    children
-  };
+  return { id: el.id, componentId: el.componentId, props, bindings: el.bindings };
 }
-function findInstance(root, instanceId) {
-  if (root.instanceId === instanceId) return root;
-  for (const child of root.children) {
-    const found = findInstance(child, instanceId);
-    if (found) return found;
-  }
-  return null;
-}
-function cloneTree(root) {
+function resolveDeclaration(declaration, ctx) {
   return {
-    ...root,
-    props: { ...root.props },
-    children: root.children.map(cloneTree)
+    snapshotId: declaration.snapshotId,
+    versionId: declaration.versionId,
+    pageId: declaration.pageId,
+    elements: declaration.elements.map((el) => resolveElement(el, ctx))
   };
 }
 var TreeController = class {
-  constructor(store, opts) {
+  constructor(store) {
     this.store = store;
     this.listeners = /* @__PURE__ */ new Map();
     this.lastKey = "";
-    this.resolveRuntime = opts?.resolveRuntime;
+    this.raw = null;
   }
   signature(d) {
     return JSON.stringify(d);
@@ -2310,50 +2378,66 @@ var TreeController = class {
     const st = this.store.getState();
     return {
       content: st.content,
-      route: st.route ? { path: st.route.route.id, params: st.route.params, query: st.route.query } : null,
+      route: st.route ? {
+        path: st.route.route.id,
+        params: st.route.params,
+        query: st.route.query,
+        groups: st.route.groups ?? []
+      } : null,
       operation: st.operationResults,
       form: st.forms
     };
   }
   load(declaration) {
+    this.raw = declaration;
     this.lastKey = this.signature(declaration);
-    this.store.getState().setTree(resolveDeclaration(declaration, this.context(), this.resolveRuntime));
+    this.store.getState().setTree(resolveDeclaration(declaration, this.context()));
     this.emit("update");
   }
   rebuild(next) {
     const key = this.signature(next);
     if (key === this.lastKey) return;
+    this.raw = next;
     this.lastKey = key;
-    this.store.getState().setTree(resolveDeclaration(next, this.context(), this.resolveRuntime));
+    this.store.getState().setTree(resolveDeclaration(next, this.context()));
     this.emit("rebuild");
     this.emit("update");
   }
-  get root() {
+  /** Разрешённый лист элементов текущей страницы (null до load). */
+  get elements() {
     const tree = this.store.getState().tree;
-    return tree ? tree.root : null;
+    return tree ? tree.elements : null;
   }
-  /** Резолвит декларацию с bindings в разрешённое дерево. */
+  /**
+   * Пересчитывает bindings текущей страницы против актуального контекста
+   * (смена роута/контента/результатов операций/форм) и публикует `update`.
+   * В отличие от rebuild не сравнивает сигнатуру декларации — декларация та же,
+   * меняются только источники данных.
+   */
+  refresh() {
+    if (!this.raw) return;
+    this.store.getState().setTree(resolveDeclaration(this.raw, this.context()));
+    this.emit("update");
+  }
+  /** Резолвит декларацию с bindings в разрешённую страницу. */
   resolve(declaration, context) {
     const ctx = context ?? this.context();
-    return resolveDeclaration(declaration, ctx, this.resolveRuntime);
+    return resolveDeclaration(declaration, ctx);
   }
-  /** Обновляет data-значения props по instanceId, не создавая onRebuild (§11#4). */
+  /** Обновляет data-значения props по id элемента, не создавая onRebuild (§11#4). */
   updateBindings(patch) {
     const current = this.store.getState().tree;
     if (!current) return;
-    const clone = cloneTree(current.root);
-    for (const instanceId of Object.keys(patch)) {
-      if (!findInstance(clone, instanceId)) {
-        throw new UnknownEntityError(`\u0418\u043D\u0441\u0442\u0430\u043D\u0441 '${instanceId}' \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0432 \u0434\u0435\u0440\u0435\u0432\u0435`);
+    for (const id of Object.keys(patch)) {
+      if (!current.elements.some((el) => el.id === id)) {
+        throw new UnknownEntityError(`\u042D\u043B\u0435\u043C\u0435\u043D\u0442 '${id}' \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0432 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435`);
       }
     }
-    for (const [instanceId, values] of Object.entries(patch)) {
-      const target = findInstance(clone, instanceId);
-      if (target) {
-        target.props = { ...target.props, ...values };
-      }
-    }
-    this.store.getState().setTree({ ...current, root: clone });
+    const elements = current.elements.map((el) => {
+      const values = patch[el.id];
+      return values ? { ...el, props: { ...el.props, ...values } } : el;
+    });
+    this.store.getState().setTree({ ...current, elements });
     this.emit("update");
   }
   onRebuild(listener) {
@@ -2378,7 +2462,7 @@ var TreeController = class {
   }
 };
 
-// ../../../ui-runtime/src/core/boot.ts
+// ../ui-runtime/src/core/boot.ts
 var DEFAULT_BASE_URL = "http://localhost";
 var CONTRACT_PATH = "/runtime/contract";
 var DEV_CHANNEL = "dev";
@@ -2387,6 +2471,7 @@ var BootSession = class {
   constructor(siteId, environment, opts) {
     this.registry = new RuntimeRegistry();
     this.store = createRuntimeStore();
+    this.pages = [];
     this.ready = false;
     this.unsubs = [];
     this.siteId = siteId;
@@ -2404,11 +2489,10 @@ var BootSession = class {
       });
       this.transport = new CompoundTransport(this.factory);
     }
-    registerBuiltin(this.registry);
     const res = await this.fetchContract();
     const text = await res.text();
     const parsed = parseDescriptors(text);
-    const rawTree = this.extractTree(text);
+    this.pages = parsed.pages;
     for (const p of parsed.providers) {
       if (!this.registry.hasProvider(p.id)) this.registry.registerProvider(p);
     }
@@ -2419,6 +2503,7 @@ var BootSession = class {
     for (const ep of parsed.endpoints) {
       if (!this.registry.hasEndpoint(ep.id)) this.registry.registerEndpoint(ep);
     }
+    registerBuiltin(this.registry);
     this.i18n = new I18n(
       { defaultLocale: parsed.contract.locale, ...this.opts.i18n },
       this.store,
@@ -2444,9 +2529,23 @@ var BootSession = class {
     }
     this.router.replaceRoutes(parsed.routes);
     this.store.getState().setRoutes(parsed.routes);
-    if (rawTree) this.tree.load(rawTree);
+    const initial = this.initialPage();
+    if (initial) this.tree.load(this.pageDeclaration(initial));
     this.startPolls(parsed.operations);
     this.startDevChannel(parsed.contract.capabilities.dev);
+  }
+  /** Домашняя страница: цель самого специфичного renderPage-роута, иначе первая. */
+  initialPage() {
+    const home = this.router.match("/");
+    const pageId = home?.route.action.type === "renderPage" ? home.route.action.pageId : void 0;
+    if (pageId) {
+      const byId = this.pages.find((p) => p.id === pageId);
+      if (byId) return byId;
+    }
+    return this.pages[0];
+  }
+  pageDeclaration(page) {
+    return { pageId: page.id, elements: page.elements };
   }
   runtime() {
     return {
@@ -2463,6 +2562,7 @@ var BootSession = class {
       tree: this.tree,
       forms: this.forms,
       assets: this.assets,
+      pages: this.pages,
       dispose: () => this.dispose()
     };
   }
@@ -2513,17 +2613,6 @@ var BootSession = class {
       );
     }
   }
-  extractTree(text) {
-    let raw;
-    try {
-      raw = JSON.parse(text);
-    } catch {
-      raw = {};
-    }
-    const tree = raw.tree;
-    if (tree === null || typeof tree !== "object" || Array.isArray(tree)) return null;
-    return tree;
-  }
   startPolls(ops) {
     for (const op of ops) {
       const schedule = op.poll?.schedule;
@@ -2557,7 +2646,12 @@ var BootSession = class {
       } catch {
         return;
       }
-      if (msg.type === "tree" && msg.tree) this.tree.rebuild(msg.tree);
+      if (msg.type === "page" && msg.page !== void 0 && msg.page !== null) {
+        const page = validatePageDescriptor(msg.page);
+        this.tree.rebuild(this.pageDeclaration(page));
+      } else if (msg.type === "pages" && Array.isArray(msg.pages)) {
+        this.pages = msg.pages.map(validatePageDescriptor);
+      }
     });
     this.dev = ws;
   }

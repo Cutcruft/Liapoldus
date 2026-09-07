@@ -91,7 +91,7 @@ func NewRouter(a *App) http.Handler {
 
 	mux.HandleFunc("GET /runtime/contract", contract.Contract)
 	mux.HandleFunc("GET /runtime/routes", contract.Routes)
-	mux.HandleFunc("GET /runtime/tree", contract.Tree)
+	mux.HandleFunc("GET /runtime/tree", contract.Page)
 	mux.HandleFunc("GET /runtime/tokens", contract.Tokens)
 
 	// Build artifacts are immutable static files (one directory per released

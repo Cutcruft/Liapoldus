@@ -48,7 +48,7 @@ func Options(outdir string, entryPoints []string, externals ...string) api.Build
 
 func (b *Builder) Build(_ context.Context, workspace build.Workspace) (build.BundleResult, error) {
 	outdir := filepath.Join(workspace.Dir, "dist")
-	entryPoints := append([]string{filepath.Join(workspace.Dir, "src", "entry.tsx")})
+	entryPoints := []string{filepath.Join(workspace.Dir, "src", "entry.tsx")}
 	for _, page := range workspace.Manifest.Pages {
 		entryPoints = append(entryPoints, filepath.Join(workspace.Dir, "src", "pages", page.PageID+".tsx"))
 	}

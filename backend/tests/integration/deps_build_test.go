@@ -147,13 +147,13 @@ export default function Agent(props) { return createElement("span", null, agentN
 	seedDefinitionSource(t, mem, site.ID, "container",
 		"import React from \"react\";\nexport default (props) => React.createElement(\"div\", null, props?.children ?? null);\n")
 
-	root := domain.ComponentNode{
-		InstanceID: "root", DefinitionID: "container",
-		Children: []domain.ComponentNode{{InstanceID: "kids", DefinitionID: "text"}},
+	root := []domain.Element{
+		{ID: "root", ComponentID: "container", Props: map[string]domain.ElementProp{}},
+		{ID: "kids", ComponentID: "text", Props: map[string]domain.ElementProp{}},
 	}
-	page := domain.Page{ID: "page_dep_e2e", SiteID: site.ID, Name: "Home", Slug: "index", Root: root, Version: 1,
+	page := domain.Page{ID: "page_dep_e2e", SiteID: site.ID, Name: "Home", Slug: "index", List: root, Version: 1,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	version := domain.PageVersion{ID: "pagever_dep_e2e", PageID: "page_dep_e2e", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_dep_e2e", PageID: "page_dep_e2e", Number: 1, List: root, CreatedAt: time.Now().UTC()}
 	if err := mem.CreatePage(ctx, page, version); err != nil {
 		t.Fatal(err)
 	}
@@ -381,10 +381,10 @@ export default agent2Name;
 	seedDefinitionSource(t, mem, site.ID, "text",
 		"import { agentName } from \"agent\";\nimport { agent2Name } from \"agent2\";\nexport default (props) => props?.title ?? agentName + \":\" + agent2Name;\n")
 
-	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "text"}
-	page := domain.Page{ID: "page_dep_nested", SiteID: site.ID, Name: "Home", Root: root, Version: 1,
+	root := []domain.Element{{ID: "root", ComponentID: "text", Props: map[string]domain.ElementProp{}}}
+	page := domain.Page{ID: "page_dep_nested", SiteID: site.ID, Name: "Home", List: root, Version: 1,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	version := domain.PageVersion{ID: "pagever_dep_nested", PageID: "page_dep_nested", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_dep_nested", PageID: "page_dep_nested", Number: 1, List: root, CreatedAt: time.Now().UTC()}
 	if err := mem.CreatePage(ctx, page, version); err != nil {
 		t.Fatal(err)
 	}
@@ -497,10 +497,10 @@ func TestDependencyBuildLegacyFlatLockStillWorks(t *testing.T) {
 	site := seedBuildSiteInMemory(t, mem, "site_dep_legacy")
 	seedDefinitionSource(t, mem, site.ID, "text",
 		"import { lMarker } from \"legacy\";\nexport default (props) => props?.title ?? lMarker;\n")
-	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "text"}
-	page := domain.Page{ID: "page_dep_legacy", SiteID: site.ID, Name: "Home", Root: root, Version: 1,
+	root := []domain.Element{{ID: "root", ComponentID: "text", Props: map[string]domain.ElementProp{}}}
+	page := domain.Page{ID: "page_dep_legacy", SiteID: site.ID, Name: "Home", List: root, Version: 1,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	version := domain.PageVersion{ID: "pagever_dep_legacy", PageID: "page_dep_legacy", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_dep_legacy", PageID: "page_dep_legacy", Number: 1, List: root, CreatedAt: time.Now().UTC()}
 	if err := mem.CreatePage(ctx, page, version); err != nil {
 		t.Fatal(err)
 	}
@@ -572,10 +572,10 @@ func TestDependencyBuildFailsOnNodeBuiltin(t *testing.T) {
 	seedDefinitionSource(t, mem, site.ID, "text",
 		"import { agentName } from \"agent\";\nexport default (props) => props?.title ?? agentName;\n")
 
-	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "text"}
-	page := domain.Page{ID: "page_dep_fail", SiteID: site.ID, Name: "Home", Root: root, Version: 1,
+	root := []domain.Element{{ID: "root", ComponentID: "text", Props: map[string]domain.ElementProp{}}}
+	page := domain.Page{ID: "page_dep_fail", SiteID: site.ID, Name: "Home", List: root, Version: 1,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	version := domain.PageVersion{ID: "pagever_dep_fail", PageID: "page_dep_fail", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_dep_fail", PageID: "page_dep_fail", Number: 1, List: root, CreatedAt: time.Now().UTC()}
 	if err := mem.CreatePage(ctx, page, version); err != nil {
 		t.Fatal(err)
 	}
@@ -649,10 +649,10 @@ export default "agent-css-live";
 	seedDefinitionSource(t, mem, site.ID, "text",
 		"import \"agent/theme.css\";\nimport { agentName } from \"agent\";\nexport default (props) => props?.title ?? agentName;\n")
 
-	root := domain.ComponentNode{InstanceID: "root", DefinitionID: "text"}
-	page := domain.Page{ID: "page_dep_css", SiteID: site.ID, Name: "Home", Root: root, Version: 1,
+	root := []domain.Element{{ID: "root", ComponentID: "text", Props: map[string]domain.ElementProp{}}}
+	page := domain.Page{ID: "page_dep_css", SiteID: site.ID, Name: "Home", List: root, Version: 1,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	version := domain.PageVersion{ID: "pagever_dep_css", PageID: "page_dep_css", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_dep_css", PageID: "page_dep_css", Number: 1, List: root, CreatedAt: time.Now().UTC()}
 	if err := mem.CreatePage(ctx, page, version); err != nil {
 		t.Fatal(err)
 	}

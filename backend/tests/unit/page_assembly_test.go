@@ -3,6 +3,7 @@ package unit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -15,45 +16,41 @@ import (
 func assemblyService(siteRepo domain.SiteRepository, pageRepo domain.PageRepository, defs domain.ComponentDefinitionRepository) *pageapp.Service {
 	return pageapp.NewService(pageRepo, siteRepo, defs, pageapp.Settings{
 		InitialVersion: 1,
-		MaxDepth:       8,
-		MaxChildren:    100,
+		MaxElements:    100,
 	})
 }
 
-func node(instanceID string, definitionID string) domain.ComponentNode {
-	return domain.ComponentNode{InstanceID: instanceID, DefinitionID: definitionID}
+func element(componentID string) domain.Element {
+	return domain.Element{ID: "el_" + componentID, ComponentID: componentID, Props: map[string]domain.ElementProp{}}
 }
 
-func TestPageAssemblyDepthLimit(t *testing.T) {
+func TestPageAssemblyElementCountLimit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	siteRepo := mocks.NewMockSiteRepository(ctrl)
 	siteRepo.EXPECT().GetSite(gomock.Any(), "site_1").Return(domain.Site{ID: "site_1"}, nil)
 	pageRepo := mocks.NewMockPageRepository(ctrl)
-	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
+	svc := pageapp.NewService(pageRepo, siteRepo, pageDefs(t, "site_1", "Text"), pageapp.Settings{
+		InitialVersion: 1,
+		MaxElements:    3,
+	})
 
-	root := node("root", "Container")
-	child := node("c1", "Container")
-	child.Children = []domain.ComponentNode{node("c2", "Container")}
-	child.Children[0].Children = []domain.ComponentNode{node("c3", "Container")}
-	child.Children[0].Children[0].Children = []domain.ComponentNode{node("c4", "Container")}
-	child.Children[0].Children[0].Children[0].Children = []domain.ComponentNode{node("c5", "Container")}
-	child.Children[0].Children[0].Children[0].Children[0].Children = []domain.ComponentNode{node("c6", "Text")}
-	child.Children[0].Children[0].Children[0].Children[0].Children[0].Children = []domain.ComponentNode{node("c7", "Text")}
-	child.Children[0].Children[0].Children[0].Children[0].Children[0].Children[0].Children = []domain.ComponentNode{node("c8", "Text")}
-	child.Children[0].Children[0].Children[0].Children[0].Children[0].Children[0].Children[0].Children = []domain.ComponentNode{node("c9", "Text")}
-	child.Children[0].Children[0].Children[0].Children[0].Children[0].Children[0].Children[0].Children[0].Children = []domain.ComponentNode{node("c10", "Text")}
-	root.Children = []domain.ComponentNode{child}
+	var list []domain.Element
+	for i := 0; i < 4; i++ {
+		e := element("Text")
+		e.ID = fmt.Sprintf("el_%d", i)
+		list = append(list, e)
+	}
 
-	_, err := svc.Create(context.Background(), "site_1", "Deep", "deep", root)
+	_, err := svc.Create(context.Background(), "site_1", "Deep", "deep", list)
 	if err == nil {
-		t.Fatalf("expected depth limit error")
+		t.Fatalf("expected element count limit error")
 	}
 	if !errors.Is(err, domain.ErrInvalidRequest) {
 		t.Fatalf("error = %v, want ErrInvalidRequest", err)
 	}
-	if !strings.Contains(err.Error(), "depth") {
-		t.Fatalf("error %q should mention depth", err)
+	if !strings.Contains(err.Error(), "more than") {
+		t.Fatalf("error %q should mention the count cap", err)
 	}
 }
 
@@ -65,8 +62,7 @@ func TestPageAssemblyMissingDefinition(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Text"))
 
-	root := node("root", "Missing")
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", root)
+	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{element("Missing")})
 	if err == nil {
 		t.Fatalf("expected missing definition error")
 	}
@@ -75,7 +71,7 @@ func TestPageAssemblyMissingDefinition(t *testing.T) {
 	}
 }
 
-func TestPageAssemblyDefinitionOnNestedNode(t *testing.T) {
+func TestPageAssemblyDuplicateElementID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	siteRepo := mocks.NewMockSiteRepository(ctrl)
@@ -83,17 +79,19 @@ func TestPageAssemblyDefinitionOnNestedNode(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	nested := node("n1", "Container")
-	nested.Children = []domain.ComponentNode{node("n2", "Unknown")}
-	root := node("root", "Container")
-	root.Children = []domain.ComponentNode{nested}
+	e1 := element("Container")
+	e2 := element("Text")
+	e2.ID = e1.ID
 
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", root)
+	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{e1, e2})
 	if err == nil {
-		t.Fatalf("expected unknown nested definition error")
+		t.Fatalf("expected duplicate id error")
 	}
-	if !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("error = %v, want ErrNotFound", err)
+	if !errors.Is(err, domain.ErrInvalidRequest) {
+		t.Fatalf("error = %v, want ErrInvalidRequest", err)
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("error %q should mention duplicate", err)
 	}
 }
 
@@ -105,15 +103,12 @@ func TestPageAssemblyContentBindingMissingContentID(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	text := node("t1", "Text")
-	text.Bindings = []domain.ComponentBinding{{
-		Property: "text",
-		Source:   domain.BindingSource{Type: "content"},
-	}}
-	root := node("root", "Container")
-	root.Children = []domain.ComponentNode{text}
+	text := element("Text")
+	text.Props = map[string]domain.ElementProp{
+		"text": {Kind: "binding", Source: &domain.BindingSource{Kind: "content"}},
+	}
 
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", root)
+	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text})
 	if err == nil {
 		t.Fatalf("expected binding validation error")
 	}
@@ -133,15 +128,12 @@ func TestPageAssemblyUnsupportedBindingSource(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	text := node("t1", "Text")
-	text.Bindings = []domain.ComponentBinding{{
-		Property: "text",
-		Source:   domain.BindingSource{Type: "magic"},
-	}}
-	root := node("root", "Container")
-	root.Children = []domain.ComponentNode{text}
+	text := element("Text")
+	text.Props = map[string]domain.ElementProp{
+		"text": {Kind: "binding", Source: &domain.BindingSource{Kind: "magic"}},
+	}
 
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", root)
+	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text})
 	if err == nil {
 		t.Fatalf("expected unsupported binding source error")
 	}
@@ -159,85 +151,44 @@ func TestPageAssemblyValidContentBinding(t *testing.T) {
 	pageRepo.EXPECT().CreatePage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	text := node("t1", "Text")
-	text.Props = map[string]any{"text": "Default"}
-	text.Bindings = []domain.ComponentBinding{{
-		Property: "text",
-		Source:   domain.BindingSource{Type: "content", ContentID: "col.posts/a1", Path: "title"},
-	}}
-	root := node("root", "Container")
-	root.Children = []domain.ComponentNode{text}
+	text := element("Text")
+	text.Props = map[string]domain.ElementProp{
+		"text": {Kind: "binding", Source: &domain.BindingSource{Kind: "content", ContentID: "col.posts/a1", Field: "title"}},
+	}
 
-	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", root); err != nil {
+	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text}); err != nil {
 		t.Fatalf("valid content binding rejected: %v", err)
 	}
 }
 
-func TestPageAssemblyPropsAgainstSchema(t *testing.T) {
+func TestPageAssemblyAssignsMissingElementID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	siteRepo := mocks.NewMockSiteRepository(ctrl)
 	siteRepo.EXPECT().GetSite(gomock.Any(), "site_1").Return(domain.Site{ID: "site_1"}, nil)
 	pageRepo := mocks.NewMockPageRepository(ctrl)
+	pageRepo.EXPECT().CreatePage(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, page domain.Page, version domain.PageVersion) error {
+			if len(page.List) != 2 {
+				t.Fatalf("expected 2 elements, got %d", len(page.List))
+			}
+			for _, el := range page.List {
+				if el.ID == "" {
+					t.Fatalf("element id was not assigned")
+				}
+			}
+			return nil
+		})
 	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	text := node("t1", "Text")
-	text.Props = map[string]any{"text": 42}
-	root := node("root", "Container")
-	root.Children = []domain.ComponentNode{text}
-
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", root)
-	if err == nil {
-		t.Fatalf("expected props schema error")
-	}
-	if !errors.Is(err, domain.ErrInvalidRequest) {
-		t.Fatalf("error = %v, want ErrInvalidRequest", err)
-	}
-	if !strings.Contains(err.Error(), "$.text") {
-		t.Fatalf("error %q should contain JSON pointer to path", err)
+	withoutID := element("Container")
+	withoutID.ID = ""
+	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{withoutID, element("Text")}); err != nil {
+		t.Fatalf("create with missing element ids rejected: %v", err)
 	}
 }
 
-func TestPageAssemblyMissingInstanceID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	siteRepo := mocks.NewMockSiteRepository(ctrl)
-	siteRepo.EXPECT().GetSite(gomock.Any(), "site_1").Return(domain.Site{ID: "site_1"}, nil)
-	pageRepo := mocks.NewMockPageRepository(ctrl)
-	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
-
-	root := domain.ComponentNode{}
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", root)
-	if err == nil {
-		t.Fatalf("expected missing instanceId error")
-	}
-	if !errors.Is(err, domain.ErrInvalidRequest) {
-		t.Fatalf("error = %v, want ErrInvalidRequest", err)
-	}
-	if !strings.Contains(err.Error(), "instanceId") {
-		t.Fatalf("error %q should mention instanceId", err)
-	}
-}
-
-func TestPageAssemblyMissingDefinitionID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	siteRepo := mocks.NewMockSiteRepository(ctrl)
-	siteRepo.EXPECT().GetSite(gomock.Any(), "site_1").Return(domain.Site{ID: "site_1"}, nil)
-	pageRepo := mocks.NewMockPageRepository(ctrl)
-	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
-
-	root := node("root", "")
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", root)
-	if err == nil {
-		t.Fatalf("expected missing definitionId error")
-	}
-	if !errors.Is(err, domain.ErrInvalidRequest) {
-		t.Fatalf("error = %v, want ErrInvalidRequest", err)
-	}
-}
-
-func TestPageAssemblyMethodNodesInsideText(t *testing.T) {
+func TestPageAssemblyMultipleElementsSameDefinition(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	siteRepo := mocks.NewMockSiteRepository(ctrl)
@@ -246,37 +197,17 @@ func TestPageAssemblyMethodNodesInsideText(t *testing.T) {
 	pageRepo.EXPECT().CreatePage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	text := node("t1", "Text")
-	text.Children = []domain.ComponentNode{node("btn", "Container")}
-	root := node("root", "Container")
-	root.Children = []domain.ComponentNode{text}
-
-	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", root); err != nil {
-		t.Fatalf("kind constraints are not enforced in this stage: %v", err)
+	list := []domain.Element{
+		{ID: "t1", ComponentID: "Text", Props: map[string]domain.ElementProp{}},
+		{ID: "t2", ComponentID: "Text", Props: map[string]domain.ElementProp{}},
+		{ID: "t3", ComponentID: "Text", Props: map[string]domain.ElementProp{}},
 	}
-}
-
-func TestPageAssemblyMultipleNodesSameDefinition(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	siteRepo := mocks.NewMockSiteRepository(ctrl)
-	siteRepo.EXPECT().GetSite(gomock.Any(), "site_1").Return(domain.Site{ID: "site_1"}, nil)
-	pageRepo := mocks.NewMockPageRepository(ctrl)
-	pageRepo.EXPECT().CreatePage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
-
-	root := node("root", "Container")
-	root.Children = []domain.ComponentNode{
-		node("t1", "Text"),
-		node("t2", "Text"),
-		node("t3", "Text"),
-	}
-	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", root); err != nil {
+	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", list); err != nil {
 		t.Fatalf("multiple instances of one definition rejected: %v", err)
 	}
 }
 
-func TestPageAssemblyUpdateTreeValidatesFlow(t *testing.T) {
+func TestPageAssemblyUpdateValidatesFlow(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	pageRepo := mocks.NewMockPageRepository(ctrl)
@@ -284,11 +215,9 @@ func TestPageAssemblyUpdateTreeValidatesFlow(t *testing.T) {
 	pageRepo.EXPECT().UpdatePage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	svc := assemblyService(nil, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	root := node("root", "Container")
-	root.Children = []domain.ComponentNode{node("t1", "Text")}
-	page, err := svc.UpdateTree(context.Background(), "page_1", root)
+	page, err := svc.Update(context.Background(), "page_1", "Home", []domain.Element{element("Container"), element("Text")})
 	if err != nil {
-		t.Fatalf("update tree: %v", err)
+		t.Fatalf("update: %v", err)
 	}
 	if page.Version != 2 {
 		t.Fatalf("version = %d, want 2", page.Version)

@@ -16,7 +16,7 @@ import (
 func newPageService(repo domain.PageRepository, siteRepo domain.SiteRepository, defs domain.ComponentDefinitionRepository) *pageapp.Service {
 	return pageapp.NewService(repo, siteRepo, defs, pageapp.Settings{
 		InitialVersion: 1,
-		MaxDepth:       5,
+		MaxElements:    500,
 	})
 }
 
@@ -37,15 +37,10 @@ func pageDefs(t *testing.T, siteID string, ids ...string) domain.ComponentDefini
 	return repo
 }
 
-func validRoot() domain.ComponentNode {
-	return domain.ComponentNode{
-		InstanceID:   "root",
-		DefinitionID: "Container",
-		Children: []domain.ComponentNode{{
-			InstanceID:   "t1",
-			DefinitionID: "Text",
-			Props:        map[string]any{"text": "Hello"},
-		}},
+func validList() []domain.Element {
+	return []domain.Element{
+		{ID: "root", ComponentID: "Container", Props: map[string]domain.ElementProp{"gap": {Kind: "literal", Value: 8}}},
+		{ID: "t1", ComponentID: "Text", Props: map[string]domain.ElementProp{"text": {Kind: "literal", Value: "Hello"}}},
 	}
 }
 
@@ -71,7 +66,7 @@ func TestPageServiceCreate(t *testing.T) {
 			return nil
 		})
 
-	page, err := newPageService(pageRepo, siteRepo, pageDefs(t, "site_1", "Container", "Text")).Create(context.Background(), "site_1", "Home", "home", validRoot())
+	page, err := newPageService(pageRepo, siteRepo, pageDefs(t, "site_1", "Container", "Text")).Create(context.Background(), "site_1", "Home", "home", validList())
 	if err != nil {
 		t.Fatalf("create page: %v", err)
 	}
@@ -89,13 +84,13 @@ func TestPageServiceCreateSiteNotFound(t *testing.T) {
 
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 
-	_, err := newPageService(pageRepo, siteRepo, pageDefs(t, "site_1", "Container", "Text")).Create(context.Background(), "site_missing", "Home", "home", validRoot())
+	_, err := newPageService(pageRepo, siteRepo, pageDefs(t, "site_1", "Container", "Text")).Create(context.Background(), "site_missing", "Home", "home", validList())
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }
 
-func TestPageServiceCreateInvalidRoot(t *testing.T) {
+func TestPageServiceCreateInvalidElement(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -105,14 +100,14 @@ func TestPageServiceCreateInvalidRoot(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	service := newPageService(pageRepo, siteRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	root := domain.ComponentNode{InstanceID: "root"}
-	_, err := service.Create(context.Background(), "site_1", "Home", "home", root)
-	if !errors.Is(err, domain.ErrInvalidRequest) {
-		t.Fatalf("error = %v, want ErrInvalidRequest", err)
+	list := []domain.Element{{ID: "root", ComponentID: "Unknown", Props: map[string]domain.ElementProp{}}}
+	_, err := service.Create(context.Background(), "site_1", "Home", "home", list)
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }
 
-func TestPageServiceUpdateTree(t *testing.T) {
+func TestPageServiceUpdate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -130,9 +125,9 @@ func TestPageServiceUpdateTree(t *testing.T) {
 		})
 
 	defs := pageDefs(t, "site_1", "Container", "Text")
-	page, err := newPageService(pageRepo, nil, defs).UpdateTree(context.Background(), "page_1", validRoot())
+	page, err := newPageService(pageRepo, nil, defs).Update(context.Background(), "page_1", "Home", validList())
 	if err != nil {
-		t.Fatalf("update tree: %v", err)
+		t.Fatalf("update: %v", err)
 	}
 	if page.Version != 2 {
 		t.Fatalf("page version = %d, want 2", page.Version)

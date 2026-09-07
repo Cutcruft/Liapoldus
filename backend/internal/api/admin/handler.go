@@ -151,13 +151,14 @@ func NewPageHandler(pages *page.Service) *PageHandler {
 }
 
 type createPageRequest struct {
-	Name string               `json:"name"`
-	Slug string               `json:"slug"`
-	Root domain.ComponentNode `json:"root"`
+	Name string            `json:"name"`
+	Slug string            `json:"slug"`
+	List []domain.Element  `json:"list"`
 }
 
-type updateTreeRequest struct {
-	Root domain.ComponentNode `json:"root"`
+type updatePageRequest struct {
+	Name string           `json:"name"`
+	List []domain.Element `json:"list"`
 }
 
 func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -169,7 +170,7 @@ func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.DecodeJSON(r, &req, w) {
 		return
 	}
-	result, err := h.pages.Create(r.Context(), siteID, req.Name, req.Slug, req.Root)
+	result, err := h.pages.Create(r.Context(), siteID, req.Name, req.Slug, req.List)
 	if err != nil {
 		httpapi.RespondError(w, err)
 		return
@@ -203,16 +204,17 @@ func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 	httpapi.RespondJSON(w, http.StatusOK, result)
 }
 
-func (h *PageHandler) UpdateTree(w http.ResponseWriter, r *http.Request) {
+// Update atomically replaces a page's name and element list (PUT /api/pages/{pageID}).
+func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	pageID := r.PathValue("pageID")
 	if pageID == "" {
 		pageID = r.URL.Query().Get("pageId")
 	}
-	var req updateTreeRequest
+	var req updatePageRequest
 	if !httpapi.DecodeJSON(r, &req, w) {
 		return
 	}
-	result, err := h.pages.UpdateTree(r.Context(), pageID, req.Root)
+	result, err := h.pages.Update(r.Context(), pageID, req.Name, req.List)
 	if err != nil {
 		httpapi.RespondError(w, err)
 		return

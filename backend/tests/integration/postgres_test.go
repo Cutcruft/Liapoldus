@@ -92,11 +92,9 @@ func TestSitePageContentAssetRoundtrip(t *testing.T) {
 		}
 	}
 
-	root := domain.ComponentNode{
-		InstanceID:   "root",
-		DefinitionID: "Container",
-		Props:        map[string]any{"title": "Home"},
-		Children:     []domain.ComponentNode{{InstanceID: "kids", DefinitionID: "Text"}},
+	root := []domain.Element{
+		{ID: "root", ComponentID: "Container", Props: map[string]domain.ElementProp{"title": {Kind: "literal", Value: "Home"}}},
+		{ID: "kids", ComponentID: "Text", Props: map[string]domain.ElementProp{}},
 	}
 	page, err := services.Pages.Create(ctx, site.ID, "Home", "index", root)
 	if err != nil {
@@ -110,16 +108,14 @@ func TestSitePageContentAssetRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get page: %v", err)
 	}
-	if got.SiteID != site.ID || got.Slug != "index" || len(got.Root.Children) != 1 {
+	if got.SiteID != site.ID || got.Slug != "index" || len(got.List) != 2 {
 		t.Fatalf("page = %#v", got)
 	}
 
-	updatedRoot := domain.ComponentNode{
-		InstanceID:   "root",
-		DefinitionID: "Container",
-		Props:        map[string]any{"title": "About"},
+	updatedRoot := []domain.Element{
+		{ID: "root", ComponentID: "Container", Props: map[string]domain.ElementProp{"title": {Kind: "literal", Value: "About"}}},
 	}
-	updated, err := services.Pages.UpdateTree(ctx, page.ID, updatedRoot)
+	updated, err := services.Pages.Update(ctx, page.ID, "Home", updatedRoot)
 	if err != nil {
 		t.Fatalf("update page: %v", err)
 	}

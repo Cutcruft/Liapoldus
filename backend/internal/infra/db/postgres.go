@@ -16,7 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql migrations/011_pages_list.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -153,7 +153,7 @@ func (p *Postgres) DeleteSite(ctx context.Context, id string) error {
 }
 
 func (p *Postgres) CreatePage(ctx context.Context, page domain.Page, version domain.PageVersion) error {
-	root, err := marshalNode(page.Root)
+	list, err := marshalList(page.List)
 	if err != nil {
 		return err
 	}
@@ -163,9 +163,9 @@ func (p *Postgres) CreatePage(ctx context.Context, page domain.Page, version dom
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO pages (id, site_id, name, slug, root, current_version, created_at, updated_at)
+		INSERT INTO pages (id, site_id, name, slug, list, current_version, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, page.ID, page.SiteID, page.Name, page.Slug, root, page.Version, page.CreatedAt, page.UpdatedAt); err != nil {
+	`, page.ID, page.SiteID, page.Name, page.Slug, list, page.Version, page.CreatedAt, page.UpdatedAt); err != nil {
 		if isUniqueViolation(err) {
 			return domain.ErrAlreadyExists
 		}
@@ -182,7 +182,7 @@ func (p *Postgres) CreatePage(ctx context.Context, page domain.Page, version dom
 
 func (p *Postgres) GetPage(ctx context.Context, id string) (domain.Page, error) {
 	row := p.pool.QueryRow(ctx, `
-		SELECT id, site_id, name, slug, root, current_version, created_at, updated_at
+		SELECT id, site_id, name, slug, list, current_version, created_at, updated_at
 		FROM pages WHERE id = $1
 	`, id)
 	page, err := scanPage(row)
@@ -197,7 +197,7 @@ func (p *Postgres) GetPage(ctx context.Context, id string) (domain.Page, error) 
 
 func (p *Postgres) ListPagesBySite(ctx context.Context, siteID string) ([]domain.Page, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, site_id, name, slug, root, current_version, created_at, updated_at
+		SELECT id, site_id, name, slug, list, current_version, created_at, updated_at
 		FROM pages WHERE site_id = $1 ORDER BY created_at, id
 	`, siteID)
 	if err != nil {
@@ -219,7 +219,7 @@ func (p *Postgres) ListPagesBySite(ctx context.Context, siteID string) ([]domain
 }
 
 func (p *Postgres) UpdatePage(ctx context.Context, page domain.Page, version domain.PageVersion) error {
-	root, err := marshalNode(page.Root)
+	list, err := marshalList(page.List)
 	if err != nil {
 		return err
 	}
@@ -230,9 +230,9 @@ func (p *Postgres) UpdatePage(ctx context.Context, page domain.Page, version dom
 	defer func() { _ = tx.Rollback(ctx) }()
 	result, err := tx.Exec(ctx, `
 		UPDATE pages
-		SET root = $2, current_version = $3, updated_at = $4
+		SET list = $2, current_version = $3, updated_at = $4
 		WHERE id = $1
-	`, page.ID, root, page.Version, page.UpdatedAt)
+	`, page.ID, list, page.Version, page.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("update page: %w", err)
 	}
@@ -250,7 +250,7 @@ func (p *Postgres) UpdatePage(ctx context.Context, page domain.Page, version dom
 
 func (p *Postgres) ListPageVersions(ctx context.Context, pageID string) ([]domain.PageVersion, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, page_id, number, root, created_at
+		SELECT id, page_id, number, list, created_at
 		FROM page_versions WHERE page_id = $1 ORDER BY number
 	`, pageID)
 	if err != nil {
@@ -260,11 +260,11 @@ func (p *Postgres) ListPageVersions(ctx context.Context, pageID string) ([]domai
 	result := make([]domain.PageVersion, 0)
 	for rows.Next() {
 		var version domain.PageVersion
-		var root []byte
-		if err := rows.Scan(&version.ID, &version.PageID, &version.Number, &root, &version.CreatedAt); err != nil {
+		var list []byte
+		if err := rows.Scan(&version.ID, &version.PageID, &version.Number, &list, &version.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan page version: %w", err)
 		}
-		if err := unmarshalNode(root, &version.Root); err != nil {
+		if err := unmarshalList(list, &version.List); err != nil {
 			return nil, err
 		}
 		result = append(result, version)
@@ -378,18 +378,18 @@ func (p *Postgres) ListSnapshotsBySite(ctx context.Context, siteID string) ([]do
 
 func (p *Postgres) GetPageVersion(ctx context.Context, pageID, versionID string) (domain.PageVersion, error) {
 	var version domain.PageVersion
-	var root []byte
+	var list []byte
 	err := p.pool.QueryRow(ctx, `
-		SELECT id, page_id, number, root, created_at
+		SELECT id, page_id, number, list, created_at
 		FROM page_versions WHERE page_id = $1 AND id = $2
-	`, pageID, versionID).Scan(&version.ID, &version.PageID, &version.Number, &root, &version.CreatedAt)
+	`, pageID, versionID).Scan(&version.ID, &version.PageID, &version.Number, &list, &version.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.PageVersion{}, domain.ErrNotFound
 	}
 	if err != nil {
 		return domain.PageVersion{}, fmt.Errorf("get page version: %w", err)
 	}
-	if err := unmarshalNode(root, &version.Root); err != nil {
+	if err := unmarshalList(list, &version.List); err != nil {
 		return domain.PageVersion{}, err
 	}
 	return version, nil
@@ -812,41 +812,44 @@ type rowScanner interface{ Scan(...any) error }
 
 func scanPage(row rowScanner) (domain.Page, error) {
 	var page domain.Page
-	var root []byte
-	if err := row.Scan(&page.ID, &page.SiteID, &page.Name, &page.Slug, &root, &page.Version, &page.CreatedAt, &page.UpdatedAt); err != nil {
+	var list []byte
+	if err := row.Scan(&page.ID, &page.SiteID, &page.Name, &page.Slug, &list, &page.Version, &page.CreatedAt, &page.UpdatedAt); err != nil {
 		return domain.Page{}, err
 	}
-	if err := unmarshalNode(root, &page.Root); err != nil {
+	if err := unmarshalList(list, &page.List); err != nil {
 		return domain.Page{}, err
 	}
 	return page, nil
 }
 
 func insertPageVersion(ctx context.Context, tx pgx.Tx, version domain.PageVersion) error {
-	root, err := marshalNode(version.Root)
+	list, err := marshalList(version.List)
 	if err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO page_versions (id, page_id, number, root, created_at)
+		INSERT INTO page_versions (id, page_id, number, list, created_at)
 		VALUES ($1, $2, $3, $4, $5)
-	`, version.ID, version.PageID, version.Number, root, version.CreatedAt); err != nil {
+	`, version.ID, version.PageID, version.Number, list, version.CreatedAt); err != nil {
 		return fmt.Errorf("insert page version: %w", err)
 	}
 	return nil
 }
 
-func marshalNode(node domain.ComponentNode) ([]byte, error) {
-	data, err := json.Marshal(node)
+func marshalList(list []domain.Element) ([]byte, error) {
+	if list == nil {
+		list = []domain.Element{}
+	}
+	data, err := json.Marshal(list)
 	if err != nil {
-		return nil, fmt.Errorf("marshal component tree: %w", err)
+		return nil, fmt.Errorf("marshal page elements: %w", err)
 	}
 	return data, nil
 }
 
-func unmarshalNode(data []byte, node *domain.ComponentNode) error {
-	if err := json.Unmarshal(data, node); err != nil {
-		return fmt.Errorf("unmarshal component tree: %w", err)
+func unmarshalList(data []byte, list *[]domain.Element) error {
+	if err := json.Unmarshal(data, list); err != nil {
+		return fmt.Errorf("unmarshal page elements: %w", err)
 	}
 	return nil
 }

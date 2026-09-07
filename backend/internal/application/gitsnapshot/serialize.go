@@ -14,7 +14,7 @@ import (
 // File layout committed into git (one commit = one full site state):
 //
 //	site.json                  — {name, slug, defaultLocale, hosts}
-//	pages/{pageID}.json        — {tree, version, updatedAt}
+//	pages/{pageID}.json        — {list, version, updatedAt}
 //	contents/{contentID}.json  — {collectionId, fields, translations}
 //	routes/{routeID}.json      — {matcher, priority, action}
 //	forms/{formID}.json        — {name, definition}
@@ -37,9 +37,9 @@ type siteFile struct {
 }
 
 type pageFile struct {
-	Tree      domain.ComponentNode `json:"tree"`
-	Version   int32                `json:"version"`
-	UpdatedAt time.Time            `json:"updatedAt"`
+	List      []domain.Element `json:"list"`
+	Version   int32            `json:"version"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 type contentFile struct {
@@ -104,7 +104,7 @@ func (s *Service) serializeSansDeps(ctx context.Context, siteID string) (map[str
 		}
 		latest := versions[len(versions)-1]
 		files["pages/"+p.ID+".json"] = mustJSON(pageFile{
-			Tree:      latest.Root,
+			List:      latest.List,
 			Version:   latest.Number,
 			UpdatedAt: p.UpdatedAt,
 		})

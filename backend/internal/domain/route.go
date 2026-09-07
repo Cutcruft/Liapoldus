@@ -18,6 +18,7 @@ type RouteAction struct {
 type Route struct {
 	ID        string      `json:"id"`
 	SiteID    string      `json:"siteId"`
+	Name      string      `json:"name,omitempty"`
 	Matcher   string      `json:"matcher"`
 	Priority  int         `json:"priority"`
 	Action    RouteAction `json:"action"`

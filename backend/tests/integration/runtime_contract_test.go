@@ -39,13 +39,13 @@ func runtimeContractFixture(t *testing.T, siteID string) (*storage.Memory, domai
 	seedDefinitionSource(t, mem, site.ID, "text",
 		"import React from \"react\";\nexport default (props) => props?.title ?? null;\n")
 
-	root := domain.ComponentNode{
-		InstanceID: "root", DefinitionID: "container", Props: map[string]any{"gap": 12},
-		Children: []domain.ComponentNode{{InstanceID: "title", DefinitionID: "text", Props: map[string]any{"title": "Hello"}}},
+	root := []domain.Element{
+		{ID: "root", ComponentID: "container", Props: map[string]domain.ElementProp{"gap": {Kind: "literal", Value: 12}}},
+		{ID: "title", ComponentID: "text", Props: map[string]domain.ElementProp{"title": {Kind: "literal", Value: "Hello"}}},
 	}
-	page := domain.Page{ID: "page_boot", SiteID: site.ID, Name: "Home", Slug: "index", Root: root, Version: 1,
+	page := domain.Page{ID: "page_boot", SiteID: site.ID, Name: "Home", Slug: "index", List: root, Version: 1,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	version := domain.PageVersion{ID: "pagever_boot", PageID: page.ID, Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_boot", PageID: page.ID, Number: 1, List: root, CreatedAt: time.Now().UTC()}
 	if err := mem.CreatePage(ctx, page, version); err != nil {
 		t.Fatal(err)
 	}
@@ -136,17 +136,22 @@ func TestRuntimeContractPinsBootRelease(t *testing.T) {
 	if home["matcher"] != "^/$" {
 		t.Fatalf("home route = %#v", home)
 	}
-	tree, _ := body["tree"].(map[string]any)
-	if tree["snapshotId"] != snapshot.ID {
-		t.Fatalf("tree = %#v", tree)
+	pages, _ := body["pages"].([]any)
+	if len(pages) != 1 {
+		t.Fatalf("pages = %#v", body["pages"])
 	}
+	pg := pages[0].(map[string]any)
 	homeAction, _ := home["action"].(map[string]any)
-	if tree["pageId"] != homeAction["pageId"] {
-		t.Fatalf("tree pageId = %#v, want %v", tree["pageId"], homeAction["pageId"])
+	if pg["id"] != homeAction["pageId"] {
+		t.Fatalf("page id = %v, want %v", pg["id"], homeAction["pageId"])
 	}
-	root, _ := tree["root"].(map[string]any)
-	if root["instanceId"] != "root" || root["definitionId"] != "container" {
-		t.Fatalf("tree root = %#v", root)
+	elements, _ := pg["elements"].([]any)
+	if len(elements) != 2 {
+		t.Fatalf("page elements = %#v", pg["elements"])
+	}
+	first := elements[0].(map[string]any)
+	if first["componentId"] != "container" {
+		t.Fatalf("first element = %#v, want container", first)
 	}
 	caps, _ := body["capabilities"].(map[string]any)
 	if caps["dev"] != false || caps["formSubmissions"] != true {
@@ -163,18 +168,18 @@ func TestRuntimeContractVersionIdOverridesEnvironment(t *testing.T) {
 	if err := mem.CreateSite(ctx, domain.Site{ID: "site_rc2", Slug: "site-rc2", Name: "S2", DefaultLocale: "ru", CreatedAt: time.Now().UTC()}); err != nil {
 		t.Fatal(err)
 	}
-	rootA := domain.ComponentNode{InstanceID: "rootA", DefinitionID: "container"}
-	pageA := domain.Page{ID: "page_a", SiteID: "site_rc2", Slug: "a", Root: rootA, Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	if err := mem.CreatePage(ctx, pageA, domain.PageVersion{ID: "pagever_a", PageID: "page_a", Number: 1, Root: rootA}); err != nil {
+	rootA := []domain.Element{{ID: "rootA", ComponentID: "container", Props: map[string]domain.ElementProp{}}}
+	pageA := domain.Page{ID: "page_a", SiteID: "site_rc2", Slug: "a", List: rootA, Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := mem.CreatePage(ctx, pageA, domain.PageVersion{ID: "pagever_a", PageID: "page_a", Number: 1, List: rootA}); err != nil {
 		t.Fatal(err)
 	}
 	snapA := domain.Snapshot{ID: "snapshot_a", SiteID: "site_rc2", Pages: []domain.SnapshotPage{{PageID: "page_a", VersionID: "pagever_a", Version: 1}}, CreatedAt: time.Now().UTC()}
 	if err := mem.CreateSnapshot(ctx, snapA); err != nil {
 		t.Fatal(err)
 	}
-	rootB := domain.ComponentNode{InstanceID: "rootB", DefinitionID: "container"}
-	pageB := domain.Page{ID: "page_b", SiteID: "site_rc2", Slug: "b", Root: rootB, Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	if err := mem.CreatePage(ctx, pageB, domain.PageVersion{ID: "pagever_b", PageID: "page_b", Number: 1, Root: rootB}); err != nil {
+	rootB := []domain.Element{{ID: "rootB", ComponentID: "container", Props: map[string]domain.ElementProp{}}}
+	pageB := domain.Page{ID: "page_b", SiteID: "site_rc2", Slug: "b", List: rootB, Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := mem.CreatePage(ctx, pageB, domain.PageVersion{ID: "pagever_b", PageID: "page_b", Number: 1, List: rootB}); err != nil {
 		t.Fatal(err)
 	}
 	snapB := domain.Snapshot{ID: "snapshot_b", SiteID: "site_rc2", Pages: []domain.SnapshotPage{{PageID: "page_b", VersionID: "pagever_b", Version: 1}}, CreatedAt: time.Now().UTC()}
@@ -203,9 +208,9 @@ func TestRuntimeContractVersionIdOverridesEnvironment(t *testing.T) {
 	if status != http.StatusOK || body["version"] != snapB.ID {
 		t.Fatalf("versionId override failed: status %d body %#v", status, body)
 	}
-	tree := body["tree"].(map[string]any)
-	if tree["root"].(map[string]any)["instanceId"] != "rootB" {
-		t.Fatalf("tree root = %#v", tree["root"])
+	pages := body["pages"].([]any)
+	if len(pages) != 1 || pages[0].(map[string]any)["id"] != "page_b" {
+		t.Fatalf("versionId override pages = %#v", body["pages"])
 	}
 
 	// A versionId from another site is not found.
@@ -239,14 +244,16 @@ func TestRuntimeContractErrors(t *testing.T) {
 }
 
 type bootProbe struct {
-	SiteID               string `json:"siteId"`
-	Environment          string `json:"environment"`
-	Ready                bool   `json:"ready"`
-	Locale               string `json:"locale"`
-	HasContentOp         bool   `json:"hasContentOp"`
-	HomePageID           string `json:"homePageId"`
-	TreeRootInstanceID   string `json:"treeRootInstanceId"`
-	TreeRootDefinitionID string `json:"treeRootDefinitionId"`
+	SiteID             string `json:"siteId"`
+	Environment        string `json:"environment"`
+	Ready              bool   `json:"ready"`
+	Locale             string `json:"locale"`
+	HasContentOp       bool   `json:"hasContentOp"`
+	HomePageID         string `json:"homePageId"`
+	PageID             string `json:"pageId"`
+	PageElementCount   int    `json:"pageElementCount"`
+	FirstElementID     string `json:"firstElementId"`
+	FirstElementCompID string `json:"firstElementComponentId"`
 }
 
 // TestBootStandaloneScript runs the real ui-runtime boot() (core bundle, no
@@ -283,8 +290,11 @@ func TestBootStandaloneScript(t *testing.T) {
 	if probe.HomePageID != "page_boot" {
 		t.Fatalf("home page = %q, want page_boot", probe.HomePageID)
 	}
-	if probe.TreeRootInstanceID != "root" || probe.TreeRootDefinitionID != "container" {
-		t.Fatalf("tree root = %#v", probe)
+	if probe.PageID != "page_boot" {
+		t.Fatalf("loaded page = %q, want page_boot", probe.PageID)
+	}
+	if probe.PageElementCount != 2 || probe.FirstElementID != "root" || probe.FirstElementCompID != "container" {
+		t.Fatalf("page list = %d elements, first %s/%s; want 2, root/container", probe.PageElementCount, probe.FirstElementID, probe.FirstElementCompID)
 	}
 	if probe.Locale == "" {
 		t.Fatalf("locale missing: %#v", probe)

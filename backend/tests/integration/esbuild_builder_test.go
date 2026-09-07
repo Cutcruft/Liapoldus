@@ -49,13 +49,13 @@ func materializeTestWorkspace(t *testing.T, mem *storage.Memory, siteID string, 
 	seedDefinitionSource(t, mem, siteID, "container",
 		"import React from \"react\";\nexport default (props) => React.createElement(\"div\", null, props?.children ?? null);\n")
 
-	root := domain.ComponentNode{
-		InstanceID: "root", DefinitionID: "container",
-		Children: []domain.ComponentNode{{InstanceID: "kids", DefinitionID: "text"}},
+	root := []domain.Element{
+		{ID: "root", ComponentID: "container", Props: map[string]domain.ElementProp{}},
+		{ID: "kids", ComponentID: "text", Props: map[string]domain.ElementProp{}},
 	}
-	page := domain.Page{ID: "page_e2e", SiteID: siteID, Name: "Home", Slug: "index", Root: root, Version: 1,
+	page := domain.Page{ID: "page_e2e", SiteID: siteID, Name: "Home", Slug: "index", List: root, Version: 1,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	version := domain.PageVersion{ID: "pagever_e2e", PageID: "page_e2e", Number: 1, Root: root, CreatedAt: time.Now().UTC()}
+	version := domain.PageVersion{ID: "pagever_e2e", PageID: "page_e2e", Number: 1, List: root, CreatedAt: time.Now().UTC()}
 	if err := mem.CreatePage(ctx, page, version); err != nil {
 		t.Fatal(err)
 	}

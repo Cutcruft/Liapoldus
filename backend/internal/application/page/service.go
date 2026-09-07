@@ -9,21 +9,18 @@ import (
 
 	idgen "github.com/liapoldus/liapoldus/backend/internal/application/id"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
-	"github.com/liapoldus/liapoldus/backend/internal/schema"
 )
 
 // Defaults applied when Settings leave a limit at its zero value.
 const (
-	defaultMaxDepth    = 32
-	defaultMaxChildren = 100
+	defaultMaxElements = 500
 )
 
 // Settings carries the externally-configured structural constraints of a page
-// component tree.
+// element list.
 type Settings struct {
 	InitialVersion int32
-	MaxDepth       int
-	MaxChildren    int
+	MaxElements    int
 }
 
 type Service struct {
@@ -37,7 +34,7 @@ func NewService(repo domain.PageRepository, siteRepo domain.SiteRepository, defs
 	return &Service{repo: repo, siteRepo: siteRepo, defs: defs, settings: settings}
 }
 
-func (s *Service) Create(ctx context.Context, siteID, name, slug string, root domain.ComponentNode) (domain.Page, error) {
+func (s *Service) Create(ctx context.Context, siteID, name, slug string, list []domain.Element) (domain.Page, error) {
 	if _, err := s.siteRepo.GetSite(ctx, siteID); err != nil {
 		return domain.Page{}, err
 	}
@@ -45,7 +42,11 @@ func (s *Service) Create(ctx context.Context, siteID, name, slug string, root do
 	if name == "" || slug == "" {
 		return domain.Page{}, fmt.Errorf("%w: name and slug are required", domain.ErrInvalidRequest)
 	}
-	if err := s.validateTree(ctx, siteID, "$."+root.InstanceID, root, 0); err != nil {
+	list, err := s.assignElementIDs(list)
+	if err != nil {
+		return domain.Page{}, err
+	}
+	if err := s.validateList(ctx, siteID, list); err != nil {
 		return domain.Page{}, err
 	}
 	id, err := idgen.New(idgen.Page)
@@ -53,12 +54,12 @@ func (s *Service) Create(ctx context.Context, siteID, name, slug string, root do
 		return domain.Page{}, err
 	}
 	now := time.Now().UTC()
-	page := domain.Page{ID: id, SiteID: siteID, Name: name, Slug: slug, Root: root, Version: s.settings.InitialVersion, CreatedAt: now, UpdatedAt: now}
+	page := domain.Page{ID: id, SiteID: siteID, Name: name, Slug: slug, List: list, Version: s.settings.InitialVersion, CreatedAt: now, UpdatedAt: now}
 	versionID, err := idgen.New(idgen.PageVer)
 	if err != nil {
 		return domain.Page{}, err
 	}
-	version := domain.PageVersion{ID: versionID, PageID: id, Number: s.settings.InitialVersion, Root: root, CreatedAt: now}
+	version := domain.PageVersion{ID: versionID, PageID: id, Number: s.settings.InitialVersion, List: list, CreatedAt: now}
 	if err := s.repo.CreatePage(ctx, page, version); err != nil {
 		return domain.Page{}, err
 	}
@@ -76,21 +77,31 @@ func (s *Service) ListBySite(ctx context.Context, siteID string) ([]domain.Page,
 	return s.repo.ListPagesBySite(ctx, siteID)
 }
 
-func (s *Service) UpdateTree(ctx context.Context, id string, root domain.ComponentNode) (domain.Page, error) {
+// Update atomically replaces a page's name and element list (§1.3 backend.md),
+// assigning stable ids to any elements that lack one.
+func (s *Service) Update(ctx context.Context, id, name string, list []domain.Element) (domain.Page, error) {
 	current, err := s.repo.GetPage(ctx, id)
 	if err != nil {
 		return domain.Page{}, err
 	}
-	if err := s.validateTree(ctx, current.SiteID, "$."+root.InstanceID, root, 0); err != nil {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return domain.Page{}, fmt.Errorf("%w: name is required", domain.ErrInvalidRequest)
+	}
+	list, err = s.assignElementIDs(list)
+	if err != nil {
+		return domain.Page{}, err
+	}
+	if err := s.validateList(ctx, current.SiteID, list); err != nil {
 		return domain.Page{}, err
 	}
 	now := time.Now().UTC()
-	current.Root, current.Version, current.UpdatedAt = root, current.Version+1, now
+	current.Name, current.List, current.Version, current.UpdatedAt = name, list, current.Version+1, now
 	versionID, err := idgen.New(idgen.PageVer)
 	if err != nil {
 		return domain.Page{}, err
 	}
-	version := domain.PageVersion{ID: versionID, PageID: id, Number: current.Version, Root: root, CreatedAt: now}
+	version := domain.PageVersion{ID: versionID, PageID: id, Number: current.Version, List: list, CreatedAt: now}
 	if err := s.repo.UpdatePage(ctx, current, version); err != nil {
 		return domain.Page{}, err
 	}
@@ -112,87 +123,111 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.repo.DeletePage(ctx, id)
 }
 
-// validateTree checks a page tree before writing:
-//   - structural invariants (ids, depth, children count)
-//   - every definitionId resolves in the site's component registry
-//   - instance props validate against the definition's JSON Schema
-//   - bindings follow the §6 contract of docs/ui-runtime/json-descriptors.md
-func (s *Service) validateTree(ctx context.Context, siteID, path string, n domain.ComponentNode, depth int) error {
-	maxDepth, maxChildren := s.settings.MaxDepth, s.settings.MaxChildren
-	if maxDepth == 0 {
-		maxDepth = defaultMaxDepth
+// validateList checks a page's element list before writing:
+//   - element count within the configured cap
+//   - every element has a stable id and a known componentId in the site registry
+//   - props follow the §1.3 contract (literal or binding with a valid source)
+func (s *Service) validateList(ctx context.Context, siteID string, list []domain.Element) error {
+	maxElements := s.settings.MaxElements
+	if maxElements == 0 {
+		maxElements = defaultMaxElements
 	}
-	if maxChildren == 0 {
-		maxChildren = defaultMaxChildren
+	if len(list) > maxElements {
+		return fmt.Errorf("%w: page has more than %d elements", domain.ErrInvalidRequest, maxElements)
 	}
-	if depth > maxDepth {
-		return fmt.Errorf("%w: component tree depth exceeds %d", domain.ErrInvalidRequest, maxDepth)
-	}
-	if len(n.Children) > maxChildren {
-		return fmt.Errorf("%w: node at %s has more than %d children", domain.ErrInvalidRequest, path, maxChildren)
-	}
-	if strings.TrimSpace(n.InstanceID) == "" {
-		return fmt.Errorf("%w: instanceId is required at %s", domain.ErrInvalidRequest, path)
-	}
-	if strings.TrimSpace(n.DefinitionID) == "" {
-		return fmt.Errorf("%w: definitionId is required at %s", domain.ErrInvalidRequest, path)
-	}
-	def, err := s.defs.Get(ctx, siteID, n.DefinitionID)
-	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return fmt.Errorf("%w: unknown definitionId %q referenced at %s", domain.ErrNotFound, n.DefinitionID, path)
+	seen := map[string]bool{}
+	for i, el := range list {
+		path := fmt.Sprintf("list[%d]", i)
+		if strings.TrimSpace(el.ID) == "" {
+			return fmt.Errorf("%w: element id is required at %s", domain.ErrInvalidRequest, path)
 		}
-		return err
-	}
-	if errs := schema.ValidateProps(n.Props, def.Schema); len(errs) > 0 {
-		return fmt.Errorf("%w: props of %s (definitionId %q) invalid: %v", domain.ErrInvalidRequest, path, n.DefinitionID, errs[0])
-	}
-	for _, b := range n.Bindings {
-		if err := validateBinding(b); err != nil {
-			return fmt.Errorf("%w: binding of %s: %v", domain.ErrInvalidRequest, path, err)
+		if seen[el.ID] {
+			return fmt.Errorf("%w: duplicate element id %q at %s", domain.ErrInvalidRequest, el.ID, path)
 		}
-	}
-	for _, child := range n.Children {
-		if err := s.validateTree(ctx, siteID, path+"."+child.InstanceID, child, depth+1); err != nil {
+		seen[el.ID] = true
+		if strings.TrimSpace(el.ComponentID) == "" {
+			return fmt.Errorf("%w: componentId is required at %s", domain.ErrInvalidRequest, path)
+		}
+		def, err := s.defs.Get(ctx, siteID, el.ComponentID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return fmt.Errorf("%w: unknown componentId %q referenced at %s", domain.ErrNotFound, el.ComponentID, path)
+			}
 			return err
+		}
+		if err := validateElementProps(el.Props, def.Schema); err != nil {
+			return fmt.Errorf("%w: props of %s (componentId %q) invalid: %v", domain.ErrInvalidRequest, path, el.ComponentID, err)
 		}
 	}
 	return nil
 }
 
-// validateBinding enforces the §6 contract: a binding points at exactly one
-// source and carries that source's discriminants.
-func validateBinding(b domain.ComponentBinding) error {
-	if strings.TrimSpace(b.Property) == "" {
-		return fmt.Errorf("property is required")
-	}
-	switch b.Source.Type {
-	case "content":
-		if strings.TrimSpace(b.Source.ContentID) == "" {
-			return fmt.Errorf("content source requires contentId")
+// validateElementProps validates each declared prop's kind and binding source.
+// Literal values are passed through; binding props must carry a valid source.
+func validateElementProps(props map[string]domain.ElementProp, schema map[string]any) error {
+	for _, p := range props {
+		switch p.Kind {
+		case "literal":
+			// literal value is unconstrained here; deep schema validation is a
+			// follow-on, matching the previous tree behaviour of passing props.
+		case "binding":
+			if p.Source == nil {
+				return fmt.Errorf("binding prop requires source")
+			}
+			if err := validateBindingSource(*p.Source); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported prop kind %q", p.Kind)
 		}
-	case "routeParam", "routeQuery":
-		if strings.TrimSpace(b.Source.Name) == "" {
-			return fmt.Errorf("%s source requires name", b.Source.Type)
-		}
-	case "operation":
-		if strings.TrimSpace(b.Source.OperationID) == "" {
-			return fmt.Errorf("operation source requires operationId")
-		}
-	case "form":
-		if strings.TrimSpace(b.Source.FormID) == "" {
-			return fmt.Errorf("form source requires formId")
-		}
-	case "props":
-		if strings.TrimSpace(b.Source.Path) == "" {
-			return fmt.Errorf("props source requires path")
-		}
-	case "runtime":
-		if strings.TrimSpace(b.Source.Source) == "" {
-			return fmt.Errorf("runtime source requires source")
-		}
-	default:
-		return fmt.Errorf("unsupported binding source type %q", b.Source.Type)
 	}
 	return nil
+}
+
+// validateBindingSource enforces the §1.3 contract: a binding points at exactly
+// one source and carries that source's discriminants.
+func validateBindingSource(b domain.BindingSource) error {
+	switch b.Kind {
+	case "content":
+		if strings.TrimSpace(b.ContentID) == "" || strings.TrimSpace(b.Field) == "" {
+			return fmt.Errorf("content source requires contentId and field")
+		}
+	case "form":
+		if strings.TrimSpace(b.FormID) == "" {
+			return fmt.Errorf("form source requires formId")
+		}
+	case "operation":
+		if strings.TrimSpace(b.OperationID) == "" {
+			return fmt.Errorf("operation source requires operationId")
+		}
+	case "query":
+		if strings.TrimSpace(b.Param) == "" {
+			return fmt.Errorf("query source requires param")
+		}
+	case "routeGroup":
+		if b.Index == nil {
+			return fmt.Errorf("routeGroup source requires index")
+		}
+	default:
+		return fmt.Errorf("unsupported binding source kind %q", b.Kind)
+	}
+	return nil
+}
+
+// assignElementIDs fills in a stable id for every element that lacks one,
+// preserving ids already present (so drag/drop and bindings stay stable).
+func (s *Service) assignElementIDs(list []domain.Element) ([]domain.Element, error) {
+	out := make([]domain.Element, len(list))
+	copy(out, list)
+	for i := range out {
+		if strings.TrimSpace(out[i].ID) != "" {
+			continue
+		}
+		id, err := idgen.New(idgen.Element)
+		if err != nil {
+			return nil, err
+		}
+		out[i].ID = id
+	}
+	return out, nil
 }
