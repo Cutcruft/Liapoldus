@@ -7,8 +7,10 @@
 `docs/backend/build-test-spec.md`, `docs/backend/dependency-service.md`,
 `docs/ui-runtime/spec.md`.
 
-- Статус: R0–R9 реализованы; R10 — активный слайс. R11–R13 последуют после
-  R10 и публичного SPA-shell (см. §8).
+- Статус: R0–R10 реализованы; **слайс R14 (ER-канвас)** — активный слайс (см. §8,
+  `er-canvas.md`). R11–R13 последуют после R14 и публичного SPA-shell.
+  *Нумерация слайсов R0–R13 отделена от нумерации решений R1–R19 в §1.2; «R14» в статусе —
+  номер слайса, а не решение (решение R14 = «База сайта», уже реализовано).*
 - Теги решений R* — из §1.2.
 
 ---
@@ -425,7 +427,7 @@ Content-Type: application/json
 
 | type | поля | поведение |
 | --- | --- | --- |
-| `renderPage` | `pageId` | клиентская отрисовка; на edge — заглушка 404 (до Builds) |
+| `renderPage` | `pageId` | клиентская отрисовка страницы (public SPA-shell) |
 | `serveAsset` | `assetId` | отдать байты ассета (content-type/mime, ETag, Cache-Control) |
 | `redirect` | `target`, `status?` (301/302/307/308, default 301), `keepQuery?` (bool, default false) | HTTP-редирект; в `target` поддерживаются группы regex `$1`..`$9` |
 
@@ -1022,6 +1024,29 @@ Backend + Frontend (R14).
 - [ ] F: ассеты: тип `asset` во всех редакторах (пикер+загрузка+превью), превью-URL и runtime-URL через AssetResolver.
 - [ ] Тесты: schema-слоты/валидация, element-мутации, createContentFromElement, workspace
       (композиция/drag/контролы/превью), usage по ассетам.
+
+### Слайс R14 — Единый ER-канвас редактора сайта
+
+Новый слайс (вне первоначального R0–R13). Редактор сайта — **единый канвас** (React Flow):
+узлы — сущности сайта, рёбра — связи/биндинги. Создание роутов/страниц переносится на канвас
+(без захода в IDE); IDE остаётся для кода/вёрстки/контента. Полный дизайн — `docs/redesign/er-canvas.md`.
+
+- [ ] F: установка `@xyflow/react`; shadcn-компоненты (dialog, select, sheet, badge, input, dropdown).
+- [ ] F: хук `useSiteGraph(siteId)`: parallel-fetch site (hosts)/routes/pages/components/contents →
+      типизированные узлы+рёбра React Flow. Маппинг: домен=`site.hosts`, роут=`Route`
+      (`action.renderPage.pageId|redirect|proxy`), страница=`Page`, компонент=`RegistryComponent`,
+      источник данных=`Content` (collection).
+- [ ] F: `SiteGraphCanvas` + nodeTypes (Domain/Route/Page/Component/Source) + edgeTypes;
+      dagre-старовкаская раскладка; позиции/зум в localStorage (ключ по siteId).
+- [ ] F: связи через handles + валидация типов рёбер (домен→роут, роут→страница, страница→компонент,
+      компонент→источник данных).
+- [ ] F: инспектор узла (shadcn sheet): форма полей + «Открыть в IDE»; создание узла из палитры →
+      dialog → POST ресурса → авто-лейаут.
+- [ ] F: примитив-лист (`nodeType` + только TS-скрипт, без schema/пропсов).
+- [ ] F: канвас — единственный путь: убрать `SiteRoutesPage`/`SitePagesPage` и legacy-роуты из прода
+      (в dev — fallback).
+- [ ] Тесты: map REST→граф, маршрутизация/валидация рёбер, localStorage layout, создание ноды,
+      инспектор, примитив-лист.
 
 ---
 

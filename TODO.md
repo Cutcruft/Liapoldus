@@ -147,60 +147,78 @@ placeholder).
 
 ## Фаза 4 — R10: База сайта (site-settings, head и page shell)
 
-Backend + Frontend (R14 из спеки).
+Backend + Frontend (R14 из спеки). **Завершено** (P1+P2, коммиты `d2e7b4c`,
+`ac4bf52`, `078d4ed`, `110ce2f`).
 
-Решения, подтверждённые перед началом:
-
-- Компонент — либо `primitive`, либо `section`; хранение — `isSection: boolean`, без групп.
-  Только section добавляется в страницу. Section импортирует только явно разрешённые primitive;
-  primitive не импортирует site-компоненты, section не импортирует section. Пустой allowlist —
-  безопасный deny-by-default. Каждый файл имеет `default export`, импорт: `@site/components/<id>`.
-- Page shell — не третий тип: это section с `acceptsPageContent`, получающая линейный page list
-  как React `children` от runtime. Site задаёт shell по умолчанию, страница может переопределить.
-- Контент и локаль — одна модель. Locale передаётся в чтение content; `defaultLocale` задаётся
-  в SiteSettings и служит языком по умолчанию редактора/runtime.
-- Компонентный IDE не упрощается: source редактируется в tiptap code-block, TSX проходит
-  live-валидацию в браузере, а schema автоматически выводится из TypeScript props с ручными
-  уточнениями. Политика импортов добавляет диагностики в этот же UI.
-- BFF ограничен контентом, формами и configuration API. Внешние интеграции выполняет frontend
-  напрямую; секреты и прокси внешних API не входят в продукт. RBAC не реализуем.
-
-Файлы: `backend/internal/domain/*`, `backend/internal/application/settings/*`,
-`backend/internal/api/admin/*`, `backend/internal/application/runtime/*`,
-`backend/internal/infra/build/{materializer,shell}/*`, `admin/src/app/base/*`,
-`admin/src/runtime/{types,operations}.ts`, `docs/redesign/spec.md`.
-
-- [ ] **P0 [B]** Entity `SiteSettings` + CRUD: one row per site, `defaultLocale`,
-      `defaultLayoutSectionId`, `head{titleTemplate,description,faviconAssetId,meta}`.
-      `GET/PUT /api/sites/{siteID}/settings`; миграция `013_site_settings.sql`; отсутствие
-      строки возвращает безопасные defaults из Site. Валидировать locale, формат meta и asset/site.
-- [ ] **P0 [B]** Расширить `Page`: `layoutSectionId?`, `head{title,description,robots,canonical,
-      og,meta}`; обновить page CRUD/versions/snapshot/gitsnapshot и миграцию. Валидировать, что
-      выбранный layout принадлежит сайту, является section и `acceptsPageContent`; page override
-      не нужен для работы default layout.
-- [ ] **P0 [B]** Компонентный контракт: добавить `isSection`, `allowedPrimitiveIds`,
-      `acceptsPageContent`. Создание/обновление и materializer валидируют `@site/components/<id>`:
-      default export, существование, тип, allowlist и циклы. Page validation принимает только section.
-      Выполнить это до контентного workspace, чтобы редактор получил устойчивые инварианты.
-- [ ] **P1 [B/R]** Runtime contract и shell: передавать settings + resolved page head/layout;
-      материализатор генерирует `<title>`, description, canonical/robots/OG/custom meta и favicon,
-      с merge `site → page`; `PageRenderer` оборачивает list в выбранный shell через `children`.
-- [ ] **P1 [F]** Раздел «База»: default locale, global head, favicon picker, shell picker из
-      подходящих section, live preview title/description. Page workspace получает вкладку «Head»:
-      override shell и page metadata с показом итогового merged head.
-- [ ] **P2 [F]** Темы/токены: перенести существующий token editor; шрифты как assets. Не вводить
-      импорт шаблонов, пока не подтверждён переносимый формат site bundle.
-- [ ] **P1 [Docs]** README, redesign spec и runtime spec синхронизированы с реальным контрактом;
-      не оставлять обещаний `renderPage → 404` после public-shell слайса.
-- [ ] Тесты: memory/Postgres CRUD и defaults, page/snapshot round-trip, cross-site/asset/layout
-      rejection, import-policy validator, contract+HTML merge, React shell rendering, BaseSection UI.
+Сделано:
+- **P0 [B]** `SiteSettings` + CRUD (`GET/PUT /api/sites/{siteID}/settings`,
+  миграция `013_site_settings.sql`, безопасные defaults из Site).
+- **P0 [B]** `Page`: `layoutSectionId?` + `head{...}`; обновлены page CRUD/versions/snapshot,
+  валидация layout принадлежит сайту, является секцией и `acceptsPageContent`.
+- **P0 [B]** Компонентный контракт: `isSection`, `allowedPrimitiveIds`, `acceptsPageContent`;
+  materializer валидирует `@site/components/<id>` (default export, тип, allowlist, циклы).
+- **P1 [B/R]** Runtime contract и shell: settings + resolved page head/layout; материализатор
+  генерирует `<title>`/description/OG/meta/favicon с merge `site → page`; shell через `children`.
+- **P1 [F]** Раздел «База»: default locale, global head, favicon picker, shell picker, live preview.
+- **P2 [F]** Темы/токены + шрифты как ассеты: табы «Настройки | Токены | Шрифты» в «Базе»,
+  общий draft + автсохранение (fingerprint-dirty, без клобберинга), шрифты → самоcодержащиеся
+  `@font-face` в head через `build.FontResolver` + `manifest.FontFaces` (backend); убран старый
+  роут `sites/:siteId/tokens`.
 
 **Done**: редактор задаёт default locale, общий head/favicon и page shell; каждая страница
-может безопасно переопределить shell/head; контентная композиция принимает только section.
+может безопасно переопределить shell/head; контентная композиция принимает только section;
+веб-шрифты работают без рантайм-JS.
 
 ---
 
-## Фаза 5 — R11: ui-runtime: рендер по листу и route-группы
+## Фаза 5 — R14 (новый слайс): Единый ER-канвас редактора сайта
+
+Редактор сайта представлен **единым ER-канвасом** (React Flow): узлы — сущности сайта,
+рёбра — связи/биндинги. Создание роутов/страниц переносится на канвас (без захода в IDE);
+IDE-редактор остаётся для кода/вёрстки/контента/токенов. Полный дизайн — `docs/redesign/er-canvas.md`.
+
+Утверждено: **5 типов узлов** (домен→роут→страница→компонент→источник данных); канвас —
+**единственный путь** создания роутов/страниц (старые `SiteRoutesPage`/`SitePagesPage` из прода —
+уберём, в dev остаются fallback); **dagre-автолейаут** для стартовой раскладки; раскладка
+в **localStorage**; **Tiptap отменён** (лист-примитив = `nodeType` + только TS-скрипт).
+REST-стратегия — **построчно в существующие ресурсы** (никакого отдельного graph-документа).
+
+Маппинг «узел → REST» (без новых сущностей): **домен** = `site.hosts`/`SiteSettings`
+(для сайта один домен-узел на запись `hosts:` у `createSite`); **роут** = `Route`
+(`matcher`/`priority`/`action.renderPage.pageId|redirect|proxy`); **страница** = `Page`
+(`name`/`slug`/`list`); **компонент** = `RegistryComponent` (`section|primitive`);
+**источник данных** = содержимое (`Content` collection, `listContents`).
+Рёбра: домен→роут (`host`), роут→страница (`renderPage`), страница→компонент (bind по
+`Element.props`/слоту), компонент→источник данных (binding `content.*`).
+
+Файлы: `admin/src/app/canvas/*`, `admin/src/runtime/{types,operations}.ts`,
+`admin/src/components/ui/*` (shadcn), `admin/package.json` (`@xyflow/react`), `docs/redesign/er-canvas.md`.
+
+- [x] **P0 [F]** Установить `@xyflow/react` (^12); проверить shadcn — есть alert-dialog, badge,
+      button, input, skeleton, sonner; dialog/select/sheet/dropdown/tooltip добавить через `shadcn add`.
+- [ ] **P0 [F]** Хук `useSiteGraph(siteId)`: параллельный fetch `site` (hosts), `listRoutes`,
+      `listPages`, реестра компонентов и `listContents` → типизированные узлы+рёбра
+      React Flow (маппинг REST→граф).
+- [ ] **P0 [F]** `SiteGraphCanvas` + `nodeTypes` (Domain/Route/Page/Component/Source) и `edgeTypes`
+      по видам связей; dagre-раскладка старта; позиции/зум в localStorage.
+- [ ] **P1 [F]** Инспектор узла (shadcn sheet): форма полей + «Открыть в IDE» (страница/компонент).
+- [ ] **P1 [F]** Создание узла из палитры/правого клика → shadcn dialog → POST ресурса
+      (`createRoute`/`createPage`/…) → автолейаут на свободное место.
+- [ ] **P1 [F]** Связи через handles + валидация типов рёбер (домен→роут, роут→страница
+      `renderPage`, страница→компонент bind, компонент→источник данных).
+- [ ] **P2 [F]** Примитив-лист: создание узла-компонента = `nodeType` + только TS-скрипт
+      (код-поле, без schema/пропсов).
+- [ ] **P2 [F]** Канвас — единственный путь: убрать `SiteRoutesPage`/`SitePagesPage` и
+      legacy-роуты из прода (в dev — fallback).
+- [ ] Тесты: unit (REST→граф, маршрутизация рёбер, localStorage layout), component
+      (создание ноды, инспектор, примитив-лист).
+
+**Done**: структура сайта (домены→роуты→страницы→компоненты→данные) создаётся и связывается
+визуально на едином канвасе; IDE остаётся для кода.
+
+---
+
+## Фаза 6 — R11: ui-runtime: рендер по листу и route-группы
 
 Первый пункт слайса выполнен (К4, `[x]` в спеке §8). Продолжить по оставшимся пунктам.
 
@@ -220,7 +238,7 @@ Backend + Frontend (R14 из спеки).
 
 ---
 
-## Фаза 6 — R12: Удаление старой модели и e2e
+## Фаза 7 — R12: Удаление старой модели и e2e
 
 Порт редактора выполнен (К5, `[x]`). Осталось удалить бэкендовые tree-хвосты и закрыть e2e.
 
@@ -234,13 +252,14 @@ Backend + Frontend (R14 из спеки).
 - [ ] **P1 [Docs]** Финал документации: README-раздел админки переписан, `docs/redesign/spec.md`
       статусы R7–R13 отмечены `[x]`, остальные доки без битых ссылок.
 - [ ] **P2 [F]** Удалить legacy-роуты/страницы admin (`LEGACY_ROUTES` в AppRoutes.tsx), когда
-      все разделы переедут на SiteTab; оставить в dev до R13.
+      все разделы переедут на SiteTab; оставить в dev до R13. *Уже снято для роутов/страниц:
+      канвас R14 — единственный путь (см. Фаза 5), удаление — там.*
 
 **Done**: в коде и API нет ни одного упоминания старого дерева; e2e на листе.
 
 ---
 
-## Фаза 7 — R13: Контент-редактор (дизайнерский workspace) и ассеты в схеме
+## Фаза 8 — R13: Контент-редактор (дизайнерский workspace) и ассеты в схеме
 
 Центральный экран для дизайнеров (R18/R19 из спеки). Самый крупный слайс.
 
@@ -274,7 +293,7 @@ Backend + Frontend (R14 из спеки).
 
 ---
 
-## Фаза 8 — Работы вне редизайна (из спеки §10)
+## Фаза 9 — Работы вне редизайна (из спеки §10)
 
 Не требуют редизайна, доводят текущую систему.
 
@@ -297,8 +316,8 @@ Backend + Frontend (R14 из спеки).
 
 ## Открытые вопросы
 
-- Разбиение Фазы 0 на 4 коммита — подтвердить порядок/имена (используя стиль репо: `feat(area): …`, `docs: …`).
 - R9 «индикатор незакоммиченных правок»: определять по `updatedAt`/версиям сущностей или вводить
   явный флаг dirty в схеме? (Вынести в спецификацию R9 при реализации.)
-- R10 темы/токены: переиспользовать существующий токен-редактор целиком или ограничить
-  read-only наследование на этом слайсе? (Вынести в спецификацию R10 при реализации.)
+- R9/R14: общие wire-типы admin↔ui-runtime (`Route`/`Page`/`AssetMeta`/...) — при переезде
+  роутов/страниц на канвас оставить типы в `admin/src/runtime/types.ts` (дублирование) или
+  вынести общий пакет (см. Фаза 9)?
