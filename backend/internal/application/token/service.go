@@ -42,14 +42,18 @@ func (s *Service) Update(ctx context.Context, siteID string, set *domain.TokenSe
 	return set, nil
 }
 
-// normalize replaces a nil set with the empty set and keeps the Colors slice
-// non-nil so the JSON wire format is a stable "colors": [].
+// normalize replaces a nil set with the empty set and keeps the Colors and
+// Fonts slices non-nil so the JSON wire format is a stable "colors": [] /
+// "fonts": [].
 func normalize(set *domain.TokenSet) *domain.TokenSet {
 	if set == nil {
 		set = &domain.TokenSet{}
 	}
 	if set.Colors == nil {
 		set.Colors = []domain.ColorToken{}
+	}
+	if set.Fonts == nil {
+		set.Fonts = []domain.FontToken{}
 	}
 	return set
 }

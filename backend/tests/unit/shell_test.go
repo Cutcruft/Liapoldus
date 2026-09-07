@@ -85,6 +85,39 @@ func TestShellRenderHomePagePreload(t *testing.T) {
 	}
 }
 
+// TestShellRenderFontFaces covers the P2 contract: web fonts registered by the
+// site land in <head> as self-contained @font-face rules (no runtime JS needed).
+func TestShellRenderFontFaces(t *testing.T) {
+	m := build.Manifest{
+		FontFaces: []build.FontFace{
+			{Family: "Inter", Weight: "400", Style: "italic", URL: "/build/_assets/inter-italic.woff2"},
+			{Family: "System Fallback", URL: "/build/_assets/fallback.woff2"},
+		},
+	}
+	html, err := shell.Render(m)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	for _, want := range []string{
+		`<style>`,
+		`@font-face{font-family:"Inter";src:url("/build/_assets/inter-italic.woff2");font-weight:400;font-style:italic}`,
+		`@font-face{font-family:"System Fallback";src:url("/build/_assets/fallback.woff2")}`,
+		`</style>`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("shell missing %q; html:\n%s", want, html)
+		}
+	}
+	// A manifest without fonts must not emit the style block.
+	plain, err := shell.Render(build.Manifest{})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(plain, "@font-face") || strings.Contains(plain, "<style>") {
+		t.Errorf("font-free shell must not carry a style block:\n%s", plain)
+	}
+}
+
 func TestShellWrite(t *testing.T) {
 	dir := t.TempDir()
 	dist := filepath.Join(dir, "dist")

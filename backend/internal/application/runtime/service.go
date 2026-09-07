@@ -306,6 +306,7 @@ func allRoutes(ctx context.Context, routes *routeapp.Service, siteID string) ([]
 func tokenSetMap(t *domain.TokenSet) map[string]any {
 	return map[string]any{
 		"colors":      t.Colors,
+		"fonts":       t.Fonts,
 		"typography":  t.Typography,
 		"spacing":     t.Spacing,
 		"shadows":     t.Shadows,

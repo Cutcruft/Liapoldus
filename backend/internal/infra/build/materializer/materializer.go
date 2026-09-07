@@ -33,12 +33,21 @@ type Materializer struct {
 	shared    build.SharedResolver
 	deps      build.DepLayouter
 	routes    domain.RouteRepository
+	fonts     build.FontResolver
 }
 
 func New(snapshots domain.SnapshotRepository, pages domain.PageRepository,
 	defs domain.ComponentDefinitionRepository, depsRepo domain.DependencyRepository,
 	shared build.SharedResolver, deps build.DepLayouter, routes domain.RouteRepository) *Materializer {
 	return &Materializer{snapshots: snapshots, pages: pages, defs: defs, depsRepo: depsRepo, shared: shared, deps: deps, routes: routes}
+}
+
+// WithFonts enables @font-face resolution: the resolver's FontFaces output is
+// stored on the materialized manifest so the boot shell can inject the rules
+// into the page head. Nil (the default) emits no font faces.
+func (m *Materializer) WithFonts(fonts build.FontResolver) *Materializer {
+	m.fonts = fonts
+	return m
 }
 
 var _ build.WorkspaceBuilder = (*Materializer)(nil)
@@ -174,6 +183,17 @@ func (m *Materializer) Materialize(ctx context.Context, req build.WorkspaceReque
 		manifest.Externals = append(append([]string{}, build.SharedExternals...), layout.Externals...)
 		manifest.Externals = uniqueSorted(manifest.Externals)
 		manifest.Styles = layout.Styles
+	}
+
+	// Resolve the site's declared web fonts (font tokens → public asset URLs)
+	// and hand them to the manifest so the boot shell can inline @font-face
+	// rules in the head. A missing resolver or an empty fonts set adds nothing.
+	if m.fonts != nil {
+		faces, err := m.fonts.FontFaces(ctx, req.SiteID)
+		if err != nil {
+			return fail("fonts", err)
+		}
+		manifest.FontFaces = faces
 	}
 
 	// Write one code-split entry per page: the chunk statically imports and

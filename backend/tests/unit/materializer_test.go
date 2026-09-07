@@ -470,3 +470,81 @@ func TestMaterializePageChunksPerPageAndHomeByRoute(t *testing.T) {
 		}
 	}
 }
+
+type fontsStub struct{ faces []build.FontFace }
+
+func (f fontsStub) FontFaces(context.Context, string) ([]build.FontFace, error) { return f.faces, nil }
+
+// TestMaterializeFontFaces covers the P2 contract: declared web fonts are
+// resolved through build.FontResolver into Manifest.FontFaces (and manifest.json).
+func TestMaterializeFontFaces(t *testing.T) {
+	ctx := context.Background()
+	mem := storage.NewMemory()
+	mat := materializer.New(mem, mem, mem, mem, nil, nil, mem).WithFonts(fontsStub{faces: []build.FontFace{
+		{Family: "Inter", Weight: "400", Style: "italic", URL: "/build/_assets/inter-italic.woff2"},
+	}})
+	site := seedBuildSite(t, mem)
+	seedDef(t, mem, site.ID, "text", "export default (props) => props.title;\n", "sha_ftext")
+	seedDef(t, mem, site.ID, "container", "export default (props) => props.children;\n", "sha_fcont")
+	seedDef(t, mem, site.ID, "hero", "export default (props) => props.title;\n", "sha_fhero")
+	seedMaterializedPage(t, mem, site.ID, "page_1")
+	snapshot := domain.Snapshot{ID: "snapshot_fonts", SiteID: site.ID,
+		Pages: []domain.SnapshotPage{{PageID: "page_1", VersionID: "pagever_1", Version: 1}}, CreatedAt: testNow()}
+	if err := mem.CreateSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	ws, err := mat.Materialize(ctx, build.WorkspaceRequest{
+		SiteID: site.ID, SnapshotID: snapshot.ID, Environment: domain.EnvironmentDevelopment, Dir: filepath.Join(t.TempDir(), "ws"),
+	})
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if len(ws.Manifest.FontFaces) != 1 {
+		t.Fatalf("manifest fontfaces = %#v", ws.Manifest.FontFaces)
+	}
+	ff := ws.Manifest.FontFaces[0]
+	if ff.Family != "Inter" || ff.URL != "/build/_assets/inter-italic.woff2" || ff.Weight != "400" || ff.Style != "italic" {
+		t.Fatalf("fontface = %#v", ff)
+	}
+	manifestData, err := os.ReadFile(filepath.Join(ws.Dir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifestData), `"fontFaces"`) || !strings.Contains(string(manifestData), `"family": "Inter"`) {
+		t.Fatalf("manifest.json must persist fontFaces: %s", manifestData)
+	}
+}
+
+// TestMaterializeNoFontResolverKeepsManifestLean: a nil FontResolver must not
+// leave a stray fontFaces entry in manifest.json.
+func TestMaterializeNoFontResolverKeepsManifestLean(t *testing.T) {
+	ctx := context.Background()
+	mem, mat := materializerHarness(t)
+	site := seedBuildSite(t, mem)
+	seedDef(t, mem, site.ID, "text", "export default (props) => props.title;\n", "sha_nf")
+	seedDef(t, mem, site.ID, "container", "export default (props) => props.children;\n", "sha_nfc")
+	seedDef(t, mem, site.ID, "hero", "export default (props) => props.title;\n", "sha_nfh")
+	seedMaterializedPage(t, mem, site.ID, "page_1")
+	snapshot := domain.Snapshot{ID: "snapshot_nof", SiteID: site.ID,
+		Pages: []domain.SnapshotPage{{PageID: "page_1", VersionID: "pagever_1", Version: 1}}, CreatedAt: testNow()}
+	if err := mem.CreateSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := mat.Materialize(ctx, build.WorkspaceRequest{
+		SiteID: site.ID, SnapshotID: snapshot.ID, Environment: domain.EnvironmentDevelopment, Dir: filepath.Join(t.TempDir(), "ws"),
+	})
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if ws.Manifest.FontFaces != nil {
+		t.Fatalf("manifest fontfaces must be nil without a resolver: %#v", ws.Manifest.FontFaces)
+	}
+	manifestData, err := os.ReadFile(filepath.Join(ws.Dir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(manifestData), `"fontFaces"`) {
+		t.Fatalf("manifest.json must not carry fontFaces without a resolver: %s", manifestData)
+	}
+}

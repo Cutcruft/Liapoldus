@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
 	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
@@ -76,9 +77,16 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Accessor: storage,
 	})
 	buildEvents := rebuilder.NewHub()
+	assetsSvc := asset.NewService(storage, blobs, storage, asset.Settings{
+		MasterVariant: cfg.MasterVariantName,
+		FallbackName:  cfg.AssetFallbackName,
+		FallbackMime:  cfg.AssetFallbackMime,
+		URLTemplate:   cfg.AssetFileURLTemplate,
+	})
 	builds := buildapp.NewService(
 		storage, storage, storage,
-		materializer.New(storage, storage, storage, storage, shared.NewResolver(), depsLayout, storage),
+		materializer.New(storage, storage, storage, storage, shared.NewResolver(), depsLayout, storage).
+			WithFonts(fontResolver{tokens: storage, assets: assetsSvc}),
 		builder.New(),
 		artifacts,
 		buildEvents,
@@ -105,13 +113,8 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Deploys:      deploy.NewService(storage, storage, storage, builds),
 		BuildEvents:  buildEvents,
 		Runtime:      runtime.NewService(storage, storage, storage, routes, builds, storage, storage, storage, sitesettings.NewService(storage, storage, storage)),
-		Contents:     content.NewService(storage),
-		Assets: asset.NewService(storage, blobs, storage, asset.Settings{
-			MasterVariant: cfg.MasterVariantName,
-			FallbackName:  cfg.AssetFallbackName,
-			FallbackMime:  cfg.AssetFallbackMime,
-			URLTemplate:   cfg.AssetFileURLTemplate,
-		}),
+Contents: content.NewService(storage),
+		Assets:   assetsSvc,
 		Routes: routes,
 		Forms: form.NewService(storage, storage, form.Settings{
 			EmailPattern:          cfg.EmailPattern,
@@ -160,4 +163,41 @@ func (t tarballFetcher) Tarball(ctx context.Context, name, version, tarballURL, 
 		TarballURL: tarballURL,
 		Integrity:  integrity,
 	})
+}
+
+// fontResolver bridges the token set and asset URL template onto the build
+// layer's FontResolver contract: every FontToken yields one @font-face face
+// whose src is the master variant public URL of the font asset. Assets are
+// validated to belong to the site (the resolver knows the siteID the tokens
+// were read for).
+type fontResolver struct {
+	tokens domain.TokenRepository
+	assets *asset.Service
+}
+
+func (f fontResolver) FontFaces(ctx context.Context, siteID string) ([]buildapp.FontFace, error) {
+	set, err := f.tokens.GetTokens(ctx, siteID)
+	if err != nil {
+		return nil, err
+	}
+	if set == nil {
+		return nil, nil
+	}
+	faces := make([]buildapp.FontFace, 0, len(set.Fonts))
+	for _, ft := range set.Fonts {
+		face := buildapp.FontFace{Family: ft.Family, Weight: ft.Weight, Style: ft.Style}
+		if face.Family == "" || ft.AssetID == "" {
+			continue
+		}
+		a, err := f.assets.Get(ctx, ft.AssetID)
+		if err != nil {
+			return nil, err
+		}
+		if a.SiteID != siteID {
+			return nil, fmt.Errorf("font asset %q does not belong to site %s", ft.AssetID, siteID)
+		}
+		face.URL = f.assets.Metadata(a).Variants[0].URL
+		faces = append(faces, face)
+	}
+	return faces, nil
 }

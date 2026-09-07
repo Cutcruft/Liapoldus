@@ -19,7 +19,6 @@ import { SiteFormsPage } from './pages/SiteFormsPage';
 import { FormEditorPage } from './pages/FormEditorPage';
 import { SiteBuildsPage } from './pages/SiteBuildsPage';
 import { SiteCommitsPage } from './pages/SiteCommitsPage';
-import { SiteTokensPage } from './pages/SiteTokensPage';
 import { SiteDepsPage } from './pages/SiteDepsPage';
 import { SiteAllowlistPage } from './pages/SiteAllowlistPage';
 import { EditorPage } from './editor/EditorPage';
@@ -45,7 +44,6 @@ const LEGACY_ROUTES: RouteObject[] = [
   { path: 'sites/:siteId/forms/:formId', element: <FormEditorPage /> },
   { path: 'sites/:siteId/builds', element: <SiteBuildsPage /> },
   { path: 'sites/:siteId/git', element: <SiteCommitsPage /> },
-  { path: 'sites/:siteId/tokens', element: <SiteTokensPage /> },
   { path: 'sites/:siteId/deps', element: <SiteDepsPage /> },
   { path: 'sites/:siteId/allowlist', element: <SiteAllowlistPage /> },
 ];

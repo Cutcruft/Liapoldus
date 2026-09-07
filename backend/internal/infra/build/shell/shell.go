@@ -39,6 +39,20 @@ func Render(m build.Manifest) (string, error) {
 	for _, css := range m.Styles {
 		fmt.Fprintf(&b, "<link rel=\"stylesheet\" href=\"%s\">\n", relToPage(css))
 	}
+	if len(m.FontFaces) > 0 {
+		b.WriteString("<style>\n")
+		for _, f := range m.FontFaces {
+			fmt.Fprintf(&b, "@font-face{font-family:%q;src:url(%q)", f.Family, f.URL)
+			if f.Weight != "" {
+				fmt.Fprintf(&b, ";font-weight:%s", f.Weight)
+			}
+			if f.Style != "" {
+				fmt.Fprintf(&b, ";font-style:%s", f.Style)
+			}
+			b.WriteString("}\n")
+		}
+		b.WriteString("</style>\n")
+	}
 	if home := homeChunk(m); home != "" {
 		fmt.Fprintf(&b, "<link rel=\"modulepreload\" href=\"%s\">\n", relToPage(home))
 	}

@@ -346,6 +346,18 @@ export type ColorToken = {
   value: Record<ColorMode, string>;
 };
 
+/**
+ * Один зарегистрированный веб-шрифт: CSS font-family, ассет с файлом шрифта
+ * (TTF/WOFF2) и начертание/стиль, которые реализует файл. Материализуется
+ * как @font-face в head сборки.
+ */
+export type FontToken = {
+  family: string;
+  assetId: string;
+  weight?: string;
+  style?: string;
+};
+
 /** Имена скалярных групп токенов (порядок = порядок в UI/JSON). */
 export const TOKEN_GROUPS = [
   'typography',
@@ -363,11 +375,12 @@ export type TokenGroup = (typeof TOKEN_GROUPS)[number];
 
 /**
  * Набор дизайн-токенов сайта (полная замена через GET/PUT /api/sites/{id}/tokens).
- * colors всегда массив (может быть пустым); скалярные группы — опциональные
- * map «имя токена → CSS-значение» ("2rem", "0 2px 4px rgba(0,0,0,.1)").
+ * colors и fonts всегда массивы (могут быть пустыми); скалярные группы —
+ * опциональные map «имя токена → CSS-значение» ("2rem", "0 2px 4px rgba(0,0,0,.1)").
  */
 export type TokenSet = {
   colors: ColorToken[];
+  fonts?: FontToken[];
   typography?: Record<string, string>;
   spacing?: Record<string, string>;
   shadows?: Record<string, string>;

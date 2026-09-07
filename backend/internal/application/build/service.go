@@ -130,6 +130,27 @@ type Manifest struct {
 	// route referencing a snapshot page, else the first snapshot page. The
 	// shell modulepreloads its chunk so the first screen has no JS round-trip.
 	HomePage string `json:"homePage,omitempty"`
+	// FontFaces are the site's declared web fonts, resolved to public URLs;
+	// the boot shell turns them into inline @font-face rules in the head so
+	// font-family tokens work without runtime JS (spec §12).
+	FontFaces []FontFace `json:"fontFaces,omitempty"`
+}
+
+// FontFace is one resolved @font-face rule: a font-family name, its weight and
+// style (both optional, CSS defaults 400/normal) and the public URL of the font
+// asset the rule should load.
+type FontFace struct {
+	Family string `json:"family"`
+	Weight string `json:"weight,omitempty"`
+	Style  string `json:"style,omitempty"`
+	URL    string `json:"url"`
+}
+
+// FontResolver is the optional source of the site's web-font faces. The
+// materializer uses it to fill Manifest.FontFaces; a nil resolver (or an empty
+// fonts set) emits no @font-face rules.
+type FontResolver interface {
+	FontFaces(ctx context.Context, siteID string) ([]FontFace, error)
 }
 
 // PageRef links a snapshot page to its code-split chunk artifact (relative to

@@ -57,6 +57,7 @@ export type {
   Submission,
   TokenGroup,
   TokenSet,
+  FontToken,
   AdminComponent,
   AdminEndpoint,
   AdminOperation,
