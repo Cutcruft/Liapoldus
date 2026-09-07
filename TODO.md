@@ -19,10 +19,11 @@
 Незакоммиченная работа в рабочей директории: комплект К4/К5 (плоская модель
 `Page.list`, admin-порт редактора на лист, ui-runtime 262/262) и чистка документации.
 
-- [ ] **P0** Проверить статус: `git status`, `git diff --stat`. Убедиться, что в diff нет
+- [x] **P0** Проверить статус: `git status`, `git diff --stat`. Убедиться, что в diff нет
       секретов/мусора (`data/`, `node_modules/`, `backend/tmp`, `backend/bin`).
-- [ ] **P0** Прогнать полный тестовый набор перед коммитом: `make test` и `make lint`.
-- [ ] **P0** Сделать коммиты по логическим группам (НЕ сливать в один):
+- [x] **P0** Прогнать полный тестовый набор перед коммитом: `make test` и `make lint`.
+      *(Попутно поправлен go vet: пустые append в builder.go/rebuilder.go.)*
+- [x] **P0** Сделать коммиты по логическим группам (НЕ сливать в один):
   - `feat(ui-runtime): list-based PageRenderer/ElementNode, routeGroup bindings, boot/store/tree (K4)` —
     ui-runtime + удалённый `ui-runtime/src/types/tree.ts` + новый `ui-runtime/src/types/page.ts`;
   - `feat(admin): editor port to flat page list, list-utils, Inspector/TreePanel/PreviewPane rewrite (K5)` —
@@ -30,11 +31,12 @@
   - `feat(backend): pages list wire contract, Route entity, migration 011_pages_list` —
     domain/model.go, route.go, handlers, postgres.go, migration;
   - `docs: consolidate redesign+API into docs/redesign/spec.md, merge json-descriptors, drop obsolete docs` —
-    docs-файлы, README, build-test-spec.
-- [ ] **P0** Верификация после коммита: `git log --oneline`, рабочая директория чиста
+    docs-файлы, README, build-test-spec;
+  - `docs: remove completed todo-mvp.md` (отдельно — файл в корне, не попал в `git add docs/`).
+- [x] **P0** Верификация после коммита: `git log --oneline`, рабочая директория чиста
       (`git status` без незакоммиченного), `make test` повторно зелёный.
 
-**Done**: консервируем состояние К4/К5 до начала слайсов R7–R13.
+**Done**: консервируем состояние К4/К5 до начала слайсов R7–R13 (5 коммитов: e40b447, 55b9cb8, 50652f2, 4306044, 204fcfe).
 
 ---
 
