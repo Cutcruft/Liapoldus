@@ -295,6 +295,21 @@ func (r *Repo) ReadFiles(_ context.Context, siteID, sha string) (map[string][]by
 	return readTreeContents(st, commit.TreeHash)
 }
 
+// ReadFile returns one file of a commit by path. The tree is flattened the
+// same way ReadFiles does, so nested paths ("components/{id}/source.tsx")
+// resolve deterministically.
+func (r *Repo) ReadFile(_ context.Context, siteID, sha, path string) ([]byte, error) {
+	files, err := r.ReadFiles(context.Background(), siteID, sha)
+	if err != nil {
+		return nil, err
+	}
+	content, ok := files[path]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	return content, nil
+}
+
 func commitOnBranch(repo *git.Repository, branch, message string, files map[string][]byte) (string, error) {
 	st := repo.Storer
 	names := make([]string, 0, len(files))

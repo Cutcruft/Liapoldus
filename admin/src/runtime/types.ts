@@ -356,3 +356,70 @@ export type EvictResponse = {
   evicted: number;
   evictedBytes: number;
 };
+
+/** Строка реестра компонентов (R5, `GET /sites/{id}/components/registry`). */
+export type RegistryComponent = {
+  id: string;
+  name: string;
+  kind: string;
+  currentSha?: string;
+  /** false = исходник отличается от dev-HEAD (или git ещё нет) → «грязно». */
+  committed: boolean;
+  usageCount: number;
+  updatedAt: string;
+};
+
+/** Ответ реестра: dev-HEAD + все определения сайта. */
+export type ComponentRegistry = {
+  devSha?: string;
+  components: RegistryComponent[];
+};
+
+/** Полное определение компонента (registry-запись + source). */
+export type AdminComponent = {
+  id: string;
+  siteId: string;
+  name: string;
+  kind: string;
+  source: string;
+  schema: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  currentSha?: string;
+  committed?: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Один коммит истории компонента: sha + сообщение + исходник на тот момент. */
+export type ComponentHistoryEntry = {
+  sha: string;
+  message: string;
+  time: string;
+  source: string;
+};
+
+/** Страница, использующая компонент (R5, `GET /components/{id}/usage`). */
+export type ComponentUsagePage = {
+  id: string;
+  name: string;
+  count: number;
+};
+
+export type ComponentUsage = {
+  componentId: string;
+  pages: ComponentUsagePage[];
+};
+
+/** Ответ `POST /components/{id}/commit`: sha + число отмеченных определений. */
+export type ComponentCommitResult = {
+  sha: string;
+  count: number;
+};
+
+/** Выведенная из TSX проп (панель Schema, R5 — авто-эвристика). */
+export type InferredProp = {
+  name: string;
+  type: string;
+  required: boolean;
+  default?: string;
+};

@@ -53,9 +53,11 @@ type BindingSource struct {
 	Source      string `json:"source,omitempty"`
 }
 
-// ComponentDefinition is the persisted registry entry for a component. The
-// actual source is stored in git (R5); the registry carries the parsed schema
-// and metadata for validation and listing.
+// ComponentDefinition is the persisted registry entry for a component. It
+// carries the source alongside the parsed schema/metadata (R5); the site git
+// history keeps the durable per-version record. Source is json:"-" so it
+// never leaks into page/snapshot payloads — it is served explicitly by the
+// component get/history endpoints.
 type ComponentDefinition struct {
 	SiteID     string         `json:"siteId"`
 	ID         string         `json:"id"`

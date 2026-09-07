@@ -12,7 +12,12 @@ export type {
   BuildStatus,
   ColorMode,
   ColorToken,
+  ComponentCommitResult,
+  ComponentHistoryEntry,
   ComponentNode,
+  ComponentRegistry,
+  ComponentUsage,
+  ComponentUsagePage,
   ContentDetail,
   ContentLocaleStat,
   ContentSummary,
@@ -26,6 +31,7 @@ export type {
   GitCommitInfo,
   GitOverview,
   GitStatus,
+  InferredProp,
   LockedDep,
   OperationResult,
   OperationStatus,
@@ -33,6 +39,7 @@ export type {
   PageVersion,
   RecentBuild,
   RecentSnapshot,
+  RegistryComponent,
   ResolveResult,
   Route,
   RouteAction,
@@ -45,6 +52,7 @@ export type {
   Submission,
   TokenGroup,
   TokenSet,
+  AdminComponent,
 } from './types';
 export { TOKEN_GROUPS } from './types';
 export { createAdminApi } from './api';

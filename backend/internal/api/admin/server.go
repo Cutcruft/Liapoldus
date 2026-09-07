@@ -54,7 +54,7 @@ func NewRouter(app App) http.Handler {
 	routeHandler := NewRouteHandler(app.Routes)
 	formHandler := NewFormHandler(app.Forms)
 	snapshotHandler := NewSnapshotHandler(app.Snapshots)
-	componentHandler := NewComponentHandler(app.Components)
+	componentHandler := NewComponentHandler(app.Components, app.Pages, app.Git)
 	buildHandler := NewBuildHandler(app.Builds)
 	depsHandler := NewDepsHandler(app.Deps)
 	dashboardHandler := NewDashboardHandler(app.Sites, app.Builds, app.Snapshots, app.Git)
@@ -157,9 +157,13 @@ func NewRouter(app App) http.Handler {
 
 	protected.HandleFunc("POST /api/sites/{siteID}/components", componentHandler.Define)
 	protected.HandleFunc("GET /api/sites/{siteID}/components", componentHandler.List)
+	protected.HandleFunc("GET /api/sites/{siteID}/components/registry", componentHandler.Registry)
 	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}", componentHandler.Get)
 	protected.HandleFunc("PUT /api/sites/{siteID}/components/{componentID}", componentHandler.Update)
 	protected.HandleFunc("DELETE /api/sites/{siteID}/components/{componentID}", componentHandler.Delete)
+	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/history", componentHandler.History)
+	protected.HandleFunc("GET /api/sites/{siteID}/components/{componentID}/usage", componentHandler.Usage)
+	protected.HandleFunc("POST /api/sites/{siteID}/components/{componentID}/commit", componentHandler.Commit)
 
 	protected.HandleFunc("POST /api/sites/{siteID}/builds", buildHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/builds", buildHandler.List)

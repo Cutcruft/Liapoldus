@@ -85,6 +85,19 @@ func (s *Service) Delete(ctx context.Context, siteID, id string) error {
 	return s.defs.Delete(ctx, siteID, id)
 }
 
+// MarkCommitted records the git sha that holds this component's state after a
+// site-wide commit, without bumping the local version (Define/Update already
+// assigned the in-memory version id). Idempotent: re-marking the same sha is a
+// no-op write.
+func (s *Service) MarkCommitted(ctx context.Context, siteID, id, sha string) error {
+	d, err := s.Get(ctx, siteID, id)
+	if err != nil {
+		return err
+	}
+	d.CurrentSHA = sha
+	return s.defs.Save(ctx, d)
+}
+
 // saveNewVersion assigns a generated version id, persists the definition and
 // returns the version record.
 func (s *Service) saveNewVersion(ctx context.Context, d domain.ComponentDefinition, message string) (domain.ComponentVersion, error) {

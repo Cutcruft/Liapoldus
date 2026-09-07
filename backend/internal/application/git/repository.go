@@ -44,6 +44,10 @@ type Repository interface {
 
 	// ReadFiles returns the file set of a single commit by sha.
 	ReadFiles(ctx context.Context, siteID, sha string) (map[string][]byte, error)
+
+	// ReadFile returns one file of a single commit by sha and path, or
+	// ErrNotFound when the commit or the path does not exist.
+	ReadFile(ctx context.Context, siteID, sha, path string) ([]byte, error)
 }
 
 // CommitInfo is one entry of a branch history list.

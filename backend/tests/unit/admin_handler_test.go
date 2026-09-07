@@ -18,11 +18,13 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
+	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
+	gitrepo "github.com/liapoldus/liapoldus/backend/internal/infra/git"
 	"github.com/liapoldus/liapoldus/backend/internal/infra/storage"
 )
 
@@ -39,6 +41,7 @@ func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	gitRepo := gitrepo.NewRepo(t.TempDir())
 	return admin.App{
 		Sites: site.NewService(db, site.Settings{DefaultLocale: "ru"}),
 		Pages: page.NewService(db, db, db, page.Settings{
@@ -59,7 +62,10 @@ func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 		}),
 		Forms:      form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
 		Components: component.NewService(db),
-		Logger:     slog.Default(),
+		Git: gitsnapshot.NewService(
+			gitRepo, db, db, db, db, db, db, db, db, nil,
+		),
+		Logger: slog.Default(),
 	}, db
 }
 

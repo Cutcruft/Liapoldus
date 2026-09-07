@@ -319,6 +319,30 @@ func TestComponentDelete(t *testing.T) {
 	}
 }
 
+func TestComponentMarkCommitted(t *testing.T) {
+	ctx := context.Background()
+	svc, fd := newComponentService(t)
+	if _, err := svc.Define(ctx, componentDefinition("site_1", "card", "Карточка")); err != nil {
+		t.Fatalf("define: %v", err)
+	}
+	if err := svc.MarkCommitted(ctx, "site_1", "card", "abc123def"); err != nil {
+		t.Fatalf("MarkCommitted: %v", err)
+	}
+	got, err := svc.Get(ctx, "site_1", "card")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CurrentSHA != "abc123def" {
+		t.Fatalf("CurrentSHA = %q, want the git sha", got.CurrentSHA)
+	}
+	if err := svc.MarkCommitted(ctx, "site_1", "ghost", "x"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("mark missing component: want ErrNotFound, got %v", err)
+	}
+	if len(fd.saved) != 2 {
+		t.Fatalf("MarkCommitted must save exactly once, got %d saves", len(fd.saved))
+	}
+}
+
 func TestComponentDefineEmptySource(t *testing.T) {
 	ctx := context.Background()
 	svc, fd := newComponentService(t)

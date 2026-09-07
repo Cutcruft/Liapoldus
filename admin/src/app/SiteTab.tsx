@@ -32,6 +32,7 @@ import {
 import { ContentSection } from './content/ContentSection';
 import { FormsSection } from './forms/FormsSection';
 import { MediaSection } from './media/MediaSection';
+import { ComponentsSection } from './components/ComponentsSection';
 
 /** Режим вкладки сайта (из URL `?view=`). */
 export type SiteTabMode = 'maintenance' | 'editor';
@@ -262,10 +263,14 @@ export function SiteTab() {
                 })}
               </nav>
               <section className="min-w-0 flex-1 pl-4" aria-label={t(sectionNavLabel(activeEditorSection))}>
-                <SectionPlaceholder
-                  title={t(sectionNavLabel(activeEditorSection))}
-                  description={t(sectionNavLabel(activeEditorSection) + '.description')}
-                />
+                {activeEditorSection === 'components' ? (
+                  <ComponentsSection />
+                ) : (
+                  <SectionPlaceholder
+                    title={t(sectionNavLabel(activeEditorSection))}
+                    description={t(sectionNavLabel(activeEditorSection) + '.description')}
+                  />
+                )}
               </section>
             </div>
           )}

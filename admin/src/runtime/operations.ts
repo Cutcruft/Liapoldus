@@ -64,7 +64,14 @@ export type OperationKind =
   | 'removeAllowlist'
   | 'getCacheConfig'
   | 'updateCacheConfig'
-  | 'evictCache';
+  | 'evictCache'
+  | 'componentRegistry'
+  | 'getComponent'
+  | 'createComponent'
+  | 'updateComponent'
+  | 'componentHistory'
+  | 'componentUsage'
+  | 'componentCommit';
 
 export interface OperationSpec<TArgs extends Record<string, unknown> = Record<string, unknown>> {
   kind: OperationKind;
@@ -685,6 +692,99 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     method: 'POST',
     route: (args) => `/api/sites/{siteId}/cache-config/evict`,
     detail: () => 'OK',
+  },
+
+  componentRegistry: {
+    kind: 'componentRegistry',
+    labelKey: 'op.componentRegistry',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/components/registry`,
+    detail: (b, t) => {
+      const list =
+        typeof b === 'object' && b !== null && Array.isArray((b as { components?: unknown }).components)
+          ? (b as { components: unknown[] }).components
+          : [];
+      return t('result.count', { n: list.length });
+    },
+  },
+
+  getComponent: {
+    kind: 'getComponent',
+    labelKey: 'op.getComponent',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/components/{componentId}`,
+    detail: (b, t) => {
+      const name = typeof b === 'object' && b !== null && 'name' in b ? String((b as { name: unknown }).name) : '';
+      return name || t('result.count', { n: 0 });
+    },
+  },
+
+  createComponent: {
+    kind: 'createComponent',
+    labelKey: 'op.createComponent',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/components`,
+    body: (args) => {
+      const body: Record<string, unknown> = {
+        name: String(args.name),
+        kind: String(args.kind ?? 'component'),
+        source: String(args.source ?? ''),
+        schema: args.schema ?? {},
+      };
+      if (args.id) body.id = args.id;
+      return body;
+    },
+    detail: () => 'OK',
+  },
+
+  updateComponent: {
+    kind: 'updateComponent',
+    labelKey: 'op.updateComponent',
+    method: 'PUT',
+    route: (args) => `/api/sites/{siteId}/components/{componentId}`,
+    body: (args) => ({
+      name: String(args.name),
+      kind: String(args.kind ?? 'component'),
+      source: String(args.source ?? ''),
+      schema: args.schema ?? {},
+      metadata: args.metadata ?? {},
+    }),
+    detail: () => 'OK',
+  },
+
+  componentHistory: {
+    kind: 'componentHistory',
+    labelKey: 'op.componentHistory',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/components/{componentId}/history`,
+    detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
+  },
+
+  componentUsage: {
+    kind: 'componentUsage',
+    labelKey: 'op.componentUsage',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/components/{componentId}/usage`,
+    detail: (b, t) => {
+      const pages =
+        typeof b === 'object' && b !== null && Array.isArray((b as { pages?: unknown }).pages)
+          ? (b as { pages: unknown[] }).pages
+          : [];
+      return t('result.usedIn', { n: pages.length });
+    },
+  },
+
+  componentCommit: {
+    kind: 'componentCommit',
+    labelKey: 'op.componentCommit',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/components/{componentId}/commit`,
+    body: (args) => ({ message: String(args.message ?? '') }),
+    detail: (b, t) => {
+      const sha =
+        typeof b === 'object' && b !== null && 'sha' in b ? String((b as { sha: unknown }).sha) : '';
+      return sha ? t('result.saved.sha', { sha: sha.slice(0, 8) }) : 'OK';
+    },
   },
 };
 
