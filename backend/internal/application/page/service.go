@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	componentapp "github.com/liapoldus/liapoldus/backend/internal/application/component"
 	idgen "github.com/liapoldus/liapoldus/backend/internal/application/id"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
@@ -34,13 +35,21 @@ func NewService(repo domain.PageRepository, siteRepo domain.SiteRepository, defs
 	return &Service{repo: repo, siteRepo: siteRepo, defs: defs, settings: settings}
 }
 
-func (s *Service) Create(ctx context.Context, siteID, name, slug string, list []domain.Element) (domain.Page, error) {
+func (s *Service) Create(ctx context.Context, siteID, name, slug string, list []domain.Element, layoutSectionID string, head domain.PageHead) (domain.Page, error) {
 	if _, err := s.siteRepo.GetSite(ctx, siteID); err != nil {
 		return domain.Page{}, err
 	}
 	name, slug = strings.TrimSpace(name), strings.TrimSpace(slug)
 	if name == "" || slug == "" {
 		return domain.Page{}, fmt.Errorf("%w: name and slug are required", domain.ErrInvalidRequest)
+	}
+	layoutSectionID = strings.TrimSpace(layoutSectionID)
+	if err := s.validateLayout(ctx, siteID, layoutSectionID); err != nil {
+		return domain.Page{}, err
+	}
+	head = normalizeHead(head)
+	if err := validateHead(head); err != nil {
+		return domain.Page{}, err
 	}
 	list, err := s.assignElementIDs(list)
 	if err != nil {
@@ -54,12 +63,12 @@ func (s *Service) Create(ctx context.Context, siteID, name, slug string, list []
 		return domain.Page{}, err
 	}
 	now := time.Now().UTC()
-	page := domain.Page{ID: id, SiteID: siteID, Name: name, Slug: slug, List: list, Version: s.settings.InitialVersion, CreatedAt: now, UpdatedAt: now}
+	page := domain.Page{ID: id, SiteID: siteID, Name: name, Slug: slug, LayoutSectionID: layoutSectionID, Head: head, List: list, Version: s.settings.InitialVersion, CreatedAt: now, UpdatedAt: now}
 	versionID, err := idgen.New(idgen.PageVer)
 	if err != nil {
 		return domain.Page{}, err
 	}
-	version := domain.PageVersion{ID: versionID, PageID: id, Number: s.settings.InitialVersion, List: list, CreatedAt: now}
+	version := domain.PageVersion{ID: versionID, PageID: id, Number: s.settings.InitialVersion, LayoutSectionID: layoutSectionID, Head: head, List: list, CreatedAt: now}
 	if err := s.repo.CreatePage(ctx, page, version); err != nil {
 		return domain.Page{}, err
 	}
@@ -77,9 +86,11 @@ func (s *Service) ListBySite(ctx context.Context, siteID string) ([]domain.Page,
 	return s.repo.ListPagesBySite(ctx, siteID)
 }
 
-// Update atomically replaces a page's name and element list (§1.3 backend.md),
-// assigning stable ids to any elements that lack one.
-func (s *Service) Update(ctx context.Context, id, name string, list []domain.Element) (domain.Page, error) {
+// Update atomically replaces a page's name, element list, layout override and
+// head (spec §2.4 / backend.md §1.3), assigning stable ids to any elements
+// that lack one. The layout/head are pinned into the new version, so a snapshot
+// rollback restores the exact presentation as written.
+func (s *Service) Update(ctx context.Context, id, name string, list []domain.Element, layoutSectionID string, head domain.PageHead) (domain.Page, error) {
 	current, err := s.repo.GetPage(ctx, id)
 	if err != nil {
 		return domain.Page{}, err
@@ -87,6 +98,14 @@ func (s *Service) Update(ctx context.Context, id, name string, list []domain.Ele
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return domain.Page{}, fmt.Errorf("%w: name is required", domain.ErrInvalidRequest)
+	}
+	layoutSectionID = strings.TrimSpace(layoutSectionID)
+	if err := s.validateLayout(ctx, current.SiteID, layoutSectionID); err != nil {
+		return domain.Page{}, err
+	}
+	head = normalizeHead(head)
+	if err := validateHead(head); err != nil {
+		return domain.Page{}, err
 	}
 	list, err = s.assignElementIDs(list)
 	if err != nil {
@@ -96,12 +115,12 @@ func (s *Service) Update(ctx context.Context, id, name string, list []domain.Ele
 		return domain.Page{}, err
 	}
 	now := time.Now().UTC()
-	current.Name, current.List, current.Version, current.UpdatedAt = name, list, current.Version+1, now
+	current.Name, current.List, current.LayoutSectionID, current.Head, current.Version, current.UpdatedAt = name, list, layoutSectionID, head, current.Version+1, now
 	versionID, err := idgen.New(idgen.PageVer)
 	if err != nil {
 		return domain.Page{}, err
 	}
-	version := domain.PageVersion{ID: versionID, PageID: id, Number: current.Version, List: list, CreatedAt: now}
+	version := domain.PageVersion{ID: versionID, PageID: id, Number: current.Version, LayoutSectionID: layoutSectionID, Head: head, List: list, CreatedAt: now}
 	if err := s.repo.UpdatePage(ctx, current, version); err != nil {
 		return domain.Page{}, err
 	}
@@ -121,6 +140,54 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return err
 	}
 	return s.repo.DeletePage(ctx, id)
+}
+
+// validateLayout checks a per-page layoutSectionId reference before it is
+// written (R10 P0-2): empty is allowed (falls back to the site default, then to
+// a bare list at materialization); any non-empty reference must resolve to a
+// site component that is a section with acceptsPageContent — the same rule that
+// guards SiteSettings.DefaultLayoutSectionID.
+func (s *Service) validateLayout(ctx context.Context, siteID, layoutSectionID string) error {
+	if strings.TrimSpace(layoutSectionID) == "" {
+		return nil
+	}
+	def, err := s.defs.Get(ctx, siteID, layoutSectionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return fmt.Errorf("%w: layout section %q not found in site components", domain.ErrInvalidRequest, layoutSectionID)
+		}
+		return err
+	}
+	if err := componentapp.ValidateLayoutSection(def); err != nil {
+		return err
+	}
+	return nil
+}
+
+// normalizeHead trims scalar head fields so persisted page heads are
+// deterministic; empty maps stay nil (absent in JSON).
+func normalizeHead(head domain.PageHead) domain.PageHead {
+	head.Title = strings.TrimSpace(head.Title)
+	head.Description = strings.TrimSpace(head.Description)
+	head.Robots = strings.TrimSpace(head.Robots)
+	head.Canonical = strings.TrimSpace(head.Canonical)
+	return head
+}
+
+// validateHead rejects og/meta entries with empty keys or values — a broken
+// head would otherwise be materialized verbatim into the page.
+func validateHead(head domain.PageHead) error {
+	for key, value := range head.OG {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%w: head.og keys and values must be non-empty (got %q)", domain.ErrInvalidRequest, key)
+		}
+	}
+	for key, value := range head.Meta {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%w: head.meta keys and values must be non-empty (got %q)", domain.ErrInvalidRequest, key)
+		}
+	}
+	return nil
 }
 
 // validateList checks a page's element list before writing:

@@ -3,19 +3,22 @@ package sitesettings
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	componentapp "github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
 type Service struct {
 	repo  domain.SiteSettingsRepository
 	sites domain.SiteRepository
+	defs  domain.ComponentDefinitionRepository
 }
 
-func NewService(repo domain.SiteSettingsRepository, sites domain.SiteRepository) *Service {
-	return &Service{repo: repo, sites: sites}
+func NewService(repo domain.SiteSettingsRepository, sites domain.SiteRepository, defs domain.ComponentDefinitionRepository) *Service {
+	return &Service{repo: repo, sites: sites, defs: defs}
 }
 
 // Get returns persisted settings or normalized defaults derived from Site.
@@ -46,7 +49,7 @@ func (s *Service) Update(ctx context.Context, siteID string, next *domain.SiteSe
 	}
 	next.SiteID = siteID
 	next = normalize(next, site)
-	if err := validate(next); err != nil {
+	if err := s.validate(ctx, next); err != nil {
 		return nil, err
 	}
 	if err := s.repo.UpsertSiteSettings(ctx, next); err != nil {
@@ -80,9 +83,25 @@ func normalize(settings *domain.SiteSettings, site domain.Site) *domain.SiteSett
 	return &copy
 }
 
-func validate(settings *domain.SiteSettings) error {
+// validate enforces the same invariants as before plus the site-wide layout
+// default: DefaultLayoutSectionID, when set, must resolve to a section with
+// acceptsPageContent in the site's component registry (shared rule with the
+// page service).
+func (s *Service) validate(ctx context.Context, settings *domain.SiteSettings) error {
 	if strings.TrimSpace(settings.DefaultLocale) == "" {
 		return fmt.Errorf("%w: defaultLocale is required", domain.ErrInvalidRequest)
+	}
+	if id := strings.TrimSpace(settings.DefaultLayoutSectionID); id != "" {
+		def, err := s.defs.Get(ctx, settings.SiteID, id)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return fmt.Errorf("%w: layout section %q not found in site components", domain.ErrInvalidRequest, id)
+			}
+			return err
+		}
+		if err := componentapp.ValidateLayoutSection(def); err != nil {
+			return err
+		}
 	}
 	for key, value := range settings.Head.Meta {
 		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {

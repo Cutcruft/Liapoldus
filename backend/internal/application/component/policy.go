@@ -181,6 +181,24 @@ func ValidateGraph(defs []domain.ComponentDefinition) error {
 	return nil
 }
 
+// ValidateLayoutSection checks a definition can act as a page layout/shell
+// (R10 P0-2): it must exist, be a section and declare acceptsPageContent — the
+// same invariants the component catalog enforces when a def is saved. Shared by
+// the page service (per-page layoutSectionId) and site settings
+// (defaultLayoutSectionId).
+func ValidateLayoutSection(def *domain.ComponentDefinition) error {
+	if def == nil {
+		return policyErrorf("layout section not found")
+	}
+	if !def.IsSection {
+		return policyErrorf("component %q is not a section — only sections can be used as a page layout", def.ID)
+	}
+	if !def.AcceptsPageContent {
+		return policyErrorf("component %q does not accept page content — a page layout must declare acceptsPageContent", def.ID)
+	}
+	return nil
+}
+
 func policyErrorf(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", domain.ErrInvalidRequest, fmt.Sprintf(format, args...))
 }

@@ -42,7 +42,7 @@ func TestPageAssemblyElementCountLimit(t *testing.T) {
 		list = append(list, e)
 	}
 
-	_, err := svc.Create(context.Background(), "site_1", "Deep", "deep", list)
+	_, err := svc.Create(context.Background(), "site_1", "Deep", "deep", list, "", domain.PageHead{})
 	if err == nil {
 		t.Fatalf("expected element count limit error")
 	}
@@ -62,7 +62,7 @@ func TestPageAssemblyMissingDefinition(t *testing.T) {
 	pageRepo := mocks.NewMockPageRepository(ctrl)
 	svc := assemblyService(siteRepo, pageRepo, pageDefs(t, "site_1", "Text"))
 
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{element("Missing")})
+	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{element("Missing")}, "", domain.PageHead{})
 	if err == nil {
 		t.Fatalf("expected missing definition error")
 	}
@@ -83,7 +83,7 @@ func TestPageAssemblyDuplicateElementID(t *testing.T) {
 	e2 := element("Text")
 	e2.ID = e1.ID
 
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{e1, e2})
+	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{e1, e2}, "", domain.PageHead{})
 	if err == nil {
 		t.Fatalf("expected duplicate id error")
 	}
@@ -108,7 +108,7 @@ func TestPageAssemblyContentBindingMissingContentID(t *testing.T) {
 		"text": {Kind: "binding", Source: &domain.BindingSource{Kind: "content"}},
 	}
 
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text})
+	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text}, "", domain.PageHead{})
 	if err == nil {
 		t.Fatalf("expected binding validation error")
 	}
@@ -133,7 +133,7 @@ func TestPageAssemblyUnsupportedBindingSource(t *testing.T) {
 		"text": {Kind: "binding", Source: &domain.BindingSource{Kind: "magic"}},
 	}
 
-	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text})
+	_, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text}, "", domain.PageHead{})
 	if err == nil {
 		t.Fatalf("expected unsupported binding source error")
 	}
@@ -156,7 +156,7 @@ func TestPageAssemblyValidContentBinding(t *testing.T) {
 		"text": {Kind: "binding", Source: &domain.BindingSource{Kind: "content", ContentID: "col.posts/a1", Field: "title"}},
 	}
 
-	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text}); err != nil {
+	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{text}, "", domain.PageHead{}); err != nil {
 		t.Fatalf("valid content binding rejected: %v", err)
 	}
 }
@@ -183,7 +183,7 @@ func TestPageAssemblyAssignsMissingElementID(t *testing.T) {
 
 	withoutID := element("Container")
 	withoutID.ID = ""
-	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{withoutID, element("Text")}); err != nil {
+	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", []domain.Element{withoutID, element("Text")}, "", domain.PageHead{}); err != nil {
 		t.Fatalf("create with missing element ids rejected: %v", err)
 	}
 }
@@ -202,7 +202,7 @@ func TestPageAssemblyMultipleElementsSameDefinition(t *testing.T) {
 		{ID: "t2", ComponentID: "Text", Props: map[string]domain.ElementProp{}},
 		{ID: "t3", ComponentID: "Text", Props: map[string]domain.ElementProp{}},
 	}
-	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", list); err != nil {
+	if _, err := svc.Create(context.Background(), "site_1", "Home", "home", list, "", domain.PageHead{}); err != nil {
 		t.Fatalf("multiple instances of one definition rejected: %v", err)
 	}
 }
@@ -215,7 +215,7 @@ func TestPageAssemblyUpdateValidatesFlow(t *testing.T) {
 	pageRepo.EXPECT().UpdatePage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	svc := assemblyService(nil, pageRepo, pageDefs(t, "site_1", "Container", "Text"))
 
-	page, err := svc.Update(context.Background(), "page_1", "Home", []domain.Element{element("Container"), element("Text")})
+	page, err := svc.Update(context.Background(), "page_1", "Home", []domain.Element{element("Container"), element("Text")}, "", domain.PageHead{})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}

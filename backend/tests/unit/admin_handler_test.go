@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -39,11 +40,18 @@ func newAdminHandlerTestApp(t *testing.T) admin.App {
 func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 	t.Helper()
 	db := storage.NewMemory()
+	return gitTestAppWithDir(t, db, t.TempDir()), db
+}
+
+// gitTestAppWithDir wires the full admin app against db and a git repo rooted
+// at gitDir, so two apps can share one repository for commit/restore tests.
+func gitTestAppWithDir(t *testing.T, db domain.Storage, gitDir string) admin.App {
+	t.Helper()
 	blobs, err := storage.NewDiskBlobStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	gitRepo := gitrepo.NewRepo(t.TempDir())
+	gitRepo := gitrepo.NewRepo(gitDir)
 	return admin.App{
 		Sites: site.NewService(db, site.Settings{DefaultLocale: "ru"}),
 		Pages: page.NewService(db, db, db, page.Settings{
@@ -72,7 +80,7 @@ func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 			gitRepo, db, db, db, db, db, db, db, db, nil,
 		),
 		Logger: slog.Default(),
-	}, db
+	}
 }
 
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -102,6 +110,26 @@ func seedSiteDefs(t *testing.T, db domain.Storage, siteID string) {
 	}
 }
 
+// seedShellDef registers a section whose acceptsPageContent is true, so it can
+// be referenced as a page layout (page.layoutSectionId / site default).
+func seedShellDef(t *testing.T, db domain.Storage, siteID string) {
+	t.Helper()
+	if err := db.Save(context.Background(), &domain.ComponentDefinition{
+		SiteID:             siteID,
+		ID:                 "Shell",
+		Name:               "Shell",
+		Kind:               "component",
+		IsSection:          true,
+		AcceptsPageContent: true,
+		Source:             "export default () => null;",
+		Schema:             mustJSONMap(`{"type":"object","properties":{"slot":{"type":"string"}}}`),
+		Metadata:           map[string]any{"label": "Shell"},
+		CreatedAt:          time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed layout shell: %v", err)
+	}
+}
+
 func TestSiteAndPageFlow(t *testing.T) {
 	app, db := newAdminHandlerTestAppDB(t)
 	handler := admin.NewRouter(app)
@@ -115,9 +143,18 @@ func TestSiteAndPageFlow(t *testing.T) {
 	}
 	decodeResponse(t, siteResponse, &created)
 	seedSiteDefs(t, db, created.ID)
+	seedShellDef(t, db, created.ID)
 
 	pageResponse := request(t, handler, http.MethodPost, "/api/sites/"+created.ID+"/pages", map[string]any{
-		"name": "Home", "slug": "home", "list": []any{
+		"name": "Home", "slug": "home",
+		"layoutSectionId": "Shell",
+		"head": map[string]any{
+			"title": "Home", "description": "Сайт", "robots": "index, follow",
+			"canonical": "https://demo.test/",
+			"og":        map[string]string{"og:type": "website"},
+			"meta":      map[string]string{"theme-color": "#000"},
+		},
+		"list": []any{
 			map[string]any{"componentId": "Container", "props": map[string]any{"gap": map[string]any{"kind": "literal", "value": 8}}},
 			map[string]any{"componentId": "Text", "props": map[string]any{"text": map[string]any{"kind": "literal", "value": "Hello"}}},
 		},
@@ -126,16 +163,28 @@ func TestSiteAndPageFlow(t *testing.T) {
 		t.Fatalf("create page status = %d", pageResponse.Code)
 	}
 	var createdPage struct {
-		ID      string `json:"id"`
-		Version int    `json:"version"`
+		ID              string          `json:"id"`
+		Version         int             `json:"version"`
+		LayoutSectionID string          `json:"layoutSectionId"`
+		Head            domain.PageHead `json:"head"`
 	}
 	decodeResponse(t, pageResponse, &createdPage)
 	if createdPage.Version != 1 {
 		t.Fatalf("initial page version = %d, want 1", createdPage.Version)
 	}
+	if createdPage.LayoutSectionID != "Shell" {
+		t.Fatalf("created layoutSectionId = %q, want Shell", createdPage.LayoutSectionID)
+	}
+	if createdPage.Head.Title != "Home" || createdPage.Head.Meta["theme-color"] != "#000" {
+		t.Fatalf("created head = %#v", createdPage.Head)
+	}
 
 	updateResponse := request(t, handler, http.MethodPut, "/api/pages/"+createdPage.ID, map[string]any{
 		"name": "Home", "list": []any{},
+		"layoutSectionId": "Shell",
+		"head": map[string]any{
+			"title": "Updated", "og": map[string]string{"og:type": "article"},
+		},
 	})
 	if updateResponse.Code != http.StatusOK {
 		t.Fatalf("update page status = %d", updateResponse.Code)
@@ -143,6 +192,12 @@ func TestSiteAndPageFlow(t *testing.T) {
 	decodeResponse(t, updateResponse, &createdPage)
 	if createdPage.Version != 2 {
 		t.Fatalf("updated page version = %d, want 2", createdPage.Version)
+	}
+	if createdPage.LayoutSectionID != "Shell" {
+		t.Fatalf("updated page lost layoutSectionId, got %q", createdPage.LayoutSectionID)
+	}
+	if createdPage.Head.Title != "Updated" || createdPage.Head.OG["og:type"] != "article" {
+		t.Fatalf("updated head = %#v", createdPage.Head)
 	}
 
 	snapshotResponse := request(t, handler, http.MethodPost, "/api/sites/"+created.ID+"/snapshots", map[string]any{"name": "Initial"})
@@ -160,11 +215,14 @@ func TestSiteAndPageFlow(t *testing.T) {
 		t.Fatalf("snapshot pages = %#v, want page version 2", snapshot.Pages)
 	}
 
-	// Version history carries the flat element list per version (§1.3/§3.7).
+	// Version history carries the flat element list per version (§1.3/§3.7)
+	// plus the layout override and head pinned at the moment of the write.
 	type versionEntry struct {
-		ID     string `json:"id"`
-		Number int    `json:"number"`
-		List   []any  `json:"list"`
+		ID              string          `json:"id"`
+		Number          int             `json:"number"`
+		LayoutSectionID string          `json:"layoutSectionId"`
+		Head            domain.PageHead `json:"head"`
+		List            []any           `json:"list"`
 	}
 	var versions []versionEntry
 	listVersionsResponse := request(t, handler, http.MethodGet, "/api/pages/"+createdPage.ID+"/versions", nil)
@@ -178,8 +236,14 @@ func TestSiteAndPageFlow(t *testing.T) {
 	if versions[0].Number != 1 || len(versions[0].List) != 2 {
 		t.Fatalf("version 1 = %#v, want list with 2 elements", versions[0])
 	}
+	if versions[0].LayoutSectionID != "Shell" || versions[0].Head.Title != "Home" {
+		t.Fatalf("version 1 layout/head not pinned: %#v", versions[0])
+	}
 	if versions[1].Number != 2 || len(versions[1].List) != 0 {
 		t.Fatalf("version 2 = %#v, want empty list", versions[1])
+	}
+	if versions[1].LayoutSectionID != "Shell" || versions[1].Head.Title != "Updated" || versions[1].Head.OG["og:type"] != "article" {
+		t.Fatalf("version 2 layout/head not pinned: %#v", versions[1])
 	}
 
 	// GetVersion returns the pinned list, not a tree.
@@ -191,6 +255,9 @@ func TestSiteAndPageFlow(t *testing.T) {
 	decodeResponse(t, getVersionResponse, &single)
 	if len(single.List) != 2 || single.Number != 1 {
 		t.Fatalf("get version = %#v, want number 1 with 2 elements", single)
+	}
+	if single.Head.Title != "Home" || single.LayoutSectionID != "Shell" {
+		t.Fatalf("get version layout/head = %#v", single)
 	}
 }
 
@@ -392,5 +459,66 @@ func TestRouteValidation(t *testing.T) {
 	})
 	if badRegex.Code != http.StatusBadRequest {
 		t.Fatalf("invalid regex matcher = %d, want 400", badRegex.Code)
+	}
+}
+
+func TestGitCommitRestoreCarriesPageHeadAndLayout(t *testing.T) {
+	ctx := context.Background()
+	gitDir := t.TempDir()
+
+	sourceDB := storage.NewMemory()
+	source := gitTestAppWithDir(t, sourceDB, gitDir)
+	site, err := source.Sites.Create(ctx, "Git", "git-site", "", nil)
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	seedSiteDefs(t, sourceDB, site.ID)
+	seedShellDef(t, sourceDB, site.ID)
+
+	head := domain.PageHead{
+		Title: "Главная", Description: "Описание", Robots: "noindex",
+		Canonical: "https://git.test/", OG: map[string]string{"og:type": "website"},
+		Meta: map[string]string{"theme-color": "#123456"},
+	}
+	page, err := source.Pages.Create(ctx, site.ID, "Главная", "index", []domain.Element{
+		{ID: "root", ComponentID: "Shell", Props: map[string]domain.ElementProp{}},
+	}, "Shell", head)
+	if err != nil {
+		t.Fatalf("create page with head: %v", err)
+	}
+
+	sha, err := source.Git.Commit(ctx, site.ID, "snapshot with head")
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	targetDB := storage.NewMemory()
+	target := gitTestAppWithDir(t, targetDB, gitDir)
+	// Restore operates on an existing site record; reuse the source site id so
+	// the pinned page references resolve.
+	if err := targetDB.CreateSite(ctx, domain.Site{ID: site.ID, Name: site.Name, Slug: site.Slug, DefaultLocale: site.DefaultLocale, CreatedAt: site.CreatedAt}); err != nil {
+		t.Fatalf("recreate site on target: %v", err)
+	}
+	if _, err := target.Git.Restore(ctx, site.ID, sha, "restore head"); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	got, err := target.Pages.Get(ctx, page.ID)
+	if err != nil {
+		t.Fatalf("get restored page: %v", err)
+	}
+	if got.LayoutSectionID != "Shell" {
+		t.Fatalf("restored layoutSectionId = %q, want Shell", got.LayoutSectionID)
+	}
+	if !reflect.DeepEqual(got.Head, head) {
+		t.Fatalf("restored head = %#v, want %#v", got.Head, head)
+	}
+
+	versions, err := target.Pages.Versions(ctx, page.ID)
+	if err != nil {
+		t.Fatalf("list restored versions: %v", err)
+	}
+	if len(versions) != 1 || versions[0].LayoutSectionID != "Shell" || !reflect.DeepEqual(versions[0].Head, head) {
+		t.Fatalf("restored version head/layout = %#v", versions)
 	}
 }

@@ -96,7 +96,7 @@ func TestSitePageContentAssetRoundtrip(t *testing.T) {
 		{ID: "root", ComponentID: "Container", Props: map[string]domain.ElementProp{"title": {Kind: "literal", Value: "Home"}}},
 		{ID: "kids", ComponentID: "Text", Props: map[string]domain.ElementProp{}},
 	}
-	page, err := services.Pages.Create(ctx, site.ID, "Home", "index", root)
+	page, err := services.Pages.Create(ctx, site.ID, "Home", "index", root, "", domain.PageHead{})
 	if err != nil {
 		t.Fatalf("create page: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestSitePageContentAssetRoundtrip(t *testing.T) {
 	updatedRoot := []domain.Element{
 		{ID: "root", ComponentID: "Container", Props: map[string]domain.ElementProp{"title": {Kind: "literal", Value: "About"}}},
 	}
-	updated, err := services.Pages.Update(ctx, page.ID, "Home", updatedRoot)
+	updated, err := services.Pages.Update(ctx, page.ID, "Home", updatedRoot, "", domain.PageHead{})
 	if err != nil {
 		t.Fatalf("update page: %v", err)
 	}

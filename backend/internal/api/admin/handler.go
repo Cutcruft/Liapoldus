@@ -152,14 +152,18 @@ func NewPageHandler(pages *page.Service) *PageHandler {
 }
 
 type createPageRequest struct {
-	Name string            `json:"name"`
-	Slug string            `json:"slug"`
-	List []domain.Element  `json:"list"`
+	Name            string           `json:"name"`
+	Slug            string           `json:"slug"`
+	LayoutSectionID string           `json:"layoutSectionId"`
+	Head            domain.PageHead  `json:"head"`
+	List            []domain.Element `json:"list"`
 }
 
 type updatePageRequest struct {
-	Name string           `json:"name"`
-	List []domain.Element `json:"list"`
+	Name            string           `json:"name"`
+	LayoutSectionID string           `json:"layoutSectionId"`
+	Head            domain.PageHead  `json:"head"`
+	List            []domain.Element `json:"list"`
 }
 
 func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +175,7 @@ func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.DecodeJSON(r, &req, w) {
 		return
 	}
-	result, err := h.pages.Create(r.Context(), siteID, req.Name, req.Slug, req.List)
+	result, err := h.pages.Create(r.Context(), siteID, req.Name, req.Slug, req.List, req.LayoutSectionID, req.Head)
 	if err != nil {
 		httpapi.RespondError(w, err)
 		return
@@ -205,7 +209,8 @@ func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 	httpapi.RespondJSON(w, http.StatusOK, result)
 }
 
-// Update atomically replaces a page's name and element list (PUT /api/pages/{pageID}).
+// Update atomically replaces a page's name, element list, layout override and
+// head (PUT /api/pages/{pageID}).
 func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	pageID := r.PathValue("pageID")
 	if pageID == "" {
@@ -215,7 +220,7 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !httpapi.DecodeJSON(r, &req, w) {
 		return
 	}
-	result, err := h.pages.Update(r.Context(), pageID, req.Name, req.List)
+	result, err := h.pages.Update(r.Context(), pageID, req.Name, req.List, req.LayoutSectionID, req.Head)
 	if err != nil {
 		httpapi.RespondError(w, err)
 		return
@@ -534,7 +539,7 @@ type assetUsageForm struct {
 }
 
 type assetUsageResponse struct {
-	AssetID  string             `json:"assetId"`
+	AssetID  string              `json:"assetId"`
 	Contents []assetUsageContent `json:"contents"`
 	Forms    []assetUsageForm    `json:"forms"`
 }

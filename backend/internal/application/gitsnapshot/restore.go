@@ -178,6 +178,8 @@ func (s *Service) upsertPage(ctx context.Context, siteID, pageID string, pf page
 			return err
 		}
 		now := time.Now().UTC()
+		current.LayoutSectionID = pf.LayoutSectionID
+		current.Head = pf.Head
 		current.List = pf.List
 		if pf.Version > current.Version {
 			current.Version = pf.Version
@@ -185,7 +187,7 @@ func (s *Service) upsertPage(ctx context.Context, siteID, pageID string, pf page
 			current.Version++
 		}
 		current.UpdatedAt = now
-		version := domain.PageVersion{ID: versionID, PageID: pageID, Number: current.Version, List: pf.List, CreatedAt: now}
+		version := domain.PageVersion{ID: versionID, PageID: pageID, Number: current.Version, LayoutSectionID: pf.LayoutSectionID, Head: pf.Head, List: pf.List, CreatedAt: now}
 		return s.pages.UpdatePage(ctx, current, version)
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		return fmt.Errorf("get page %s: %w", pageID, err)
@@ -199,8 +201,8 @@ func (s *Service) upsertPage(ctx context.Context, siteID, pageID string, pf page
 	if err != nil {
 		return err
 	}
-	page := domain.Page{ID: pageID, SiteID: siteID, Name: pageID, Slug: pageID, List: pf.List, Version: version, CreatedAt: now, UpdatedAt: pf.UpdatedAt}
-	return s.pages.CreatePage(ctx, page, domain.PageVersion{ID: versionID, PageID: pageID, Number: version, List: pf.List, CreatedAt: now})
+	page := domain.Page{ID: pageID, SiteID: siteID, Name: pageID, Slug: pageID, LayoutSectionID: pf.LayoutSectionID, Head: pf.Head, List: pf.List, Version: version, CreatedAt: now, UpdatedAt: pf.UpdatedAt}
+	return s.pages.CreatePage(ctx, page, domain.PageVersion{ID: versionID, PageID: pageID, Number: version, LayoutSectionID: pf.LayoutSectionID, Head: pf.Head, List: pf.List, CreatedAt: now})
 }
 
 func (s *Service) upsertContent(ctx context.Context, siteID, contentID string, cf contentFile) error {

@@ -120,7 +120,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		Deps:         depsSvc,
 		Tokens:       tokensSvc,
 		Infra:        infraSvc,
-		SiteSettings: sitesettings.NewService(storage, storage),
+		SiteSettings: sitesettings.NewService(storage, storage, storage),
 	}
 }
 

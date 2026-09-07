@@ -35,6 +35,19 @@ type SiteHead struct {
 	Meta           map[string]string `json:"meta"`
 }
 
+// PageHead is the per-page portion of the document head (spec §2.4). Scalar
+// fields override the SiteHead defaults during materialization; Meta merges
+// over the site map by key (site first, then page). TitleTemplate and
+// FaviconAssetID stay site-wide by design.
+type PageHead struct {
+	Title       string            `json:"title,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Robots      string            `json:"robots,omitempty"`
+	Canonical   string            `json:"canonical,omitempty"`
+	OG          map[string]string `json:"og,omitempty"`
+	Meta        map[string]string `json:"meta,omitempty"`
+}
+
 // SiteSettings contains site-scoped presentation defaults. It deliberately
 // does not repeat identity fields (name, slug, hosts) from Site.
 type SiteSettings struct {
@@ -108,22 +121,26 @@ type ComponentVersion struct {
 }
 
 type Page struct {
-	ID        string    `json:"id"`
-	SiteID    string    `json:"siteId"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	List      []Element `json:"list"`
-	Version   int32     `json:"version"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID              string    `json:"id"`
+	SiteID          string    `json:"siteId"`
+	Name            string    `json:"name"`
+	Slug            string    `json:"slug"`
+	LayoutSectionID string    `json:"layoutSectionId,omitempty"`
+	Head            PageHead  `json:"head,omitempty"`
+	List            []Element `json:"list"`
+	Version         int32     `json:"version"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 type PageVersion struct {
-	ID        string    `json:"id"`
-	PageID    string    `json:"pageId"`
-	Number    int32     `json:"number"`
-	List      []Element `json:"list"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID              string    `json:"id"`
+	PageID          string    `json:"pageId"`
+	Number          int32     `json:"number"`
+	LayoutSectionID string    `json:"layoutSectionId,omitempty"`
+	Head            PageHead  `json:"head,omitempty"`
+	List            []Element `json:"list"`
+	CreatedAt       time.Time `json:"createdAt"`
 }
 
 type SnapshotPage struct {

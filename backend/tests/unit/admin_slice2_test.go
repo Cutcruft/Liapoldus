@@ -68,7 +68,7 @@ func slice2TestApp(t *testing.T, adminToken string) (admin.App, *storage.Memory)
 			deps.NewService(db, db, &fakeRegistry{}),
 		),
 		Tokens:       tokenapp.NewService(db, db),
-		SiteSettings: sitesettings.NewService(db, db),
+		SiteSettings: sitesettings.NewService(db, db, db),
 		Logger:       slog.Default(),
 		AdminToken:   adminToken,
 	}, db

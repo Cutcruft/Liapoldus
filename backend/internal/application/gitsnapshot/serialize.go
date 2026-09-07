@@ -37,9 +37,11 @@ type siteFile struct {
 }
 
 type pageFile struct {
-	List      []domain.Element `json:"list"`
-	Version   int32            `json:"version"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	LayoutSectionID string           `json:"layoutSectionId,omitempty"`
+	Head            domain.PageHead  `json:"head,omitempty"`
+	List            []domain.Element `json:"list"`
+	Version         int32            `json:"version"`
+	UpdatedAt       time.Time        `json:"updatedAt"`
 }
 
 type contentFile struct {
@@ -104,9 +106,11 @@ func (s *Service) serializeSansDeps(ctx context.Context, siteID string) (map[str
 		}
 		latest := versions[len(versions)-1]
 		files["pages/"+p.ID+".json"] = mustJSON(pageFile{
-			List:      latest.List,
-			Version:   latest.Number,
-			UpdatedAt: p.UpdatedAt,
+			LayoutSectionID: latest.LayoutSectionID,
+			Head:            latest.Head,
+			List:            latest.List,
+			Version:         latest.Number,
+			UpdatedAt:       p.UpdatedAt,
 		})
 	}
 
