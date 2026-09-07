@@ -29,17 +29,37 @@ export type Site = {
   createdAt?: string;
 };
 
-/** Источник значения свойства (literal = хранится как есть). */
+/**
+ * Источник значения свойства (линейная модель §1.3, docs/redesign/backend.md).
+ * Дискриминирующий union: ровно один вариант заполнен.
+ */
 export type BindingSource =
-  | { source: 'literal' }
-  | { source: 'content' | 'route' | 'query' | 'operation' | 'form'; path: string };
+  | { kind: 'content'; contentId: string; field: string }
+  | { kind: 'form'; formId: string }
+  | { kind: 'operation'; operationId: string }
+  | { kind: 'query'; param: string }
+  | { kind: 'routeGroup'; index: number };
 
-export type ComponentNode = {
+/**
+ * Значение свойства элемента: литерал (хранится как есть) или binding.
+ * Соответствует wire `domain.ElementProp` (`{kind, value?, source?}`).
+ */
+export type ElementProp =
+  | { kind: 'literal'; value?: unknown }
+  | { kind: 'binding'; source: BindingSource };
+
+/**
+ * Элемент страницы в линейной модели: id стабилен (назначается сервером,
+ * не меняется при insert/move), componentId — id из ComponentRegistry,
+ * props — литералы и/или биндинги. Вложенности нет: позиция в листе = порядок
+ * рендера. Соответствует wire `domain.Element`.
+ */
+export type ElementNode = {
   id: string;
-  type: string;
-  props?: Record<string, unknown>;
-  bindings?: Record<string, BindingSource>;
-  children?: ComponentNode[];
+  componentId: string;
+  props: Record<string, ElementProp>;
+  /** явные биндинги элемента (редакторские) */
+  bindings?: BindingSource[];
 };
 
 export type Page = {
@@ -47,7 +67,7 @@ export type Page = {
   siteId: string;
   name: string;
   slug: string;
-  root: ComponentNode;
+  list: ElementNode[];
   version: number;
   createdAt?: string;
 };
@@ -55,7 +75,7 @@ export type Page = {
 export type PageVersion = {
   versionId: string;
   version: number;
-  root: ComponentNode;
+  list: ElementNode[];
   createdAt?: string;
 };
 

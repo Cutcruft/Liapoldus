@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import type { Page } from '../../runtime';
+import type { ElementNode, Page } from '../../runtime';
 import { jsonResponse, renderApp } from '../test-utils';
 import { setDevSocketFactory, type WsLike } from '../ws-client';
 import { __lastRichTextEditor } from '../rich-text/RichTextEditor';
@@ -20,18 +20,15 @@ const PAGE: Page = {
   name: 'Главная',
   slug: 'index',
   version: 3,
-  root: {
-    id: 'root',
-    type: 'Container',
-    props: { layout: 'stack', gap: 8 },
-    children: [{ id: 't1', type: 'Text', props: { text: 'Привет', size: 'md', align: 'left' }, bindings: {} }],
-  },
+  list: [
+    { id: 't1', componentId: 'Text', props: { text: { kind: 'literal', value: 'Привет' }, size: { kind: 'literal', value: 'md' }, align: { kind: 'literal', value: 'left' } } },
+  ],
 };
 
-const handler = (put: { root: unknown; version: number }) => (url: string, init: RequestInit) => {
+const handler = (put: { list: unknown; version: number }) => (url: string, init: RequestInit) => {
   if (url === '/api/pages/p1' && init.method === 'GET') return jsonResponse(200, PAGE);
-  if (url === '/api/pages/p1/tree' && init.method === 'PUT') {
-    put.root = JSON.parse(String(init.body))['root'];
+  if (url === '/api/pages/p1' && init.method === 'PUT') {
+    put.list = JSON.parse(String(init.body))['list'];
     put.version += 1;
     return jsonResponse(200, { version: put.version });
   }
@@ -39,22 +36,18 @@ const handler = (put: { root: unknown; version: number }) => (url: string, init:
 };
 
 describe('EditorPage', () => {
-  it('загружает страницу: дерево, инспектор, канвас', async () => {
-    const put = { root: null as unknown, version: 3 };
+  it('загружает страницу: лист, инспектор, канвас', async () => {
+    const put = { list: null as unknown, version: 3 };
     await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
 
-    expect(await screen.findByText('Привет')).toBeTruthy();
-    expect(screen.getByText('Container')).toBeTruthy();
+    expect(await screen.findByText('· Привет')).toBeTruthy();
     expect(screen.getByText('Text', { exact: true })).toBeTruthy();
     expect(screen.getByText('· Привет')).toBeTruthy();
-    expect(screen.getByText('Свойства · Container')).toBeTruthy();
-
-    fireEvent.click(screen.getByText('· Привет'));
-    expect(await screen.findByText('Свойства · Text')).toBeTruthy();
+    expect(screen.getByText('Свойства · Text')).toBeTruthy();
   });
 
-  it('правка пропа → автосейв PUT saveTree + обновление версии', async () => {
-    const put = { root: null as unknown, version: 3 };
+  it('правка пропа → автосейв PUT updatePage + обновление версии', async () => {
+    const put = { list: null as unknown, version: 3 };
     const { calls } = await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
 
     fireEvent.click(await screen.findByText('· Привет'));
@@ -65,11 +58,11 @@ describe('EditorPage', () => {
 
     await waitFor(
       () => {
-        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree');
+        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1');
         expect(save).toBeTruthy();
-        const body = JSON.parse(String(save?.init.body)) as { root: Page['root'] };
-        expect(String(body.root.children?.[0]?.props?.['text'])).toContain('Новый заголовок');
-        expect(String(body.root.children?.[0]?.props?.['text'])).toMatch(/^<p>/);
+        const body = JSON.parse(String(save?.init.body)) as { list: ElementNode[] };
+        expect(body.list[0]?.props['text']).toEqual({ kind: 'literal', value: expect.stringContaining('Новый заголовок') });
+        expect(String((body.list[0]?.props['text'] as { value?: unknown }).value)).toMatch(/^<p>/);
       },
       { timeout: 3000 },
     );
@@ -77,26 +70,27 @@ describe('EditorPage', () => {
     expect(screen.queryByText('Есть несохранённые изменения')).toBeNull();
   });
 
-  it('добавление узла через меню +, undo возвращает назад, redo повторяет', async () => {
-    const put = { root: null as unknown, version: 3 };
+  it('добавление элемента через меню +, undo возвращает назад, redo повторяет', async () => {
+    const put = { list: null as unknown, version: 3 };
     await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
 
     fireEvent.click(await screen.findByTitle('Добавить'));
     fireEvent.click(await screen.findByText('+ Текст'));
 
-    // canvas отражает живое дерево (design-mode)
-    expect(screen.getAllByText('Текст').length).toBeGreaterThanOrEqual(2);
+    // добавленный элемент появился на канвасе вторым data-node="Text"
+    await waitFor(() => expect(document.querySelectorAll('[data-node="Text"]')).toHaveLength(2));
 
     fireEvent.click(screen.getByTitle('Назад'));
-    expect(screen.getAllByText('Привет').length).toBe(1);
     expect(screen.queryByText('· Текст')).toBeNull();
+    await waitFor(() => expect(document.querySelectorAll('[data-node="Text"]')).toHaveLength(1));
 
     fireEvent.click(screen.getByTitle('Вперёд'));
+    await waitFor(() => expect(document.querySelectorAll('[data-node="Text"]')).toHaveLength(2));
     expect(screen.getByText('· Текст')).toBeTruthy();
   });
 
   it('binding к контенту: выбирается источник + путь, уходит в PUT', async () => {
-    const put = { root: null as unknown, version: 3 };
+    const put = { list: null as unknown, version: 3 };
     const { calls } = await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
 
     fireEvent.click(await screen.findByText('· Привет'));
@@ -107,17 +101,20 @@ describe('EditorPage', () => {
 
     await waitFor(
       () => {
-        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree');
+        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1');
         expect(save).toBeTruthy();
-        const body = JSON.parse(String(save?.init.body)) as { root: Page['root'] };
-        expect(body.root.children?.[0]?.bindings?.['text']).toEqual({ source: 'content', path: 'strings.hero' });
+        const body = JSON.parse(String(save?.init.body)) as { list: ElementNode[] };
+        expect(body.list[0]?.props['text']).toEqual({
+          kind: 'binding',
+          source: { kind: 'content', contentId: 'strings', field: 'hero' },
+        });
       },
       { timeout: 3000 },
     );
   });
 
-  it('удаление узла убирает его из дерева и канваса', async () => {
-    const put = { root: null as unknown, version: 3 };
+  it('удаление элемента убирает его из листа и канваса', async () => {
+    const put = { list: null as unknown, version: 3 };
     await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
 
     const removeButton = (await screen.findAllByTitle('Удалить'))[0]!;
@@ -140,26 +137,23 @@ describe('EditorPage', () => {
 
     expect(await screen.findByText(/Ошибка/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
-    expect(await screen.findByText('Привет')).toBeTruthy();
+    expect(await screen.findByText('· Привет')).toBeTruthy();
   });
 
   it('выбор ассета через пикер в инспекторе пишет assetId и уходит в PUT', async () => {
-    const put = { root: null as unknown, version: 3 };
+    const put = { list: null as unknown, version: 3 };
     const imagePage: Page = {
       ...PAGE,
-      root: {
-        id: 'root',
-        type: 'Container',
-        props: {},
-        children: [{ id: 'i1', type: 'Image', props: { assetId: '', alt: '', width: 320 }, bindings: {} }],
-      },
+      list: [
+        { id: 'i1', componentId: 'Image', props: { assetId: { kind: 'literal', value: '' }, alt: { kind: 'literal', value: '' }, width: { kind: 'literal', value: 320 } } },
+      ],
     };
     const { calls } = await renderApp({
       path: '/sites/s1/pages/p1',
       handler: (url, init) => {
         if (url === '/api/pages/p1' && init.method === 'GET') return jsonResponse(200, imagePage);
-        if (url === '/api/pages/p1/tree' && init.method === 'PUT') {
-          put.root = JSON.parse(String(init.body))['root'];
+        if (url === '/api/pages/p1' && init.method === 'PUT') {
+          put.list = JSON.parse(String(init.body))['list'];
           put.version += 1;
           return jsonResponse(200, { version: put.version });
         }
@@ -197,10 +191,10 @@ describe('EditorPage', () => {
 
     await waitFor(
       () => {
-        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree');
+        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1');
         expect(save).toBeTruthy();
-        const body = JSON.parse(String(save?.init.body)) as { root: Page['root'] };
-        expect(body.root.children?.[0]?.props?.['assetId']).toBe('logo1');
+        const body = JSON.parse(String(save?.init.body)) as { list: ElementNode[] };
+        expect(body.list[0]?.props['assetId']).toEqual({ kind: 'literal', value: 'logo1' });
       },
       { timeout: 3000 },
     );
@@ -210,13 +204,13 @@ describe('EditorPage', () => {
   });
 
   it('после автосейва собирается dev build; таб Превью показывает iframe', async () => {
-    const put = { root: null as unknown, version: 3 };
+    const put = { list: null as unknown, version: 3 };
     const { calls } = await renderApp({
       path: '/sites/s1/pages/p1',
       handler: (url, init) => {
         if (url === '/api/pages/p1' && init.method === 'GET') return jsonResponse(200, PAGE);
-        if (url === '/api/pages/p1/tree' && init.method === 'PUT') {
-          put.root = JSON.parse(String(init.body))['root'];
+        if (url === '/api/pages/p1' && init.method === 'PUT') {
+          put.list = JSON.parse(String(init.body))['list'];
           put.version += 1;
           return jsonResponse(200, { version: put.version });
         }
@@ -245,7 +239,7 @@ describe('EditorPage', () => {
     await waitFor(() => expect(__lastRichTextEditor()).toBeTruthy());
     __lastRichTextEditor()?.chain().focus().selectAll().deleteSelection().insertContent('Заголовок').run();
     await waitFor(
-      () => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/pages/p1/tree')).toBe(true),
+      () => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/pages/p1')).toBe(true),
       { timeout: 3000 },
     );
     await waitFor(

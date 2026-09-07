@@ -31,7 +31,7 @@ export function EditorPage() {
   const preview = useMemo(() => previewActions(previewStore, { api, t, siteId }), [previewStore, api, t, siteId]);
   const [canvasView, setCanvasView] = useState<'design' | 'preview'>('design');
 
-  const tree = useSelector(store, (s) => s.tree);
+  const tree = useSelector(store, (s) => s.elements);
   const dirty = useSelector(store, (s) => s.dirty);
   const version = useSelector(store, (s) => s.version);
   const pastCount = useSelector(store, (s) => s.past.length);
@@ -43,9 +43,9 @@ export function EditorPage() {
 
   const performSave = useCallback(async () => {
     const cur = store.getState();
-    if (!cur.tree) return;
     setSaveState('saving');
-    const res = await runOperation(api, 'saveTree', { pageId, root: cur.tree }, t);
+    const pageName = page.state.status === 'success' ? page.state.data.name : '';
+    const res = await runOperation(api, 'updatePage', { pageId, name: pageName, list: cur.elements }, t);
     if (!res.ok) {
       setSaveState('failed');
       return;
@@ -54,10 +54,10 @@ export function EditorPage() {
     actions.applySaved(next?.version ?? cur.version);
     setSaveState('saved');
     void preview.requestBuild();
-  }, [api, t, pageId, actions, store, preview]);
+  }, [api, t, pageId, actions, store, preview, page.state]);
 
   useEffect(() => {
-    if (!dirty || !tree) return;
+    if (!dirty || tree.length === 0) return;
     setSaveState('saving');
     const timer = setTimeout(() => {
       void performSave();
@@ -69,7 +69,7 @@ export function EditorPage() {
 
   useEffect(() => {
     if (page.state.status === 'success') {
-      actions.applyLoaded({ root: page.state.data.root, version: page.state.data.version });
+      actions.applyLoaded({ list: page.state.data.list, version: page.state.data.version });
     } else if (page.state.status === 'error') {
       actions.setLoadError(page.state.detail);
     }
@@ -79,7 +79,7 @@ export function EditorPage() {
     return <p className="p-8 text-sm text-neutral-400">{t('common.loading')}</p>;
   }
 
-  if (page.state.status === 'error' && status !== 'ready' && !tree) {
+  if (page.state.status === 'error' && status !== 'ready' && tree.length === 0) {
     return (
       <div className="p-8">
         <p className="text-sm text-red-600">

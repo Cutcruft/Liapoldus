@@ -1,88 +1,69 @@
 import { describe, expect, it } from 'vitest';
-import type { ComponentNode } from '../../runtime';
+import type { ElementNode } from '../../runtime';
 import {
-  findNode,
-  findParent,
-  insertChild,
-  makeNode,
-  moveNode,
-  nodePath,
-  removeNode,
-  replaceNode,
+  elementSummary,
+  findElement,
+  indexOfElement,
+  insertElement,
+  makeElement,
+  moveElement,
+  removeElement,
+  replaceElement,
   resetUid,
   uid,
 } from './tree-utils';
 import { BUILTIN_BY_TYPE } from './schemas';
 
-const TREE: ComponentNode = {
-  id: 'root',
-  type: 'Container',
-  props: { layout: 'stack', gap: 8 },
-  children: [
-    { id: 't1', type: 'Text', props: { text: 'A' } },
-    {
-      id: 'c2',
-      type: 'Container',
-      props: { layout: 'row' },
-      children: [{ id: 'b1', type: 'Button', props: { label: 'Go' } }],
-    },
-  ],
-};
+const LIST: ElementNode[] = [
+  { id: 'e1', componentId: 'Text', props: { text: { kind: 'literal', value: 'A' } } },
+  { id: 'e2', componentId: 'Button', props: { label: { kind: 'literal', value: 'Go' } } },
+];
 
-describe('tree-utils', () => {
-  it('findNode находит вложенный узел и не находит отсутствующий', () => {
-    expect(findNode(TREE, 'b1')?.type).toBe('Button');
-    expect(findNode(TREE, 'missing')).toBeUndefined();
+describe('list-utils (tree-utils: линейная модель)', () => {
+  it('findElement/indexOfElement находят элемент по id', () => {
+    expect(findElement(LIST, 'e2')?.componentId).toBe('Button');
+    expect(indexOfElement(LIST, 'e1')).toBe(0);
+    expect(findElement(LIST, 'missing')).toBeUndefined();
+    expect(indexOfElement(LIST, 'missing')).toBe(-1);
   });
 
-  it('findParent возвращает непосредственного родителя', () => {
-    expect(findParent(TREE, 'b1')?.id).toBe('c2');
-    expect(findParent(TREE, 'root')).toBeUndefined();
+  it('replaceElement заменяет элемент, сохраняя остальные и позицию', () => {
+    const next = replaceElement(LIST, 'e1', { id: 'e1', componentId: 'Text', props: { text: { kind: 'literal', value: 'B' } } });
+    expect(next[0]?.props['text']).toEqual({ kind: 'literal', value: 'B' });
+    expect(next[1]?.id).toBe('e2');
+    expect(replaceElement(LIST, 'nope', { id: 'x', componentId: 'Text', props: {} })).toBe(LIST);
   });
 
-  it('replaceNode заменяет узел, сохраняя остальные', () => {
-    const next = replaceNode(TREE, 't1', { id: 't1', type: 'Text', props: { text: 'B' } });
-    expect(findNode(next, 't1')?.props?.['text']).toBe('B');
-    expect(findNode(next, 'b1')).toBeTruthy();
+  it('insertElement добавляет в конец и по индексу', () => {
+    const el: ElementNode = { id: 'n1', componentId: 'Text', props: {} };
+    const appended = insertElement(LIST, el);
+    expect(appended.length).toBe(3);
+    expect(appended[2]?.id).toBe('n1');
+
+    const at0 = insertElement(LIST, { ...el, id: 'n0' }, 0);
+    expect(at0[0]?.id).toBe('n0');
+    expect(at0[1]?.id).toBe('e1');
   });
 
-  it('insertChild добавляет в конец и по индексу', () => {
-    const appended = insertChild(TREE, 'root', { id: 'n1', type: 'Text', props: {} });
-    expect(appended.children?.length).toBe(3);
-    expect(appended.children?.[2]?.id).toBe('n1');
-
-    const at0 = insertChild(TREE, 'root', { id: 'n0', type: 'Text', props: {} }, 0);
-    expect(at0.children?.[0]?.id).toBe('n0');
-    expect(at0.children?.[1]?.id).toBe('t1');
+  it('insertElement по индексу за границами клампится', () => {
+    const el: ElementNode = { id: 'x', componentId: 'Text', props: {} };
+    expect(insertElement(LIST, el, 99)[2]?.id).toBe('x');
+    expect(insertElement(LIST, el, -5)[0]?.id).toBe('x');
   });
 
-  it('insertChild в отсутствующий родитель не меняет дерево', () => {
-    expect(insertChild(TREE, 'nope', { id: 'x', type: 'Text' })).toBe(TREE);
+  it('removeElement удаляет элемент, не трогая остальные', () => {
+    const removed = removeElement(LIST, 'e1');
+    expect(removed.length).toBe(1);
+    expect(removed[0]?.id).toBe('e2');
+    expect(removeElement(LIST, 'nope')).toBe(LIST);
   });
 
-  it('removeNode удаляет лист и не даёт удалить root', () => {
-    const removed = removeNode(TREE, 't1');
-    expect(removed.children?.length).toBe(1);
-    expect(removed.children?.[0]?.id).toBe('c2');
-    expect(removeNode(TREE, 'root')).toBe(TREE);
-  });
-
-  it('moveNode переставляет соседей вверх/вниз и не выходит за границы', () => {
-    const up = moveNode(TREE, 'c2', 'up');
-    expect(up.children?.[0]?.id).toBe('c2');
-    expect(up.children?.[1]?.id).toBe('t1');
-
-    expect(moveNode(TREE, 't1', 'up')).toBe(TREE);
-    expect(moveNode(TREE, 'c2', 'down')).toBe(TREE);
-
-    const innerDown = moveNode(TREE, 'b1', 'down');
-    expect(innerDown).toBe(TREE);
-  });
-
-  it('nodePath собирает путь от root до узла', () => {
-    const path = nodePath(TREE, 'b1');
-    expect(path.map((n) => n.id)).toEqual(['root', 'c2', 'b1']);
-    expect(nodePath(TREE, 'nope')).toEqual([]);
+  it('moveElement переставляет соседей вверх/вниз, не выходит за границы', () => {
+    const up = moveElement(LIST, 'e2', 'up');
+    expect(up.map((e) => e.id)).toEqual(['e2', 'e1']);
+    expect(moveElement(LIST, 'e1', 'up')).toBe(LIST);
+    expect(moveElement(LIST, 'e2', 'down')).toBe(LIST);
+    expect(moveElement(LIST, 'nope', 'up')).toBe(LIST);
   });
 
   it('uid уникален и сбрасывается', () => {
@@ -93,9 +74,22 @@ describe('tree-utils', () => {
     expect(uid()).toBe('n1');
   });
 
-  it('makeNode сливает дефолты схемы и props пусто', () => {
-    const node = makeNode('Text', {}, BUILTIN_BY_TYPE['Text']?.schema);
-    expect(node.props).toMatchObject({ text: 'Текст', size: 'md' });
-    expect(node.bindings).toEqual({});
+  it('makeElement сливает дефолты схемы как литералы', () => {
+    const el = makeElement('Text', BUILTIN_BY_TYPE['Text']?.schema);
+    expect(el.componentId).toBe('Text');
+    expect(el.props['text']).toEqual({ kind: 'literal', value: 'Текст' });
+    expect(el.props['size']).toEqual({ kind: 'literal', value: 'md' });
+  });
+
+  it('elementSummary берёт label/text/title литералы', () => {
+    expect(elementSummary(LIST[0]!)).toBe('A');
+    expect(elementSummary({ id: 'x', componentId: 'Text', props: {} })).toBeUndefined();
+    expect(
+      elementSummary({
+        id: 'y',
+        componentId: 'Text',
+        props: { label: { kind: 'literal', value: 'Меню' }, text: { kind: 'literal', value: 'Игнор' } },
+      }),
+    ).toBe('Меню');
   });
 });

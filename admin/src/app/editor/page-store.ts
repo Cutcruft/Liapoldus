@@ -1,14 +1,23 @@
 import { createSliceStore, type SliceStore } from '@liapoldus/ui-runtime';
-import type { BindingSource, ComponentNode } from '../../runtime';
-import { findNode, insertChild, makeNode, moveNode, removeNode, replaceNode, uid } from './tree-utils';
+import type { BindingSource, ElementNode, ElementProp } from '../../runtime';
+import {
+  findElement,
+  insertElement,
+  makeElement,
+  moveElement,
+  removeElement,
+  replaceElement,
+  uid,
+} from './tree-utils';
 import type { JSONSchema } from './schemas';
 
 export interface EditorState {
   status: 'empty' | 'ready' | 'error';
-  tree?: ComponentNode;
+  /** Упорядоченный лист элементов (позиция = порядок рендера). */
+  elements: ElementNode[];
   selectionId?: string;
-  past: ComponentNode[];
-  future: ComponentNode[];
+  past: ElementNode[][];
+  future: ElementNode[][];
   /** Серверная версия последней сохранённой страницы. */
   version: number;
   savedKey: string | null;
@@ -21,6 +30,7 @@ export type EditorStore = SliceStore<EditorState>;
 export function createEditorStore(): EditorStore {
   return createSliceStore<EditorState>({
     status: 'empty',
+    elements: [],
     past: [],
     future: [],
     version: 0,
@@ -29,35 +39,39 @@ export function createEditorStore(): EditorStore {
   });
 }
 
-const serialize = (node?: ComponentNode): string | null => (node ? JSON.stringify(node) : null);
+const serialize = (list: ElementNode[]): string => JSON.stringify(list);
 const HISTORY_CAP = 50;
 
 export interface EditorActions {
-  applyLoaded(page: { root: ComponentNode; version: number }): void;
+  applyLoaded(page: { list: ElementNode[]; version: number }): void;
   setLoadError(message: string): void;
   select(id: string): void;
-  insert(parentId: string, type: string, schema?: JSONSchema): void;
+  /** Добавляет элемент указанного типа (в конец листа). */
+  insert(componentId: string, schema?: JSONSchema): void;
   remove(id: string): void;
   move(id: string, dir: 'up' | 'down'): void;
   updateProp(id: string, field: string, value: unknown): void;
-  setBinding(id: string, field: string, binding: BindingSource): void;
+  setBinding(id: string, field: string, source: BindingSource): void;
   undo(): void;
   redo(): void;
   applySaved(version: number): void;
 }
 
 export function editorActions(store: EditorStore): EditorActions {
-  const commit = (nextTree: ComponentNode) => {
+  const commit = (nextElements: ElementNode[]) => {
     const s = store.getState();
-    if (s.tree && serialize(s.tree) === serialize(nextTree)) return;
-    const past = [...s.past, s.tree].filter((t): t is ComponentNode => !!t).slice(-HISTORY_CAP);
+    if (serialize(s.elements) === serialize(nextElements)) return;
+    const past = [...s.past, s.elements].slice(-HISTORY_CAP);
     store.setState({
-      tree: nextTree,
+      elements: nextElements,
       past,
       future: [],
-      dirty: s.savedKey !== serialize(nextTree),
-      // selection остаётся, если узел ещё существует, иначе — root
-      selectionId: s.selectionId && findNode(nextTree, s.selectionId) ? s.selectionId : nextTree.id,
+      dirty: s.savedKey !== serialize(nextElements),
+      // selection остаётся, если элемент ещё существует, иначе — первый элемент
+      selectionId:
+        s.selectionId && findElement(nextElements, s.selectionId)
+          ? s.selectionId
+          : nextElements[0]?.id,
     });
   };
 
@@ -66,13 +80,13 @@ export function editorActions(store: EditorStore): EditorActions {
       const s = store.getState();
       store.setState({
         status: 'ready',
-        tree: page.root,
+        elements: page.list,
         version: page.version,
-        savedKey: serialize(page.root),
+        savedKey: serialize(page.list),
         dirty: false,
         past: [],
         future: [],
-        selectionId: page.root.id,
+        selectionId: page.list[0]?.id,
         error: undefined,
       });
       void s;
@@ -84,71 +98,72 @@ export function editorActions(store: EditorStore): EditorActions {
 
     select(id) {
       const s = store.getState();
-      if (s.tree && findNode(s.tree, id)) store.setState({ selectionId: id });
+      if (findElement(s.elements, id)) store.setState({ selectionId: id });
     },
 
-    insert(parentId, type, schema) {
+    insert(componentId, schema) {
       const s = store.getState();
-      const tree = s.tree;
-      if (!tree || !findNode(tree, parentId)) return;
-      const child = makeNode(type, {}, schema);
-      commit(insertChild(tree, parentId, child));
-      store.setState({ selectionId: child.id });
+      const element = makeElement(componentId, schema);
+      commit(insertElement(s.elements, element));
+      store.setState({ selectionId: element.id });
     },
 
     remove(id) {
       const s = store.getState();
-      const tree = s.tree;
-      if (!tree || tree.id === id) return;
-      commit(removeNode(tree, id));
+      commit(removeElement(s.elements, id));
     },
 
     move(id, dir) {
       const s = store.getState();
-      const tree = s.tree;
-      if (!tree) return;
-      commit(moveNode(tree, id, dir));
+      commit(moveElement(s.elements, id, dir));
     },
 
     updateProp(id, field, value) {
       const s = store.getState();
-      const tree = s.tree;
-      if (!tree || !findNode(tree, id)) return;
-      const node = findNode(tree, id)!;
-      commit(replaceNode(tree, id, { ...node, props: { ...(node.props ?? {}), [field]: value } }));
+      const el = findElement(s.elements, id);
+      if (!el) return;
+      const props: Record<string, ElementProp> = { ...el.props, [field]: { kind: 'literal', value } };
+      const next: ElementNode = { ...el, props };
+      commit(replaceElement(s.elements, id, next));
     },
 
-    setBinding(id, field, binding) {
+    setBinding(id, field, source) {
       const s = store.getState();
-      const tree = s.tree;
-      if (!tree || !findNode(tree, id)) return;
-      const node = findNode(tree, id)!;
-      const next = { ...node, bindings: { ...(node.bindings ?? {}), [field]: binding } };
-      commit(replaceNode(tree, id, next));
+      const el = findElement(s.elements, id);
+      if (!el) return;
+      const props: Record<string, ElementProp> = { ...el.props, [field]: { kind: 'binding', source } };
+      const next: ElementNode = { ...el, props };
+      commit(replaceElement(s.elements, id, next));
     },
 
     undo() {
       const s = store.getState();
-      if (!s.tree || s.past.length === 0) return;
+      if (s.past.length === 0) return;
       const prev = s.past[s.past.length - 1]!;
       store.setState({
-        tree: prev,
+        elements: prev,
         past: s.past.slice(0, -1),
-        future: [s.tree, ...s.future].slice(0, HISTORY_CAP),
-        selectionId: s.selectionId && findNode(prev, s.selectionId) ? s.selectionId : prev.id,
+        future: [s.elements, ...s.future].slice(0, HISTORY_CAP),
+        selectionId:
+          s.selectionId && findElement(prev, s.selectionId)
+            ? s.selectionId
+            : prev[0]?.id,
         dirty: s.savedKey !== serialize(prev),
       });
     },
 
     redo() {
       const s = store.getState();
-      if (!s.tree || s.future.length === 0) return;
+      if (s.future.length === 0) return;
       const next = s.future[0]!;
       store.setState({
-        tree: next,
-        past: [...s.past, s.tree].slice(-HISTORY_CAP),
+        elements: next,
+        past: [...s.past, s.elements].slice(-HISTORY_CAP),
         future: s.future.slice(1),
-        selectionId: s.selectionId && findNode(next, s.selectionId) ? s.selectionId : next.id,
+        selectionId:
+          s.selectionId && findElement(next, s.selectionId)
+            ? s.selectionId
+            : next[0]?.id,
         dirty: s.savedKey !== serialize(next),
       });
     },
@@ -157,7 +172,7 @@ export function editorActions(store: EditorStore): EditorActions {
       const s = store.getState();
       store.setState({
         version,
-        savedKey: serialize(s.tree),
+        savedKey: serialize(s.elements),
         dirty: false,
       });
     },

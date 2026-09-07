@@ -55,8 +55,7 @@ function renderForm(props: Partial<Parameters<typeof SchemaForm>[0]> = {}) {
   return render(
     <SchemaForm
       schema={SCHEMA}
-      values={{ text: 'Привет', size: 'md', gap: 8, active: true }}
-      bindings={{}}
+      props={{ text: { kind: 'literal', value: 'Привет' }, size: { kind: 'literal', value: 'md' }, gap: { kind: 'literal', value: 8 }, active: { kind: 'literal', value: true } }}
       sourceLabel={sourceLabel}
       pathLabel="Путь"
       errorLabel={(c) => `ERR:${c}`}
@@ -77,7 +76,14 @@ describe('SchemaForm', () => {
   });
 
   it('показывает live-ошибку для невалидного литерала', () => {
-    renderForm({ values: { text: '', size: 'xs', gap: 8, active: true } });
+    renderForm({
+      props: {
+        text: { kind: 'literal', value: '' },
+        size: { kind: 'literal', value: 'xs' },
+        gap: { kind: 'literal', value: 8 },
+        active: { kind: 'literal', value: true },
+      },
+    });
     expect(screen.getByText('ERR:required')).toBeTruthy();
     expect(screen.getByText('ERR:enum')).toBeTruthy();
   });
@@ -86,6 +92,21 @@ describe('SchemaForm', () => {
     const onBindingChange = vi.fn();
     renderForm({ onBindingChange });
     fireEvent.change(screen.getAllByRole('combobox')[0]!, { target: { value: 'content' } });
-    expect(onBindingChange).toHaveBeenCalledWith('text', { source: 'content', path: '' });
+    expect(onBindingChange).toHaveBeenCalledWith('text', { kind: 'content', contentId: '', field: '' });
+  });
+
+  it('binding уже задан: рендерит поле вместо литерала и не считает ошибкой', () => {
+    renderForm({
+      props: {
+        text: { kind: 'binding', source: { kind: 'content', contentId: 'strings', field: 'hero' } },
+        size: { kind: 'literal', value: 'lg' },
+        gap: { kind: 'literal', value: 8 },
+        active: { kind: 'literal', value: true },
+      },
+    });
+    expect(screen.getByLabelText('Путь')).toBeTruthy();
+    expect(screen.queryByText('ERR:required')).toBeNull();
+    const input = screen.getByLabelText('Путь') as HTMLInputElement;
+    expect(input.value).toBe('strings.hero');
   });
 });

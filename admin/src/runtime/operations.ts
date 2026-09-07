@@ -12,7 +12,7 @@ export type OperationKind =
   | 'createPage'
   | 'listPages'
   | 'getPage'
-  | 'saveTree'
+  | 'updatePage'
   | 'deletePage'
   | 'listContents'
   | 'getContent'
@@ -156,7 +156,7 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     body: (args) => ({
       name: String(args.name),
       slug: String(args.slug),
-      root: (args.root as { id: string; type: string }) ?? { id: 'root', type: 'Container', children: [] },
+      list: (args.list as unknown[]) ?? [],
     }),
     detail: (b, t) => {
       const version = typeof b === 'object' && b !== null && 'version' in b ? (b as { version: unknown }).version : 1;
@@ -183,12 +183,15 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     },
   },
 
-  saveTree: {
-    kind: 'saveTree',
-    labelKey: 'op.saveTree',
+  updatePage: {
+    kind: 'updatePage',
+    labelKey: 'op.updatePage',
     method: 'PUT',
-    route: (args) => `/api/pages/{pageId}/tree`,
-    body: (args) => ({ root: args.root }),
+    route: (args) => `/api/pages/{pageId}`,
+    body: (args) => ({
+      name: String(args.name ?? ''),
+      list: (args.list as unknown[]) ?? [],
+    }),
     detail: (b, t) => {
       const version = typeof b === 'object' && b !== null && 'version' in b ? (b as { version: unknown }).version : 0;
       return t('result.saved.v', { version: Number(version) });

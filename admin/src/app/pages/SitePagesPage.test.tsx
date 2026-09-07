@@ -9,7 +9,7 @@ const PAGES: Page[] = [
     siteId: 's1',
     name: 'Главная',
     slug: 'index',
-    root: { id: 'root', type: 'Container', children: [] },
+    list: [],
     version: 3,
   },
   {
@@ -17,7 +17,7 @@ const PAGES: Page[] = [
     siteId: 's1',
     name: 'О нас',
     slug: 'about',
-    root: { id: 'root', type: 'Container', children: [] },
+    list: [],
     version: 1,
   },
 ];
@@ -46,7 +46,7 @@ describe('SitePagesPage', () => {
             siteId: 's1',
             name: String(body.name),
             slug: String(body.slug),
-            root: { id: 'root', type: 'Container', children: [] },
+            list: [],
             version: 1,
           };
           list = [...list, created];
@@ -66,7 +66,7 @@ describe('SitePagesPage', () => {
     expect(JSON.parse(String(post?.init.body))).toEqual({
       name: 'Контакты',
       slug: 'contacts',
-      root: { id: 'root', type: 'Container', children: [] },
+      list: [],
     });
   });
 

@@ -24,9 +24,9 @@ function noBody(status: number): Response {
 }
 
 describe('operations: реестр', () => {
-  it('содержит все createPage/saveTree/runtimeStatus и ищется по kind', () => {
+  it('содержит все createPage/updatePage/runtimeStatus и ищется по kind', () => {
     expect(operationByKind('createSite').labelKey).toBe('op.createSite');
-    expect(operationByKind('saveTree').route({ pageId: 'p' })).toBe('/api/pages/{pageId}/tree');
+    expect(operationByKind('updatePage').route({ pageId: 'p' })).toBe('/api/pages/{pageId}');
     expect(operationByKind('runtimeStatus').route({})).toBe('/api/runtime/status');
   });
 
@@ -81,14 +81,26 @@ describe('runOperation', () => {
     expect(res.detail).toBe('Создан «Demo»');
   });
 
-  it('saveTree: версия из ответа', async () => {
+  it('updatePage: PUT по pageId, версия из ответа', async () => {
     const api = fixtureApi(async (url, init) => {
-      expect(url).toBe('/api/pages/p1/tree');
+      expect(url).toBe('/api/pages/p1');
       expect(init.method).toBe('PUT');
-      expect(JSON.parse(init.body as string)).toEqual({ root: { id: 'root', type: 'Container' } });
+      expect(JSON.parse(init.body as string)).toEqual({
+        name: 'Главная',
+        list: [{ id: 'e1', componentId: 'Text', props: { text: { kind: 'literal', value: 'Привет' } } }],
+      });
       return json(200, { id: 'page1', version: 7 });
     });
-    const res = await runOperation(api, 'saveTree', { pageId: 'p1', root: { id: 'root', type: 'Container' } }, t);
+    const res = await runOperation(
+      api,
+      'updatePage',
+      {
+        pageId: 'p1',
+        name: 'Главная',
+        list: [{ id: 'e1', componentId: 'Text', props: { text: { kind: 'literal', value: 'Привет' } } }],
+      },
+      t,
+    );
     expect(res.detail).toBe('Сохранено, версия 7');
   });
 

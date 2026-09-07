@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ComponentNode } from '../../runtime';
+import type { ElementNode } from '../../runtime';
 import { createEditorStore, editorActions } from './page-store';
-import { findNode, resetUid } from './tree-utils';
+import { findElement, resetUid } from './tree-utils';
 
-const ROOT: ComponentNode = {
-  id: 'root',
-  type: 'Container',
-  props: { layout: 'stack', gap: 8 },
-  children: [{ id: 't1', type: 'Text', props: { text: 'Привет' } }],
-};
+const LIST: ElementNode[] = [
+  { id: 't1', componentId: 'Text', props: { text: { kind: 'literal', value: 'Привет' } } },
+];
 
 const load = () => {
   const store = createEditorStore();
@@ -22,42 +19,43 @@ describe('page-store', () => {
     expect(store.getState().dirty).toBe(false);
   });
 
-  it('applyLoaded фиксирует дерево и версию, выбирает root', () => {
+  it('applyLoaded фиксирует лист и версию, выбирает первый элемент', () => {
     const { store, actions } = load();
-    actions.applyLoaded({ root: ROOT, version: 3 });
+    actions.applyLoaded({ list: LIST, version: 3 });
     const s = store.getState();
     expect(s.status).toBe('ready');
     expect(s.version).toBe(3);
-    expect(s.selectionId).toBe('root');
+    expect(s.selectionId).toBe('t1');
     expect(s.dirty).toBe(false);
   });
 
-  it('insert добавляет ребёнка настраиваемого типа и выбирает его', () => {
+  it('insert добавляет элемент в конец и выбирает его', () => {
     resetUid();
     const { store, actions } = load();
-    actions.applyLoaded({ root: ROOT, version: 1 });
-    actions.insert('root', 'Text', { type: 'object', properties: {} });
+    actions.applyLoaded({ list: LIST, version: 1 });
+    actions.insert('Button', { type: 'object', properties: {} });
     const s = store.getState();
-    expect(s.tree?.children?.length).toBe(2);
-    expect(s.tree?.children?.[1]?.id).toBe('n1');
+    expect(s.elements.length).toBe(2);
+    expect(s.elements[1]?.id).toBe('n1');
+    expect(s.elements[1]?.componentId).toBe('Button');
     expect(s.selectionId).toBe('n1');
     expect(s.dirty).toBe(true);
   });
 
-  it('undo/redo возвращают дерево и грязь, applySaved сбрасывает', () => {
+  it('undo/redo возвращают лист и грязь, applySaved сбрасывает', () => {
     const { store, actions } = load();
-    actions.applyLoaded({ root: ROOT, version: 1 });
-    actions.insert('root', 'Text', { type: 'object', properties: {} });
+    actions.applyLoaded({ list: LIST, version: 1 });
+    actions.insert('Button', { type: 'object', properties: {} });
 
     actions.undo();
     let s = store.getState();
-    expect(s.tree?.children?.length).toBe(1);
+    expect(s.elements.length).toBe(1);
     expect(s.future.length).toBe(1);
     expect(s.dirty).toBe(false);
 
     actions.redo();
     s = store.getState();
-    expect(s.tree?.children?.length).toBe(2);
+    expect(s.elements.length).toBe(2);
     expect(s.past.length).toBe(1);
     expect(s.dirty).toBe(true);
 
@@ -65,53 +63,57 @@ describe('page-store', () => {
     s = store.getState();
     expect(s.version).toBe(2);
     expect(s.dirty).toBe(false);
-    expect(serialize(s.tree)).toBe(s.savedKey);
+    expect(serialize(s.elements)).toBe(s.savedKey);
   });
 
-  it('updateProp правит props узла и помечает dirty', () => {
+  it('updateProp правит literal-проп элемента и помечает dirty', () => {
     const { store, actions } = load();
-    actions.applyLoaded({ root: ROOT, version: 1 });
+    actions.applyLoaded({ list: LIST, version: 1 });
     actions.updateProp('t1', 'text', 'Мир');
-    expect(findNode(store.getState().tree!, 't1')?.props?.['text']).toBe('Мир');
-    expect(store.getState().dirty).toBe(true);
-  });
-
-  it('setBinding сохраняет источник в bindings', () => {
-    const { store, actions } = load();
-    actions.applyLoaded({ root: ROOT, version: 1 });
-    actions.setBinding('t1', 'text', { source: 'content', path: 'strings.hero' });
-    expect(findNode(store.getState().tree!, 't1')?.bindings?.['text']).toEqual({
-      source: 'content',
-      path: 'strings.hero',
+    expect(findElement(store.getState().elements, 't1')?.props['text']).toEqual({
+      kind: 'literal',
+      value: 'Мир',
     });
     expect(store.getState().dirty).toBe(true);
   });
 
-  it('remove удаляет не-root узел, выбор переходит на root', () => {
+  it('setBinding сохраняет binding-источник в props как binding', () => {
     const { store, actions } = load();
-    actions.applyLoaded({ root: ROOT, version: 1 });
+    actions.applyLoaded({ list: LIST, version: 1 });
+    actions.setBinding('t1', 'text', { kind: 'content', contentId: 'strings', field: 'hero' });
+    expect(findElement(store.getState().elements, 't1')?.props['text']).toEqual({
+      kind: 'binding',
+      source: { kind: 'content', contentId: 'strings', field: 'hero' },
+    });
+    expect(store.getState().dirty).toBe(true);
+  });
+
+  it('remove удаляет элемент, выбор переходит на соседний', () => {
+    const { store, actions } = load();
+    actions.applyLoaded({ list: LIST, version: 1 });
     actions.select('t1');
     actions.remove('t1');
     const s = store.getState();
-    expect(s.tree?.children?.length).toBe(0);
-    expect(s.selectionId).toBe('root');
+    expect(s.elements.length).toBe(0);
+    expect(s.selectionId).toBeUndefined();
+    expect(s.dirty).toBe(true);
   });
 
-  it('remove(root) — no-op', () => {
+  it('remove неизвестного id — no-op', () => {
     const { store, actions } = load();
-    actions.applyLoaded({ root: ROOT, version: 1 });
-    actions.remove('root');
-    expect(store.getState().tree?.children?.length).toBe(1);
+    actions.applyLoaded({ list: LIST, version: 1 });
+    actions.remove('nope');
+    expect(store.getState().elements.length).toBe(1);
     expect(store.getState().dirty).toBe(false);
   });
 
-  it('move переставляет местами соседние узлы', () => {
+  it('move переставляет местами соседние элементы', () => {
     resetUid();
     const { store, actions } = load();
-    actions.applyLoaded({ root: ROOT, version: 1 });
-    actions.insert('root', 'Text', { type: 'object', properties: {} });
+    actions.applyLoaded({ list: LIST, version: 1 });
+    actions.insert('Button', { type: 'object', properties: {} });
     actions.move('n1', 'up');
-    const ids = store.getState().tree?.children?.map((c) => c.id);
+    const ids = store.getState().elements.map((e) => e.id);
     expect(ids).toEqual(['n1', 't1']);
   });
 
@@ -124,4 +126,4 @@ describe('page-store', () => {
   });
 });
 
-const serialize = (tree?: ComponentNode) => JSON.stringify(tree);
+const serialize = (list: ElementNode[]) => JSON.stringify(list);
