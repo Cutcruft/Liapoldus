@@ -16,7 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql migrations/011_pages_list.sql migrations/012_deployments.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql migrations/011_pages_list.sql migrations/012_deployments.sql migrations/013_site_settings.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -1388,6 +1388,36 @@ func (p *Postgres) UpsertTokens(ctx context.Context, siteID string, tokens *doma
 		ON CONFLICT (site_id) DO UPDATE SET tokens = EXCLUDED.tokens, updated_at = EXCLUDED.updated_at
 	`, siteID, raw, now); err != nil {
 		return fmt.Errorf("upsert tokens: %w", err)
+	}
+	return nil
+}
+
+func (p *Postgres) GetSiteSettings(ctx context.Context, siteID string) (*domain.SiteSettings, error) {
+	var raw []byte
+	err := p.pool.QueryRow(ctx, `SELECT settings FROM site_settings WHERE site_id = $1`, siteID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get site settings: %w", err)
+	}
+	var settings domain.SiteSettings
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return nil, fmt.Errorf("unmarshal site settings: %w", err)
+	}
+	return &settings, nil
+}
+
+func (p *Postgres) UpsertSiteSettings(ctx context.Context, settings *domain.SiteSettings) error {
+	raw, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("marshal site settings: %w", err)
+	}
+	if _, err := p.pool.Exec(ctx, `
+		INSERT INTO site_settings (site_id, settings, updated_at) VALUES ($1, $2, $3)
+		ON CONFLICT (site_id) DO UPDATE SET settings = EXCLUDED.settings, updated_at = EXCLUDED.updated_at
+	`, settings.SiteID, raw, time.Now().UTC()); err != nil {
+		return fmt.Errorf("upsert site settings: %w", err)
 	}
 	return nil
 }

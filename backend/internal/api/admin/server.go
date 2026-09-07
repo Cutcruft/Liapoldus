@@ -17,27 +17,29 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
+	"github.com/liapoldus/liapoldus/backend/internal/application/sitesettings"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/application/token"
 )
 
 type App struct {
-	Sites      *site.Service
-	Pages      *page.Service
-	Contents   *content.Service
-	Assets     *asset.Service
-	Routes     *route.Service
-	Forms      *form.Service
-	Snapshots  *snapshot.Service
-	Components *component.Service
-	Git        *gitsnapshot.Service
-	Builds     *buildapp.Service
-	Deploys    *deployapp.Service
-	Deps       *deps.Service
-	Tokens     *token.Service
-	Infra      *infra.Service
-	Logger     *slog.Logger
-	AdminToken string
+	Sites        *site.Service
+	Pages        *page.Service
+	Contents     *content.Service
+	Assets       *asset.Service
+	Routes       *route.Service
+	Forms        *form.Service
+	Snapshots    *snapshot.Service
+	Components   *component.Service
+	Git          *gitsnapshot.Service
+	Builds       *buildapp.Service
+	Deploys      *deployapp.Service
+	Deps         *deps.Service
+	Tokens       *token.Service
+	Infra        *infra.Service
+	SiteSettings *sitesettings.Service
+	Logger       *slog.Logger
+	AdminToken   string
 	// DefaultLocale and RedirectDefaultStatus mirror server configuration so
 	// the Settings page can surface them (slice 2.3).
 	DefaultLocale         string
@@ -66,6 +68,10 @@ func NewRouter(app App) http.Handler {
 	settingsHandler := NewSettingsHandler(app.AdminToken, app.DefaultLocale, app.RedirectDefaultStatus)
 	authHandler := NewAuthHandler(app.AdminToken)
 	infraHandler := NewInfraHandler(app.Infra)
+	var siteSettingsHandler *SiteSettingsHandler
+	if app.SiteSettings != nil {
+		siteSettingsHandler = NewSiteSettingsHandler(app.SiteSettings)
+	}
 
 	var gitHandler *GitHandler
 	if app.Git != nil {
@@ -103,6 +109,10 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("GET /api/sites/{siteID}", siteHandler.Get)
 	protected.HandleFunc("PUT /api/sites/{siteID}", siteHandler.Update)
 	protected.HandleFunc("DELETE /api/sites/{siteID}", siteHandler.Delete)
+	if siteSettingsHandler != nil {
+		protected.HandleFunc("GET /api/sites/{siteID}/settings", siteSettingsHandler.Get)
+		protected.HandleFunc("PUT /api/sites/{siteID}/settings", siteSettingsHandler.Put)
+	}
 
 	protected.HandleFunc("POST /api/sites/{siteID}/pages", pageHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/pages", pageHandler.List)

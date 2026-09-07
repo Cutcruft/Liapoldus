@@ -145,25 +145,58 @@ placeholder).
 
 ---
 
-## Фаза 4 — R10: База сайта (site-settings)
+## Фаза 4 — R10: База сайта (site-settings, head и page shell)
 
 Backend + Frontend (R14 из спеки).
 
-Файлы: `backend/internal/domain/*` (нет SiteSettings), `backend/internal/api/admin/settingsHandler`,
-`admin/src/app/SiteTab.tsx` (`section=base` — placeholder), `docs/redesign/spec.md` §3.3/§5.5.
+Решения, подтверждённые перед началом:
 
-- [ ] **P0 [B]** Entity `SiteSettings` + CRUD: id/siteId + jsonb; поля: favicon (assetId),
-      lang, meta (title/description/og), фолбэки дефолтов. Миграция `013_site_settings.sql`.
-- [ ] **P1 [B]** Контракт runtime и index.html получают мета/фавиконку: расширить
-      `runtime/contract.go`/материализатор (siteSettings в контракт, `<link rel="icon">` в shell).
-- [ ] **P1 [F]** Раздел «База»: форма site-settings; интеграция фавиконки (пикер из Медиа,
-      `AssetPicker`); og-meta; превью title/description.
-- [ ] **P2 [F]** Темы/токены (наследуемый токен-редактор, `SiteTokensPage` → раздел),
-      шрифты как ассеты, базовые шаблоны/заготовки (импорт).
-- [ ] Тесты: CRUD settings, мета в контракте и HTML (`runtime_contract_test`,
-      `materializer_test`), UI-форма (BaseSection.test).
+- Компонент — либо `primitive`, либо `section`; хранение — `isSection: boolean`, без групп.
+  Только section добавляется в страницу. Section импортирует только явно разрешённые primitive;
+  primitive не импортирует site-компоненты, section не импортирует section. Пустой allowlist —
+  безопасный deny-by-default. Каждый файл имеет `default export`, импорт: `@site/components/<id>`.
+- Page shell — не третий тип: это section с `acceptsPageContent`, получающая линейный page list
+  как React `children` от runtime. Site задаёт shell по умолчанию, страница может переопределить.
+- Контент и локаль — одна модель. Locale передаётся в чтение content; `defaultLocale` задаётся
+  в SiteSettings и служит языком по умолчанию редактора/runtime.
+- Компонентный IDE не упрощается: source редактируется в tiptap code-block, TSX проходит
+  live-валидацию в браузере, а schema автоматически выводится из TypeScript props с ручными
+  уточнениями. Политика импортов добавляет диагностики в этот же UI.
+- BFF ограничен контентом, формами и configuration API. Внешние интеграции выполняет frontend
+  напрямую; секреты и прокси внешних API не входят в продукт. RBAC не реализуем.
 
-**Done**: метаданные сайта/фавиконка из конфигурации попадают в контракт и сборку.
+Файлы: `backend/internal/domain/*`, `backend/internal/application/settings/*`,
+`backend/internal/api/admin/*`, `backend/internal/application/runtime/*`,
+`backend/internal/infra/build/{materializer,shell}/*`, `admin/src/app/base/*`,
+`admin/src/runtime/{types,operations}.ts`, `docs/redesign/spec.md`.
+
+- [ ] **P0 [B]** Entity `SiteSettings` + CRUD: one row per site, `defaultLocale`,
+      `defaultLayoutSectionId`, `head{titleTemplate,description,faviconAssetId,meta}`.
+      `GET/PUT /api/sites/{siteID}/settings`; миграция `013_site_settings.sql`; отсутствие
+      строки возвращает безопасные defaults из Site. Валидировать locale, формат meta и asset/site.
+- [ ] **P0 [B]** Расширить `Page`: `layoutSectionId?`, `head{title,description,robots,canonical,
+      og,meta}`; обновить page CRUD/versions/snapshot/gitsnapshot и миграцию. Валидировать, что
+      выбранный layout принадлежит сайту, является section и `acceptsPageContent`; page override
+      не нужен для работы default layout.
+- [ ] **P0 [B]** Компонентный контракт: добавить `isSection`, `allowedPrimitiveIds`,
+      `acceptsPageContent`. Создание/обновление и materializer валидируют `@site/components/<id>`:
+      default export, существование, тип, allowlist и циклы. Page validation принимает только section.
+      Выполнить это до контентного workspace, чтобы редактор получил устойчивые инварианты.
+- [ ] **P1 [B/R]** Runtime contract и shell: передавать settings + resolved page head/layout;
+      материализатор генерирует `<title>`, description, canonical/robots/OG/custom meta и favicon,
+      с merge `site → page`; `PageRenderer` оборачивает list в выбранный shell через `children`.
+- [ ] **P1 [F]** Раздел «База»: default locale, global head, favicon picker, shell picker из
+      подходящих section, live preview title/description. Page workspace получает вкладку «Head»:
+      override shell и page metadata с показом итогового merged head.
+- [ ] **P2 [F]** Темы/токены: перенести существующий token editor; шрифты как assets. Не вводить
+      импорт шаблонов, пока не подтверждён переносимый формат site bundle.
+- [ ] **P1 [Docs]** README, redesign spec и runtime spec синхронизированы с реальным контрактом;
+      не оставлять обещаний `renderPage → 404` после public-shell слайса.
+- [ ] Тесты: memory/Postgres CRUD и defaults, page/snapshot round-trip, cross-site/asset/layout
+      rejection, import-policy validator, contract+HTML merge, React shell rendering, BaseSection UI.
+
+**Done**: редактор задаёт default locale, общий head/favicon и page shell; каждая страница
+может безопасно переопределить shell/head; контентная композиция принимает только section.
 
 ---
 

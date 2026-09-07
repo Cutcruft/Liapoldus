@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
-	buildapp 	"github.com/liapoldus/liapoldus/backend/internal/application/build"
+	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
 	"github.com/liapoldus/liapoldus/backend/internal/application/deploy"
@@ -16,6 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
 	"github.com/liapoldus/liapoldus/backend/internal/application/runtime"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
+	"github.com/liapoldus/liapoldus/backend/internal/application/sitesettings"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/application/token"
 	"github.com/liapoldus/liapoldus/backend/internal/config"
@@ -50,6 +51,7 @@ type Services struct {
 	Deps         *deps.Service
 	Tokens       *token.Service
 	Infra        *infra.Service
+	SiteSettings *sitesettings.Service
 	// BuildEvents relays build lifecycle events to admin WS subscribers.
 	BuildEvents buildapp.DevEventHub
 }
@@ -111,13 +113,14 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 			URLTemplate:   cfg.AssetFileURLTemplate,
 		}),
 		Routes: routes,
-		Forms:  form.NewService(storage, storage, form.Settings{
+		Forms: form.NewService(storage, storage, form.Settings{
 			EmailPattern:          cfg.EmailPattern,
 			SubmitTargetValidator: infraSvc.ValidateSubmitTarget,
 		}),
-		Deps:   depsSvc,
-		Tokens: tokensSvc,
-		Infra:  infraSvc,
+		Deps:         depsSvc,
+		Tokens:       tokensSvc,
+		Infra:        infraSvc,
+		SiteSettings: sitesettings.NewService(storage, storage),
 	}
 }
 

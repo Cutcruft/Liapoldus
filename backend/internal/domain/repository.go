@@ -22,6 +22,7 @@ type Storage interface {
 	OperationRepository
 	EndpointRepository
 	DeploymentRepository
+	SiteSettingsRepository
 }
 
 type SiteRepository interface {
@@ -31,6 +32,14 @@ type SiteRepository interface {
 	ListSites(context.Context) ([]Site, error)
 	UpdateSite(context.Context, Site) error
 	DeleteSite(context.Context, string) error
+}
+
+// SiteSettingsRepository stores a single optional settings record per site.
+// A missing record is represented by (nil, nil); application code exposes a
+// normalized default instead of making callers handle this storage detail.
+type SiteSettingsRepository interface {
+	GetSiteSettings(context.Context, string) (*SiteSettings, error)
+	UpsertSiteSettings(context.Context, *SiteSettings) error
 }
 
 type PageRepository interface {

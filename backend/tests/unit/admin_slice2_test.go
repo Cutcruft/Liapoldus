@@ -13,11 +13,12 @@ import (
 	"time"
 
 	"github.com/liapoldus/liapoldus/backend/internal/api/admin"
-	deployapp "github.com/liapoldus/liapoldus/backend/internal/application/deploy"
 	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
+	deployapp "github.com/liapoldus/liapoldus/backend/internal/application/deploy"
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/application/site"
+	"github.com/liapoldus/liapoldus/backend/internal/application/sitesettings"
 	"github.com/liapoldus/liapoldus/backend/internal/application/snapshot"
 	tokenapp "github.com/liapoldus/liapoldus/backend/internal/application/token"
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
@@ -66,9 +67,10 @@ func slice2TestApp(t *testing.T, adminToken string) (admin.App, *storage.Memory)
 			db, db, db, db, db, db, db, db,
 			deps.NewService(db, db, &fakeRegistry{}),
 		),
-		Tokens:     tokenapp.NewService(db, db),
-		Logger:     slog.Default(),
-		AdminToken: adminToken,
+		Tokens:       tokenapp.NewService(db, db),
+		SiteSettings: sitesettings.NewService(db, db),
+		Logger:       slog.Default(),
+		AdminToken:   adminToken,
 	}, db
 }
 

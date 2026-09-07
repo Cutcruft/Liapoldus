@@ -11,53 +11,55 @@ import (
 )
 
 type Memory struct {
-	mu          sync.RWMutex
-	sites       map[string]domain.Site
-	pages       map[string]domain.Page
-	versions    map[string][]domain.PageVersion
-	snapshots   map[string]domain.Snapshot
-	contents    map[string]domain.Content
-	assets      map[string]domain.Asset
-	routes      map[string]domain.Route
-	forms       map[string]domain.Form
-	submissions map[string][]domain.Submission
-	defs        map[string]*domain.ComponentDefinition
-	builds      map[string]domain.Build
-	deps        map[string]domain.Dependency
-	pkgCache    map[string]domain.DepPackage
-	allowlist   map[string]map[string]struct{}
-	cacheConfig map[string]domain.SiteCacheConfig
-	tarballAcc  map[string]domain.TarballAccess
-	tokens      map[string]*domain.TokenSet
-	operations  map[string]domain.Operation
-	endpoints   map[string]domain.Endpoint
-	deployments map[string]domain.Deployment
+	mu           sync.RWMutex
+	sites        map[string]domain.Site
+	pages        map[string]domain.Page
+	versions     map[string][]domain.PageVersion
+	snapshots    map[string]domain.Snapshot
+	contents     map[string]domain.Content
+	assets       map[string]domain.Asset
+	routes       map[string]domain.Route
+	forms        map[string]domain.Form
+	submissions  map[string][]domain.Submission
+	defs         map[string]*domain.ComponentDefinition
+	builds       map[string]domain.Build
+	deps         map[string]domain.Dependency
+	pkgCache     map[string]domain.DepPackage
+	allowlist    map[string]map[string]struct{}
+	cacheConfig  map[string]domain.SiteCacheConfig
+	tarballAcc   map[string]domain.TarballAccess
+	tokens       map[string]*domain.TokenSet
+	operations   map[string]domain.Operation
+	endpoints    map[string]domain.Endpoint
+	deployments  map[string]domain.Deployment
+	siteSettings map[string]*domain.SiteSettings
 }
 
 var _ domain.Storage = (*Memory)(nil)
 
 func NewMemory() *Memory {
 	return &Memory{
-		sites:       make(map[string]domain.Site),
-		pages:       make(map[string]domain.Page),
-		versions:    make(map[string][]domain.PageVersion),
-		snapshots:   make(map[string]domain.Snapshot),
-		contents:    make(map[string]domain.Content),
-		assets:      make(map[string]domain.Asset),
-		routes:      make(map[string]domain.Route),
-		forms:       make(map[string]domain.Form),
-		submissions: make(map[string][]domain.Submission),
-		defs:        make(map[string]*domain.ComponentDefinition),
-		builds:      make(map[string]domain.Build),
-		deps:        make(map[string]domain.Dependency),
-		pkgCache:    make(map[string]domain.DepPackage),
-		allowlist:   make(map[string]map[string]struct{}),
-		cacheConfig: make(map[string]domain.SiteCacheConfig),
-		tarballAcc:  make(map[string]domain.TarballAccess),
-		tokens:      make(map[string]*domain.TokenSet),
-		operations:  make(map[string]domain.Operation),
-		endpoints:   make(map[string]domain.Endpoint),
-		deployments: make(map[string]domain.Deployment),
+		sites:        make(map[string]domain.Site),
+		pages:        make(map[string]domain.Page),
+		versions:     make(map[string][]domain.PageVersion),
+		snapshots:    make(map[string]domain.Snapshot),
+		contents:     make(map[string]domain.Content),
+		assets:       make(map[string]domain.Asset),
+		routes:       make(map[string]domain.Route),
+		forms:        make(map[string]domain.Form),
+		submissions:  make(map[string][]domain.Submission),
+		defs:         make(map[string]*domain.ComponentDefinition),
+		builds:       make(map[string]domain.Build),
+		deps:         make(map[string]domain.Dependency),
+		pkgCache:     make(map[string]domain.DepPackage),
+		allowlist:    make(map[string]map[string]struct{}),
+		cacheConfig:  make(map[string]domain.SiteCacheConfig),
+		tarballAcc:   make(map[string]domain.TarballAccess),
+		tokens:       make(map[string]*domain.TokenSet),
+		operations:   make(map[string]domain.Operation),
+		endpoints:    make(map[string]domain.Endpoint),
+		deployments:  make(map[string]domain.Deployment),
+		siteSettings: make(map[string]*domain.SiteSettings),
 	}
 }
 
@@ -1012,6 +1014,23 @@ func (m *Memory) UpsertTokens(_ context.Context, siteID string, tokens *domain.T
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.tokens[siteID] = clone(tokens)
+	return nil
+}
+
+func (m *Memory) GetSiteSettings(_ context.Context, siteID string) (*domain.SiteSettings, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	settings, ok := m.siteSettings[siteID]
+	if !ok {
+		return nil, nil
+	}
+	return clone(settings), nil
+}
+
+func (m *Memory) UpsertSiteSettings(_ context.Context, settings *domain.SiteSettings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.siteSettings[settings.SiteID] = clone(settings)
 	return nil
 }
 
