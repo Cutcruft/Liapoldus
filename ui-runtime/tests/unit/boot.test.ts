@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { DescriptorValidationError, TransportError } from '../../src/errors';
 import type { RouteDescriptor, ThemeDescriptor } from '../../src/types/descriptor';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { PageDescriptor } from '../../src/types/page';
 import { boot } from '../../src/core/boot';
 import type { FetchCall } from './helpers';
 import { FakeWebSocket, makeFakeFetch, resetFakes } from './helpers';
@@ -52,7 +52,7 @@ const otherOp = {
 
 function buildContract(overrides?: {
   operations?: unknown[];
-  tree?: TreeDeclaration;
+  pages?: PageDescriptor[];
   dev?: boolean;
   locale?: string;
   version?: string;
@@ -69,32 +69,32 @@ function buildContract(overrides?: {
     themes: [themeDefault],
     enabledChannels: { ws: true, sse: true },
     capabilities: { formSubmissions: true, dev: overrides?.dev ?? false },
-    ...(overrides?.tree ? { tree: overrides.tree } : {}),
+    pages: overrides?.pages ?? [],
   };
 }
 
-const treeA: TreeDeclaration = {
-  snapshotId: 'snap-1',
-  versionId: 'v1',
-  root: {
-    instanceId: 'root',
-    definitionId: 'page.home',
-    props: { title: { content: 'Главная' } },
-    bindings: [],
-    children: [],
-  },
+const pageA: PageDescriptor = {
+  id: 'page.home',
+  name: 'Home',
+  elements: [
+    {
+      id: 'root',
+      componentId: 'page.home',
+      props: { title: { kind: 'literal', value: { content: 'Главная' } } },
+    },
+  ],
 };
 
-const treeB: TreeDeclaration = {
-  snapshotId: 'snap-2',
-  versionId: 'v2',
-  root: {
-    instanceId: 'root-b',
-    definitionId: 'page.home',
-    props: { title: { content: 'Другая' } },
-    bindings: [],
-    children: [],
-  },
+const pageB: PageDescriptor = {
+  id: 'page.home',
+  name: 'Home',
+  elements: [
+    {
+      id: 'root-b',
+      componentId: 'page.home',
+      props: { title: { kind: 'literal', value: { content: 'Другая' } } },
+    },
+  ],
 };
 
 async function until(fn: () => boolean, ms = 1000): Promise<void> {
@@ -171,11 +171,11 @@ describe('16. boot', () => {
     rt.dispose();
   });
 
-  it('6. если tree в контракте — TreeController.load', async () => {
-    const { fetch } = makeFakeFetch(() => buildContract({ tree: treeA, operations: [] }));
+  it('6. страница из контракта — TreeController.load (home-page)', async () => {
+    const { fetch } = makeFakeFetch(() => buildContract({ pages: [pageA], operations: [] }));
     const rt = await boot('acme', 'production', { env: { fetch } });
-    expect(rt.store.getState().tree?.root.instanceId).toBe('root');
-    expect(rt.store.getState().tree?.versionId).toBe('v1');
+    expect(rt.store.getState().tree?.pageId).toBe('page.home');
+    expect(rt.store.getState().tree?.elements[0].id).toBe('root');
     rt.dispose();
   });
 
@@ -262,21 +262,21 @@ describe('16. boot', () => {
     rt2.dispose();
   });
 
-  it('12. dev-mode: подписка на WS-канал DevTransport и rebuild при новой декларации', async () => {
-    const { fetch } = makeFakeFetch(() => buildContract({ tree: treeA, dev: true }));
+  it('12. dev-mode: подписка на WS-канал DevTransport и rebuild при новой странице', async () => {
+    const { fetch } = makeFakeFetch(() => buildContract({ pages: [pageA], dev: true }));
     const rt = await boot('acme', 'development', { env: { fetch, WebSocket: FakeWebSocket } });
     expect(FakeWebSocket.instances).toHaveLength(1);
     expect(FakeWebSocket.instances[0].url).toBe('http://localhost/runtime/dev');
 
     const ws = FakeWebSocket.instances[0];
-    ws.emitMessage(JSON.stringify({ type: 'tree', tree: treeB }));
-    expect(rt.store.getState().tree?.root.instanceId).toBe('root-b');
-    expect(rt.store.getState().tree?.versionId).toBe('v2');
+    ws.emitMessage(JSON.stringify({ type: 'page', page: pageB }));
+    expect(rt.store.getState().tree?.pageId).toBe('page.home');
+    expect(rt.store.getState().tree?.elements[0].id).toBe('root-b');
     rt.dispose();
   });
 
   it('12b. production: WS-канал DevTransport не создаётся', async () => {
-    const { fetch } = makeFakeFetch(() => buildContract({ tree: treeA, dev: true }));
+    const { fetch } = makeFakeFetch(() => buildContract({ pages: [pageA], dev: true }));
     const rt = await boot('acme', 'production', { env: { fetch, WebSocket: FakeWebSocket } });
     expect(FakeWebSocket.instances).toHaveLength(0);
     rt.dispose();

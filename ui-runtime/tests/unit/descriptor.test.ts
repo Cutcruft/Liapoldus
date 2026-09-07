@@ -9,6 +9,9 @@ import {
 import {
   parseDescriptors,
   parseContractJSON,
+  validateBindingSource,
+  validateElementDescriptor,
+  validatePageDescriptor,
   validateProviderDescriptor,
   validateOperationDescriptor,
 } from '../../src/core/descriptor';
@@ -95,5 +98,61 @@ describe('descriptor parse (JSON)', () => {
     expect(op.id).toBe('content.get');
     expect(op.type).toBe('content');
     expect(op.params).toBeUndefined();
+  });
+
+  it('page: элементы с literal/binding props парсятся; pages наполняется', () => {
+    const parsed = parseDescriptors(
+      JSON.stringify({
+        siteId: 's', environment: 'prod', version: '1', locale: 'ru',
+        providers: [], operations: [], endpoints: [], routes: [], themes: [],
+        pages: [
+          {
+            id: 'page.home',
+            name: 'Home',
+            elements: [
+              { id: 'el1', componentId: 'Text', props: { text: { kind: 'literal', value: 'Привет' } } },
+              {
+                id: 'el2',
+                componentId: 'Title',
+                props: { title: { kind: 'binding', source: { kind: 'content', contentId: 'hero', field: 'title' } } },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(parsed.pages).toHaveLength(1);
+    expect(parsed.pages[0].id).toBe('page.home');
+    expect(parsed.pages[0].elements).toHaveLength(2);
+    const el2 = parsed.pages[0].elements[1];
+    expect(el2.props.title).toEqual({
+      kind: 'binding',
+      source: { kind: 'content', contentId: 'hero', field: 'title' },
+    });
+  });
+
+  it('page: без elements или без id → DescriptorValidationError', () => {
+    expect(() => validatePageDescriptor({ id: 'p' } as never)).toThrow(DescriptorValidationError);
+    expect(() => validatePageDescriptor({ name: 'x' } as never)).toThrow(DescriptorValidationError);
+  });
+
+  it('element: props с неизвестным kind → DescriptorValidationError', () => {
+    const el = {
+      id: 'el1',
+      componentId: 'Text',
+      props: { text: { kind: 'runtime', path: 'x' } },
+    };
+    expect(() => validateElementDescriptor(el as never)).toThrow(DescriptorValidationError);
+    expect(() => validateElementDescriptor({ id: 'el1' } as never)).toThrow(DescriptorValidationError);
+  });
+
+  it('binding source: принятые виды и невалидные → ошибка', () => {
+    expect(validateBindingSource({ kind: 'content', contentId: 'c', field: 'x' })).toEqual({
+      kind: 'content', contentId: 'c', field: 'x',
+    });
+    expect(validateBindingSource({ kind: 'routeGroup', index: 2 })).toEqual({ kind: 'routeGroup', index: 2 });
+    expect(() => validateBindingSource({ kind: 'routeGroup' } as never)).toThrow(DescriptorValidationError);
+    expect(() => validateBindingSource({ kind: 'props' } as never)).toThrow(DescriptorValidationError);
+    expect(() => validateBindingSource({ kind: 'content' } as never)).toThrow(DescriptorValidationError);
   });
 });

@@ -1,6 +1,6 @@
 import { boot, type BootRuntime } from '../../src/core/boot';
 import type { RouteDescriptor, ThemeDescriptor } from '../../src/types/descriptor';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { PageDescriptor } from '../../src/types/page';
 import { FakeWebSocket, makeFakeFetch, type FetchCall } from './helpers';
 
 export function routeHome(): RouteDescriptor {
@@ -53,7 +53,7 @@ export function feedOp(poll = true): Record<string, unknown> {
 
 export interface ContractOverrides {
   operations?: unknown[];
-  tree?: TreeDeclaration;
+  pages?: PageDescriptor[];
   dev?: boolean;
   locale?: string;
   version?: string;
@@ -73,7 +73,7 @@ export function buildContract(overrides?: ContractOverrides): Record<string, unk
     themes: [themeDefault()],
     enabledChannels: { ws: true, sse: true },
     capabilities: { formSubmissions: true, dev: overrides?.dev ?? false },
-    ...(overrides?.tree ? { tree: overrides.tree } : {}),
+    pages: overrides?.pages ?? [],
   };
 }
 

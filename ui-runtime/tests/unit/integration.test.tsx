@@ -7,7 +7,7 @@ import { ContentController } from '../../src/core/content';
 import { PageRenderer, RuntimeProvider, useContent, useForm, useMutation, useQuery, useT } from '../../src/react';
 import { TransportFactory } from '../../src/core/transport/factory';
 import { ScopeError } from '../../src/errors';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { ElementProp, PageDescriptor } from '../../src/types/page';
 import { FakeWebSocket, makeFakeFetch, resetFakes, type FetchCall } from './helpers';
 import { routeHome } from './react-harness';
 
@@ -168,81 +168,42 @@ function contract(): Record<string, unknown> {
     themes: [{ themeId: 'default', tokens: { '--color-primary': '#111111' } }],
     enabledChannels: { ws: true, sse: true },
     capabilities: { formSubmissions: true, dev: false },
-    tree: treeA(),
+    pages: [pageA()],
   };
 }
 
-function treeA(): TreeDeclaration {
+const B = (contentId: string, field: string): ElementProp => ({
+  kind: 'binding',
+  source: { kind: 'content', contentId, field },
+});
+
+function pageA(): PageDescriptor {
   return {
-    snapshotId: 's1',
-    versionId: 'v1',
-    root: {
-      instanceId: 'root',
-      definitionId: 'page.home',
-      props: {},
-      bindings: [],
-      children: [
-        {
-          instanceId: 'title',
-          definitionId: 'title',
-          props: { text: '—' },
-          bindings: [{ property: 'text', source: { type: 'content', contentId: 'post', path: 'title' } }],
-          children: [],
-        },
-        {
-          instanceId: 'image',
-          definitionId: 'image',
-          props: {},
-          bindings: [{ property: 'src', source: { type: 'content', contentId: 'post', path: 'image' } }],
-          children: [],
-        },
-        {
-          instanceId: 'list',
-          definitionId: 'list',
-          props: {},
-          bindings: [{ property: 'items', source: { type: 'content', contentId: 'post', path: 'items' } }],
-          children: [
-            { instanceId: 'k1', definitionId: 'item', props: {}, bindings: [], children: [] },
-            { instanceId: 'k2', definitionId: 'item', props: {}, bindings: [], children: [] },
-          ],
-        },
-      ],
-    },
+    id: 'page.home',
+    name: 'Home',
+    elements: [
+      { id: 'root', componentId: 'page.home', props: {} },
+      { id: 'title', componentId: 'title', props: { text: B('post', 'title') } },
+      { id: 'image', componentId: 'image', props: { src: B('post', 'image') } },
+      { id: 'list', componentId: 'list', props: { items: B('post', 'items') } },
+      { id: 'k1', componentId: 'item', props: {} },
+      { id: 'k2', componentId: 'item', props: {} },
+    ],
   };
 }
 
-function treeB(): TreeDeclaration {
-  const a = treeA();
-  const list = a.root.children[2];
-  return {
-    ...a,
-    snapshotId: 's2',
-    versionId: 'v2',
-    root: {
-      ...a.root,
-      children: [
-        ...a.root.children.slice(0, 2),
-        {
-          ...list,
-          children: [
-            { instanceId: 'k1', definitionId: 'item', props: {}, bindings: [], children: [] },
-            { instanceId: 'k2', definitionId: 'item', props: {}, bindings: [], children: [] },
-            { instanceId: 'k3', definitionId: 'item', props: {}, bindings: [], children: [] },
-          ],
-        },
-      ],
-    },
-  };
+function pageB(): PageDescriptor {
+  const a = pageA();
+  a.elements.push({ id: 'k3', componentId: 'item', props: {} });
+  return a;
 }
 
 const components = {
-  'page.home': ({ children }: { children?: ReactNode }) => <section data-testid="root">{children}</section>,
+  'page.home': () => <section data-testid="root" />,
   title: ({ text }: { text?: unknown }) => <h1 data-testid="title">{String(text)}</h1>,
   image: ({ src }: { src?: unknown }) => <img data-testid="image" src={String(src)} alt="" />,
-  list: ({ items, children }: { items?: unknown; children?: ReactNode }) => (
-    <ul data-testid="list" data-count={Array.isArray(items) ? items.length : 0}>
-      {children}
-    </ul>
+  list: ({ items }: { items?: unknown }) => (
+    <ul data-testid="list" data-count={Array.isArray(items) ? items.length : 0} />
   ),
   item: () => <li data-testid="item">x</li>,
 };
@@ -295,9 +256,9 @@ async function until(fn: () => boolean, ms = 2500): Promise<void> {
 describe('19. integration (один слой сквозной)', () => {
   beforeEach(() => resetFakes());
 
-  it('1. boot → дерево → content из fake-сервера через binding; image {assetId,variant} → URL', async () => {
+  it('1. boot → страница → content из fake-сервера через binding; image {assetId,variant} → URL', async () => {
     const { runtime } = await setup();
-    const decl = treeA();
+    const decl = pageA();
     const rebuilds: number[] = [0];
     runtime.tree.onRebuild(() => {
       rebuilds[0] += 1;
@@ -308,10 +269,10 @@ describe('19. integration (один слой сквозной)', () => {
         <PageRenderer components={components} />
       </Scaffold>,
     );
-    await waitFor(() => expect(screen.getByTestId('title').textContent).toBe('—'));
+    await waitFor(() => expect(screen.getByTestId('title')).toBeTruthy());
     expect(screen.getByTestId('image').getAttribute('src')).toBe('undefined');
 
-    // app: метаданные ассета → контент в стор → дерево резолвится заново (load, не rebuild)
+    // app: метаданные ассета → контент в стор → страница резолвится заново (load, не rebuild)
     await runtime.assets.get('img1');
     await contentController(runtime).get('post', { locale: 'ru' });
     act(() => runtime.tree.load(decl));
@@ -321,7 +282,7 @@ describe('19. integration (один слой сквозной)', () => {
     expect(rebuilds[0]).toBe(0);
   });
 
-  it('2. поллинг обновил стор; дерево НЕ пересобиралось (onRebuild=0, DOM по key без изменений)', async () => {
+  it('2. поллинг обновил стор; страница НЕ пересобиралась (onRebuild=0, DOM по key без изменений)', async () => {
     const { runtime, backend } = await setup();
     const rebuilds: number[] = [0];
     runtime.tree.onRebuild(() => {
@@ -349,7 +310,7 @@ describe('19. integration (один слой сквозной)', () => {
     expect(screen.getAllByTestId('item')[1]).toBe(itemsBefore[1]);
   });
 
-  it('3. новая декларация → rebuild → DOM обновился', async () => {
+  it('3. новая страница → rebuild → DOM обновился', async () => {
     const { runtime } = await setup();
     const rebuilds: number[] = [0];
     runtime.tree.onRebuild(() => {
@@ -364,7 +325,7 @@ describe('19. integration (один слой сквозной)', () => {
     await waitFor(() => expect(screen.getAllByTestId('item')).toHaveLength(2));
     const k1 = screen.getAllByTestId('item')[0];
 
-    act(() => runtime.tree.rebuild(treeB()));
+    act(() => runtime.tree.rebuild(pageB()));
 
     await waitFor(() => expect(screen.getAllByTestId('item')).toHaveLength(3));
     expect(screen.getAllByTestId('item')[0]).toBe(k1);
@@ -420,9 +381,9 @@ describe('19. integration (один слой сквозной)', () => {
     expect((backend.submissions[0].values as Record<string, unknown>).email).toBe('user@example.com');
   });
 
-  it('6. setLocale → контент и UI-строки перечитаны по новой локали (серверный фолбэк); дерево НЕ пересобирается', async () => {
+  it('6. setLocale → контент и UI-строки перечитаны по новой локали (серверный фолбэк); страница НЕ пересобирается', async () => {
     const { runtime } = await setup();
-    const decl = treeA();
+    const decl = pageA();
     const rebuilds: number[] = [0];
     runtime.tree.onRebuild(() => {
       rebuilds[0] += 1;

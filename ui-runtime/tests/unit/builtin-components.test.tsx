@@ -3,24 +3,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ComponentRegistry } from '../../src/core/component-registry';
 import { componentMapFromRegistry, registerBuiltinComponents } from '../../src/react/builtin';
 import { PageRenderer } from '../../src/react/render';
-import type { ResolvedTreeInstance } from '../../src/types/tree';
+import type { ResolvedElementNode } from '../../src/types/page';
 
-function renderRoot(definitionId: string, props: Record<string, unknown>, children: ResolvedTreeInstance[] = []) {
-  const root: ResolvedTreeInstance = {
-    instanceId: 'root',
-    definitionId,
-    props,
-    bindings: [],
-    children,
-  };
-  return render(<PageRenderer components={componentMapFromRegistry()} root={root} />);
+function renderRoot(definitionId: string, props: Record<string, unknown>) {
+  const elements: ResolvedElementNode[] = [
+    { id: 'only', componentId: definitionId, props, bindings: [] },
+  ];
+  return render(<PageRenderer components={componentMapFromRegistry()} elements={elements} />);
 }
 
 describe('builtin Container', () => {
-  it('рендерит div с layout stack (column) и children', () => {
-    const { container } = renderRoot('Container', { layout: 'stack', gap: 8 }, [
-      { instanceId: 'child', definitionId: 'Text', props: { text: 'Привет' }, bindings: [], children: [] },
-    ]);
+  it('рендерит div с layout stack (column)', () => {
+    const { container } = renderRoot('Container', { layout: 'stack', gap: 8 });
     const div = container.querySelector('div[data-component="Container"]') as HTMLElement;
     expect(div).not.toBeNull();
     expect(div.style.display).toBe('flex');

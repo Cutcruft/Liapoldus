@@ -6,7 +6,7 @@ import type {
   RouteDescriptor,
   ThemeDescriptor,
 } from '../../src/types/descriptor';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { PageDeclaration } from '../../src/types/page';
 
 // --- providers -----------------------------------------------------------
 
@@ -346,62 +346,46 @@ export const contractJson = JSON.stringify(
   2,
 );
 
-// --- дерево --------------------------------------------------------------
+// --- страница -------------------------------------------------------------
 
-export const treeDeclaration: TreeDeclaration = {
-  root: {
-    instanceId: 'root',
-    definitionId: 'Page',
-    props: {},
-    bindings: [
-      { property: 'title', source: { type: 'content', contentId: 'hero', path: 'strings.title' } },
-      { property: 'items', source: { type: 'operation', operationId: 'reviews', path: 'items.[].title' } },
-    ],
-    children: [
-      {
-        instanceId: 'i1',
-        definitionId: 'Header',
-        props: { nav: ['home', 'favorites'] },
-        bindings: [],
-        children: [
-          {
-            instanceId: 'i2',
-            definitionId: 'Navigation',
-            props: {},
-            bindings: [{ property: 'label', source: { type: 'content', contentId: 'menu', path: 'home' } }],
-            children: [],
-          },
-        ],
+/** Лист элементов страницы в новом контракте (§1.3): линейный порядок = рендер. */
+export const pageDeclaration: PageDeclaration = {
+  pageId: 'page.home',
+  elements: [
+    {
+      id: 'i1',
+      componentId: 'Header',
+      props: { nav: { kind: 'literal', value: ['home', 'favorites'] } },
+    },
+    {
+      id: 'i2',
+      componentId: 'Navigation',
+      props: {
+        label: { kind: 'binding', source: { kind: 'content', contentId: 'menu', field: 'home' } },
       },
-      {
-        instanceId: 'i3',
-        definitionId: 'Hero',
-        props: {},
-        bindings: [
-          { property: 'title', source: { type: 'content', contentId: 'hero', path: 'strings.title' } },
-          { property: 'body', source: { type: 'content', contentId: 'hero', path: 'strings.body' } },
-        ],
-        children: [],
+    },
+    {
+      id: 'i3',
+      componentId: 'Hero',
+      props: {
+        title: { kind: 'binding', source: { kind: 'content', contentId: 'hero', field: 'strings.title' } },
+        body: { kind: 'binding', source: { kind: 'content', contentId: 'hero', field: 'strings.body' } },
       },
-      {
-        instanceId: 'i4',
-        definitionId: 'ProductList',
-        props: {},
-        bindings: [
-          { property: 'items', source: { type: 'content', contentId: 'products', path: 'items' } },
-          { property: 'title', source: { type: 'content', contentId: 'hero', path: 'strings.title' } },
-        ],
-        children: [],
+    },
+    {
+      id: 'i4',
+      componentId: 'ProductList',
+      props: {
+        items: { kind: 'binding', source: { kind: 'content', contentId: 'products', field: 'items' } },
+        title: { kind: 'binding', source: { kind: 'content', contentId: 'hero', field: 'strings.title' } },
       },
-      {
-        instanceId: 'i5',
-        definitionId: 'Footer',
-        props: {},
-        bindings: [
-          { property: 'copyright', source: { type: 'content', contentId: 'footer', path: 'copyright' } },
-        ],
-        children: [],
+    },
+    {
+      id: 'i5',
+      componentId: 'Footer',
+      props: {
+        title: { kind: 'binding', source: { kind: 'content', contentId: 'strings', field: 'footer' } },
       },
-    ],
-  },
+    },
+  ],
 };

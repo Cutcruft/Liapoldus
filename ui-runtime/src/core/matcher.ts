@@ -59,7 +59,10 @@ export function createMatcher(routes: RouteDescriptor[]): MatchFunction {
           if (v !== undefined) params[k] = v;
         }
       }
-      return { route, params, query };
+      const groups = m.slice(1).map((g) => (g === undefined ? '' : g));
+      const resolved: ResolvedRoute = { route, params, query };
+      if (groups.length > 0) resolved.groups = groups;
+      return resolved;
     }
     return null;
   };

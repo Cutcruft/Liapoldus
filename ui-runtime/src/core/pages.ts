@@ -1,4 +1,4 @@
-import type { TreeDeclaration } from '../types/tree';
+import type { PageDeclaration } from '../types/page';
 import type { FetchLike } from './transport/transport';
 
 /**
@@ -7,21 +7,22 @@ import type { FetchLike } from './transport/transport';
  * Контракт:
  *  - сборка публикует манифест `/build/{site}/{env}/{version}/manifest.json` и
  *    код-сплит чанки `.../pages/{pageId}.js`;
- *  - каждый чанк сам регистрирует свои компоненты (ComponentRegistry) и дерево
- *    страницы через `registerPage(pageId, tree)` — статический реестр ниже;
+ *  - каждый чанк сам регистрирует свои компоненты (ComponentRegistry) и
+ *    декларацию страницы через `registerPage(pageId, declaration)` — статический
+ *    реестр ниже;
  *  - корневой entry.js (shell) только монтируется; чанк домашней страницы
  *    помечается в index.html <link rel=modulepreload>.
  */
 
-/** Зарегистрированные деревья страниц (чанки кладут сюда; mount читает отсюда). */
-const pageTrees = new Map<string, TreeDeclaration>();
+/** Зарегистрированные декларации страниц (чанки кладут сюда; mount читает отсюда). */
+const pageTrees = new Map<string, PageDeclaration>();
 
-/** Точка входа чанка: регистрирует дерево своей страницы в статическом реестре. */
-export function registerPage(pageId: string, tree: TreeDeclaration): void {
-  pageTrees.set(pageId, tree);
+/** Точка входа чанка: регистрирует декларацию своей страницы в статическом реестре. */
+export function registerPage(pageId: string, declaration: PageDeclaration): void {
+  pageTrees.set(pageId, declaration);
 }
 
-export function getPageTree(pageId: string): TreeDeclaration | undefined {
+export function getPageTree(pageId: string): PageDeclaration | undefined {
   return pageTrees.get(pageId);
 }
 

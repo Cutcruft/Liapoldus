@@ -5,7 +5,7 @@ import { createRuntimeStore } from '../core/store';
 import type { ContentData } from '../types/content';
 import type { ResolvedRoute } from '../types/descriptor';
 import type { FieldSchema } from '../types/form';
-import type { TreeDeclaration } from '../types/tree';
+import type { ResolvedPageDeclaration } from '../types/page';
 import { useRuntime, useRuntimeContext } from './context';
 
 /** Пустой стор — рендер вне готового RuntimeProvider не падает. */
@@ -121,8 +121,8 @@ export function useRoute(): ResolvedRoute | null {
   return useRuntimeRaw((s) => s.route) ?? null;
 }
 
-/** useTree(): текущая декларация дерева (§17#9). */
-export function useTree(): TreeDeclaration | null {
+/** useTree(): текущая разрешённая страница (§17#9). */
+export function useTree(): ResolvedPageDeclaration | null {
   return useRuntimeRaw((s) => s.tree) ?? null;
 }
 

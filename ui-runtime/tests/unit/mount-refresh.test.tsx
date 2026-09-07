@@ -7,7 +7,7 @@ import { PageRenderer } from '../../src/react/render';
 import { componentMapFromRegistry, registerBuiltinComponents } from '../../src/react/builtin';
 import type { BootRuntime } from '../../src/core/boot';
 import type { ResolvedRoute, RouteDescriptor } from '../../src/types/descriptor';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { ElementProp, PageDeclaration } from '../../src/types/page';
 
 function fakeRuntime(): BootRuntime {
   const store = createRuntimeStore();
@@ -31,18 +31,17 @@ function fakeRuntime(): BootRuntime {
   return runtime;
 }
 
+const bind = (source: import('../../src/types/page').BindingSource): ElementProp => ({ kind: 'binding', source });
+
 describe('TreeController.refresh (Этап 5: пересборка vs синк данных)', () => {
   it('refresh пересчитывает content-binding после обновления контента', () => {
     registerBuiltinComponents();
     const runtime = fakeRuntime();
-    const declaration: TreeDeclaration = {
-      root: {
-        instanceId: 'root',
-        definitionId: 'Text',
-        props: {},
-        bindings: [{ property: 'text', source: { type: 'content', contentId: 'hero', path: 'title' } }],
-        children: [],
-      },
+    const declaration: PageDeclaration = {
+      pageId: 'page.home',
+      elements: [
+        { id: 'root', componentId: 'Text', props: { text: bind({ kind: 'content', contentId: 'hero', field: 'title' }) } },
+      ],
     };
     runtime.tree.load(declaration);
     runtime.store.getState().setContent({ hero: { title: 'Привет' } } as never);
@@ -61,7 +60,7 @@ describe('TreeController.refresh (Этап 5: пересборка vs синк �
     expect(span.innerHTML).toContain('Привет');
   });
 
-  it('rebuild резолвит routeParam-binding против актуального роута', () => {
+  it('rebuild резолвит query-binding против актуального роута (params-фоллбэк)', () => {
     const runtime = fakeRuntime();
     const routeDescriptor: RouteDescriptor = {
       id: 'r1',
@@ -72,16 +71,11 @@ describe('TreeController.refresh (Этап 5: пересборка vs синк �
     const route: ResolvedRoute = { route: routeDescriptor, params: { id: '42' }, query: {} };
     runtime.store.getState().setRoute(route);
     runtime.tree.rebuild({
-      root: {
-        instanceId: 'root',
-        definitionId: 'Text',
-        props: {},
-        bindings: [{ property: 'text', source: { type: 'routeParam', name: 'id' } }],
-        children: [],
-      },
+      pageId: 'home',
+      elements: [{ id: 'root', componentId: 'Text', props: { text: bind({ kind: 'query', param: 'id' }) } }],
     });
-    const root = runtime.store.getState().tree?.root as { props: Record<string, unknown> };
-    expect(root.props['text']).toBe('42');
+    const first = runtime.store.getState().tree?.elements as Array<{ props: Record<string, unknown> }>;
+    expect(first[0].props['text']).toBe('42');
   });
 
   it('refresh no-op без дерева (не падает)', () => {

@@ -3,12 +3,12 @@ import type { AssetMeta } from '../types/asset';
 import type { ContentData } from '../types/content';
 import type { ResolvedRoute, RouteDescriptor } from '../types/descriptor';
 import type { FormRuntimeSnapshot } from '../types/form';
-import type { TreeDeclaration } from '../types/tree';
+import type { ResolvedPageDeclaration } from '../types/page';
 
 /** Срезы runtime-состояния (тест-спека §14). */
 export interface RuntimeState {
   ready: boolean;
-  tree: TreeDeclaration | null;
+  tree: ResolvedPageDeclaration | null;
   routes: RouteDescriptor[];
   /** текущий маршрут (ResolvedRoute) после навигации */
   route: ResolvedRoute | null;
@@ -22,7 +22,7 @@ export interface RuntimeState {
 
 export interface RuntimeActions {
   setReady(ready?: boolean): void;
-  setTree(tree: TreeDeclaration | null): void;
+  setTree(tree: ResolvedPageDeclaration | null): void;
   setRoutes(routes: RouteDescriptor[]): void;
   setRoute(route: ResolvedRoute | null): void;
   applyTokens(tokens: Record<string, string>): void;

@@ -3,29 +3,13 @@ import type { RuntimeStore } from './store';
 import type {
   BindingContext,
   BindingSource,
-  ResolvedTreeInstance,
-  TreeDeclaration,
-  TreeInstance,
-} from '../types/tree';
-
-export interface TreeOptions {
-  /** резолв binding source `runtime` */
-  resolveRuntime?: (source: string) => unknown;
-}
+  ElementNode,
+  PageDeclaration,
+  ResolvedElementNode,
+  ResolvedPageDeclaration,
+} from '../types/page';
 
 type TreeListener = () => void;
-
-/** Разрешает декларацию; возвращает новую декларацию с resolved root. */
-function resolveDeclaration(
-  declaration: TreeDeclaration,
-  ctx: BindingContext,
-  resolveRuntime?: (source: string) => unknown,
-): TreeDeclaration {
-  return {
-    ...declaration,
-    root: resolveInstance(declaration.root, ctx, resolveRuntime),
-  };
-}
 
 function getPath(value: unknown, path: string): unknown {
   const tokens = path.split('.').filter((t) => t !== '');
@@ -51,85 +35,55 @@ function operationValue(entry: unknown): unknown {
   return rec.data !== undefined ? rec.data : entry;
 }
 
-function resolveBinding(
-  source: BindingSource,
-  ctx: BindingContext,
-  parentProps: Record<string, unknown>,
-  resolveRuntime?: (source: string) => unknown,
-): unknown {
-  switch (source.type) {
+/** Резолвит binding-источник против контекста (§1.3) — одно значение на источник. */
+function resolveBinding(source: BindingSource, ctx: BindingContext): unknown {
+  switch (source.kind) {
     case 'content':
-      return getPath(ctx.content[source.contentId], source.path);
-    case 'routeParam':
-      return ctx.route?.params[source.name];
-    case 'routeQuery':
-      return ctx.route?.query[source.name];
-    case 'operation':
-      return getPath(operationValue(ctx.operation[source.operationId]), source.path);
+      return getPath(ctx.content[source.contentId], source.field);
     case 'form':
-      return getPath(ctx.form[source.formId]?.values, source.path);
-    case 'props':
-      return getPath(parentProps, source.path);
-    case 'runtime':
-      return resolveRuntime?.(source.source);
+      return ctx.form[source.formId]?.values;
+    case 'operation':
+      return operationValue(ctx.operation[source.operationId]);
+    case 'query':
+      return ctx.route?.query[source.param] ?? ctx.route?.params[source.param];
+    case 'routeGroup':
+      return ctx.route?.groups[source.index];
   }
 }
 
-function resolveInstance(
-  instance: TreeInstance,
-  ctx: BindingContext,
-  resolveRuntime?: (source: string) => unknown,
-): ResolvedTreeInstance {
-  let props: Record<string, unknown> = { ...instance.props };
-  for (const binding of instance.bindings) {
-    const value = resolveBinding(binding.source, ctx, props, resolveRuntime);
-    if (value !== undefined) {
-      props = { ...props, [binding.property]: value };
+/** Резолвит один элемент: literal → as-is, binding → значение из контекста. */
+function resolveElement(el: ElementNode, ctx: BindingContext): ResolvedElementNode {
+  const props: Record<string, unknown> = {};
+  for (const [name, prop] of Object.entries(el.props)) {
+    if (prop.kind === 'binding') {
+      const value = resolveBinding(prop.source, ctx);
+      if (value !== undefined) props[name] = value;
+    } else {
+      props[name] = prop.value;
     }
   }
-  const children = instance.children.map((child) =>
-    resolveInstance(child, ctx, resolveRuntime),
-  );
+  return { id: el.id, componentId: el.componentId, props, bindings: el.bindings };
+}
+
+/** Разрешает декларацию страницы; возвращает новую декларацию с resolved элементами. */
+function resolveDeclaration(declaration: PageDeclaration, ctx: BindingContext): ResolvedPageDeclaration {
   return {
-    instanceId: instance.instanceId,
-    definitionId: instance.definitionId,
-    props,
-    bindings: instance.bindings,
-    children,
+    snapshotId: declaration.snapshotId,
+    versionId: declaration.versionId,
+    pageId: declaration.pageId,
+    elements: declaration.elements.map((el) => resolveElement(el, ctx)),
   };
 }
 
-function findInstance(root: ResolvedTreeInstance, instanceId: string): ResolvedTreeInstance | null {
-  if (root.instanceId === instanceId) return root;
-  for (const child of root.children) {
-    const found = findInstance(child, instanceId);
-    if (found) return found;
-  }
-  return null;
-}
-
-function cloneTree(root: ResolvedTreeInstance): ResolvedTreeInstance {
-  return {
-    ...root,
-    props: { ...root.props },
-    children: root.children.map(cloneTree),
-  };
-}
-
-/** Управляет деревом страницы: load/rebuild/updateBindings с резолвом bindings (§11). */
+/** Управляет страницей: load/rebuild/updateBindings с резолвом bindings (§11). */
 export class TreeController {
   private listeners = new Map<'rebuild' | 'update', TreeListener[]>();
   private lastKey = '';
-  private resolveRuntime?: (source: string) => unknown;
+  private raw: PageDeclaration | null = null;
 
-  constructor(
-    private store: RuntimeStore,
-    opts?: TreeOptions,
-  ) {
-    this.resolveRuntime = opts?.resolveRuntime;
-  }
+  constructor(private store: RuntimeStore) {}
 
-  private signature(d: TreeDeclaration): string {
+  private signature(d: PageDeclaration): string {
     return JSON.stringify(d);
   }
 
@@ -138,69 +92,73 @@ export class TreeController {
     return {
       content: st.content as unknown as Record<string, unknown>,
       route: st.route
-        ? { path: st.route.route.id, params: st.route.params, query: st.route.query }
+        ? {
+            path: st.route.route.id,
+            params: st.route.params,
+            query: st.route.query,
+            groups: st.route.groups ?? [],
+          }
         : null,
       operation: st.operationResults as BindingContext['operation'],
       form: st.forms,
     };
   }
 
-  load(declaration: TreeDeclaration): void {
+  load(declaration: PageDeclaration): void {
+    this.raw = declaration;
     this.lastKey = this.signature(declaration);
-    this.store.getState().setTree(resolveDeclaration(declaration, this.context(), this.resolveRuntime));
+    this.store.getState().setTree(resolveDeclaration(declaration, this.context()));
     this.emit('update');
   }
 
-  rebuild(next: TreeDeclaration): void {
+  rebuild(next: PageDeclaration): void {
     const key = this.signature(next);
     if (key === this.lastKey) return;
+    this.raw = next;
     this.lastKey = key;
-    this.store.getState().setTree(resolveDeclaration(next, this.context(), this.resolveRuntime));
+    this.store.getState().setTree(resolveDeclaration(next, this.context()));
     this.emit('rebuild');
     this.emit('update');
   }
 
-  get root(): ResolvedTreeInstance | null {
+  /** Разрешённый лист элементов текущей страницы (null до load). */
+  get elements(): ResolvedElementNode[] | null {
     const tree = this.store.getState().tree;
-    return tree ? (tree.root as ResolvedTreeInstance) : null;
+    return tree ? tree.elements : null;
   }
 
   /**
-   * Пересчитывает bindings текущего дерева против актуального контекста
+   * Пересчитывает bindings текущей страницы против актуального контекста
    * (смена роута/контента/результатов операций/форм) и публикует `update`.
    * В отличие от rebuild не сравнивает сигнатуру декларации — декларация та же,
    * меняются только источники данных.
    */
   refresh(): void {
-    const current = this.store.getState().tree;
-    if (!current) return;
-    this.store.getState().setTree(resolveDeclaration(current, this.context(), this.resolveRuntime));
+    if (!this.raw) return;
+    this.store.getState().setTree(resolveDeclaration(this.raw, this.context()));
     this.emit('update');
   }
 
-  /** Резолвит декларацию с bindings в разрешённое дерево. */
-  resolve(declaration: TreeDeclaration, context?: BindingContext): TreeDeclaration {
+  /** Резолвит декларацию с bindings в разрешённую страницу. */
+  resolve(declaration: PageDeclaration, context?: BindingContext): ResolvedPageDeclaration {
     const ctx = context ?? this.context();
-    return resolveDeclaration(declaration, ctx, this.resolveRuntime);
+    return resolveDeclaration(declaration, ctx);
   }
 
-  /** Обновляет data-значения props по instanceId, не создавая onRebuild (§11#4). */
+  /** Обновляет data-значения props по id элемента, не создавая onRebuild (§11#4). */
   updateBindings(patch: Record<string, Record<string, unknown>>): void {
     const current = this.store.getState().tree;
     if (!current) return;
-    const clone = cloneTree(current.root as ResolvedTreeInstance);
-    for (const instanceId of Object.keys(patch)) {
-      if (!findInstance(clone, instanceId)) {
-        throw new UnknownEntityError(`Инстанс '${instanceId}' не найден в дереве`);
+    for (const id of Object.keys(patch)) {
+      if (!current.elements.some((el) => el.id === id)) {
+        throw new UnknownEntityError(`Элемент '${id}' не найден в странице`);
       }
     }
-    for (const [instanceId, values] of Object.entries(patch)) {
-      const target = findInstance(clone, instanceId);
-      if (target) {
-        target.props = { ...target.props, ...values };
-      }
-    }
-    this.store.getState().setTree({ ...current, root: clone });
+    const elements = current.elements.map((el) => {
+      const values = patch[el.id];
+      return values ? { ...el, props: { ...el.props, ...values } } : el;
+    });
+    this.store.getState().setTree({ ...current, elements });
     this.emit('update');
   }
 

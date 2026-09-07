@@ -8,11 +8,11 @@ import {
   resolveBuildBase,
 } from '../../src/core/pages';
 import type { ChunkImporter } from '../../src/core/pages';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { PageDeclaration } from '../../src/types/page';
 
-const tree = (pageId: string, rootId = 'root'): TreeDeclaration => ({
+const tree = (pageId: string, elementId = 'root'): PageDeclaration => ({
   pageId,
-  root: { instanceId: rootId, definitionId: 'text', props: {}, bindings: [], children: [] },
+  elements: [{ id: elementId, componentId: 'text', props: {} }],
 });
 
 const MANIFEST = JSON.stringify({
@@ -36,7 +36,7 @@ describe('pages (Этап 5 п.4: постраничная доставка)', (
     registerPage('p1', tree('p1'));
     expect(hasPageTree('p1')).toBe(true);
     expect(hasPageTree('nope')).toBe(false);
-    expect(getPageTree('p1')?.root.instanceId).toBe('root');
+    expect(getPageTree('p1')?.elements[0].id).toBe('root');
   });
 
   it('parseManifest читает camelCase-манифест Go-сборки', () => {

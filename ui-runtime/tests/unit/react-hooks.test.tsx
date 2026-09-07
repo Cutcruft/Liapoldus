@@ -244,10 +244,11 @@ function View() {
     const { runtime } = await bootFromContract();
     runtime.store.getState().setTree({
       snapshotId: 's1',
-      root: { instanceId: 'root', definitionId: 'page.home', props: {}, bindings: [], children: [] },
+      pageId: 'page.home',
+      elements: [{ id: 'root', componentId: 'page.home', props: {} }],
     });
     function View() {
-      return <div data-testid="tr">{useTree()?.root.instanceId ?? 'none'}</div>;
+      return <div data-testid="tr">{useTree()?.elements[0]?.id ?? 'none'}</div>;
     }
     render(
       <Scaffold runtime={runtime}>

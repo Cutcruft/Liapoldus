@@ -1,11 +1,11 @@
 import { DescriptorValidationError, TransportError } from '../errors';
 import type { OperationDescriptor } from '../types/descriptor';
-import type { TreeDeclaration } from '../types/tree';
+import type { PageDeclaration, PageDescriptor } from '../types/page';
 import { ApiClient } from './api-client';
 import { AssetResolver } from './assets';
 import { registerBuiltin } from './builtin/descriptors';
 import { parseCron } from './cron';
-import { parseDescriptors } from './descriptor';
+import { parseDescriptors, validatePageDescriptor } from './descriptor';
 import { FormRuntime } from './form';
 import { I18n, type I18nOptions } from './i18n';
 import { RuntimeRegistry } from './registry';
@@ -55,6 +55,8 @@ export interface BootRuntime {
   readonly tree: TreeController;
   readonly forms: FormRuntime;
   readonly assets: AssetResolver;
+  /** страницы контракта (лист элементов на страницу, §1.3) */
+  readonly pages: PageDescriptor[];
   /** полный сброс: закрыть dev-канал, снять poll, выгрузить транспорты и сессию */
   dispose(): void;
 }
@@ -81,6 +83,7 @@ class BootSession {
   client!: ApiClient;
   forms!: FormRuntime;
   assets!: AssetResolver;
+  pages: PageDescriptor[] = [];
 
   ready = false;
   private factory!: TransportFactory;
@@ -110,7 +113,7 @@ class BootSession {
     const res = await this.fetchContract();
     const text = await res.text();
     const parsed = parseDescriptors(text);
-    const rawTree = this.extractTree(text);
+    this.pages = parsed.pages;
 
     for (const p of parsed.providers) {
       if (!this.registry.hasProvider(p.id)) this.registry.registerProvider(p);
@@ -157,10 +160,26 @@ class BootSession {
     this.router.replaceRoutes(parsed.routes);
     this.store.getState().setRoutes(parsed.routes);
 
-    if (rawTree) this.tree.load(rawTree);
+    const initial = this.initialPage();
+    if (initial) this.tree.load(this.pageDeclaration(initial));
 
     this.startPolls(parsed.operations);
     this.startDevChannel(parsed.contract.capabilities.dev);
+  }
+
+  /** Домашняя страница: цель самого специфичного renderPage-роута, иначе первая. */
+  private initialPage(): PageDescriptor | undefined {
+    const home = this.router.match('/');
+    const pageId = home?.route.action.type === 'renderPage' ? home.route.action.pageId : undefined;
+    if (pageId) {
+      const byId = this.pages.find((p) => p.id === pageId);
+      if (byId) return byId;
+    }
+    return this.pages[0];
+  }
+
+  private pageDeclaration(page: PageDescriptor): PageDeclaration {
+    return { pageId: page.id, elements: page.elements };
   }
 
   runtime(): BootRuntime {
@@ -178,6 +197,7 @@ class BootSession {
       tree: this.tree,
       forms: this.forms,
       assets: this.assets,
+      pages: this.pages,
       dispose: () => this.dispose(),
     };
   }
@@ -235,18 +255,6 @@ class BootSession {
     }
   }
 
-  private extractTree(text: string): TreeDeclaration | null {
-    let raw: Record<string, unknown>;
-    try {
-      raw = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      raw = {};
-    }
-    const tree = raw.tree;
-    if (tree === null || typeof tree !== 'object' || Array.isArray(tree)) return null;
-    return tree as TreeDeclaration;
-  }
-
   private startPolls(ops: OperationDescriptor[]): void {
     for (const op of ops) {
       const schedule = op.poll?.schedule;
@@ -275,13 +283,19 @@ class BootSession {
     ws.addEventListener('message', (event) => {
       const data = (event as { data?: string }).data;
       if (!data) return;
-      let msg: { type?: string; tree?: TreeDeclaration };
+      let msg: { type?: string; page?: unknown; pages?: unknown };
       try {
-        msg = JSON.parse(data) as { type?: string; tree?: TreeDeclaration };
+        msg = JSON.parse(data) as { type?: string; page?: unknown; pages?: unknown };
       } catch {
         return;
       }
-      if (msg.type === 'tree' && msg.tree) this.tree.rebuild(msg.tree);
+      // dev-канал толкает пересобранную страницу ({type:'page', page}) или их набор
+      if (msg.type === 'page' && msg.page !== undefined && msg.page !== null) {
+        const page = validatePageDescriptor(msg.page);
+        this.tree.rebuild(this.pageDeclaration(page));
+      } else if (msg.type === 'pages' && Array.isArray(msg.pages)) {
+        this.pages = msg.pages.map(validatePageDescriptor);
+      }
     });
     this.dev = ws;
   }

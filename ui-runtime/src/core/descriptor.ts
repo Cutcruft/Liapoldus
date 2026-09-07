@@ -13,6 +13,7 @@ import type {
   ThemeDescriptorKind,
   ThemeTokenDef,
 } from '../types/descriptor';
+import type { BindingSource, ElementNode, ElementProp, PageDescriptor } from '../types/page';
 
 const BADGE_RE = /^([A-Za-z0-9._/-]+)#([a-z]+)$/;
 
@@ -221,6 +222,95 @@ export function validateRouteDescriptor(raw: unknown): RouteDescriptorKind {
   return { kind: 'route', id, matcher, priority, action: raw.action as RouteAction };
 }
 
+/** Валидирует binding-источник (§1.3): discriminated union по kind. */
+export function validateBindingSource(raw: unknown): BindingSource {
+  if (!isRecord(raw)) throw new DescriptorValidationError('binding source должен быть объектом');
+  const kind = raw.kind;
+  switch (kind) {
+    case 'content':
+      return {
+        kind: 'content',
+        contentId: requireString(raw, 'contentId', 'element.bindings'),
+        field: typeof raw.field === 'string' ? raw.field : '',
+      };
+    case 'form':
+      return { kind: 'form', formId: requireString(raw, 'formId', 'element.bindings') };
+    case 'operation':
+      return { kind: 'operation', operationId: requireString(raw, 'operationId', 'element.bindings') };
+    case 'query':
+      return { kind: 'query', param: requireString(raw, 'param', 'element.bindings') };
+    case 'routeGroup': {
+      const index = raw.index;
+      if (typeof index !== 'number' || !Number.isInteger(index)) {
+        throw new DescriptorValidationError('binding routeGroup требует index (integer)', {
+          entityId: 'element.bindings',
+          path: 'index',
+        });
+      }
+      return { kind: 'routeGroup', index };
+    }
+    default:
+      throw new DescriptorValidationError(
+        `binding kind '${String(kind)}' должен быть content|form|operation|query|routeGroup`,
+        { entityId: 'element.bindings', path: 'kind' },
+      );
+  }
+}
+
+/** Валидирует значение props-записи элемента: литерал или binding. */
+export function validateElementProp(raw: unknown, prop: string): ElementProp {
+  if (!isRecord(raw) || raw.kind !== 'literal' && raw.kind !== 'binding') {
+    throw new DescriptorValidationError(
+      `props.${prop} должен быть { kind: 'literal'|'binding', … }`,
+      { path: `props.${prop}` },
+    );
+  }
+  if (raw.kind === 'binding') {
+    if (!('source' in raw)) {
+      throw new DescriptorValidationError(`props.${prop} (binding) требует source`, { path: `props.${prop}` });
+    }
+    return { kind: 'binding', source: validateBindingSource(raw.source) };
+  }
+  return { kind: 'literal', value: raw.value };
+}
+
+/** Валидирует элемент страницы: id/componentId/props (литералы и/или bindings). */
+export function validateElementDescriptor(raw: unknown): ElementNode {
+  if (!isRecord(raw)) throw new DescriptorValidationError('Дескриптор element должен быть объектом');
+  const id = requireString(raw, 'id', 'element');
+  const componentId = requireString(raw, 'componentId', id);
+  const props: Record<string, ElementProp> = {};
+  if (isRecord(raw.props)) {
+    for (const [name, value] of Object.entries(raw.props)) {
+      props[name] = validateElementProp(value, name);
+    }
+  }
+  const element: ElementNode = { id, componentId, props };
+  if (Array.isArray(raw.bindings)) {
+    element.bindings = raw.bindings.map((b) => validateBindingSource(b));
+  }
+  return element;
+}
+
+/** Валидирует страницу: id/name + линейный список элементов (§1.3). */
+export function validatePageDescriptor(raw: unknown): PageDescriptor {
+  if (!isRecord(raw)) throw new DescriptorValidationError('Дескриптор page должен быть объектом');
+  const id = requireString(raw, 'id', 'page');
+  const name = typeof raw.name === 'string' ? raw.name : '';
+  const elementsRaw = raw.elements;
+  if (elementsRaw === undefined) {
+    throw new DescriptorValidationError('page требует elements', { entityId: id, path: 'elements' });
+  }
+  if (!Array.isArray(elementsRaw)) {
+    throw new DescriptorValidationError('page.elements должен быть массивом', { entityId: id, path: 'elements' });
+  }
+  return {
+    id,
+    name,
+    elements: elementsRaw.map(validateElementDescriptor),
+  };
+}
+
 export function validateThemeDescriptor(raw: unknown): ThemeDescriptorKind {
   if (!isRecord(raw)) throw new DescriptorValidationError('Дескриптор theme должен быть объектом');
   const themeId = requireString(raw, 'themeId', 'theme');
@@ -254,6 +344,7 @@ export interface ParseResult {
   endpoints: EndpointDescriptor[];
   routes: RouteDescriptor[];
   themes: ThemeDescriptor[];
+  pages: PageDescriptor[];
 }
 
 /** Парсит и валидирует весь контракт. Бросает DescriptorValidationError. */
@@ -273,6 +364,15 @@ export function parseDescriptors(json: string): ParseResult {
   const endpoints = list('endpoints').map(validateEndpointDescriptor);
   const routes = list('routes').map(validateRouteDescriptor);
   const themes = list('themes').map(validateThemeDescriptor);
+
+  const pagesRaw = raw.pages;
+  let pages: PageDescriptor[] = [];
+  if (pagesRaw !== undefined) {
+    if (!Array.isArray(pagesRaw)) {
+      throw new DescriptorValidationError(`'pages' должен быть массивом`, { path: 'pages' });
+    }
+    pages = pagesRaw.map(validatePageDescriptor);
+  }
 
   const enabledChannels = { ws: true, sse: true };
   if (isRecord(raw.enabledChannels)) {
@@ -306,5 +406,5 @@ export function parseDescriptors(json: string): ParseResult {
     };
   }
 
-  return { contract, providers, operations, endpoints, routes, themes };
+  return { contract, providers, operations, endpoints, routes, themes, pages };
 }

@@ -2,13 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { createRuntimeStore } from '../../src/core/store';
 import type { AssetMeta } from '../../src/types/asset';
 import type { ResolvedRoute, RouteDescriptor } from '../../src/types/descriptor';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { ResolvedPageDeclaration } from '../../src/types/page';
 
-const treeA: TreeDeclaration = {
-  root: { instanceId: 'root', definitionId: 'Page', props: {}, bindings: [], children: [] },
+const treeA: ResolvedPageDeclaration = {
+  pageId: 'page.home',
+  elements: [{ id: 'root', componentId: 'Page', props: {} }],
 };
-const treeB: TreeDeclaration = {
-  root: { instanceId: 'root', definitionId: 'PageAlt', props: {}, bindings: [], children: [] },
+const treeB: ResolvedPageDeclaration = {
+  pageId: 'page.home',
+  elements: [{ id: 'root', componentId: 'PageAlt', props: {} }],
 };
 const route: RouteDescriptor = {
   id: 'route.home',

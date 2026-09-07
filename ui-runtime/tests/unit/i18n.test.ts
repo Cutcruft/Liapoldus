@@ -7,13 +7,14 @@ import { createRuntimeStore } from '../../src/core/store';
 import { RuntimeRegistry } from '../../src/core/registry';
 import { TransportFactory } from '../../src/core/transport/factory';
 import { LocaleUnsupportedError } from '../../src/errors';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { ResolvedPageDeclaration } from '../../src/types/page';
 import { makeFakeFetch, resetFakes } from './helpers';
 
 const BUILTIN = 'liapoldus.builtin';
 
-const treeA: TreeDeclaration = {
-  root: { instanceId: 'root', definitionId: 'Page', props: {}, bindings: [], children: [] },
+const treeA: ResolvedPageDeclaration = {
+  pageId: 'page.home',
+  elements: [{ id: 'root', componentId: 'Page', props: {} }],
 };
 
 const stringsByLocale: Record<string, Record<string, string>> = {

@@ -108,6 +108,8 @@ export interface ResolvedRoute {
   params: Record<string, string>;
   /** query-параметры запроса */
   query: Record<string, string>;
+  /** позиционные захваченные группы regex (для binding `routeGroup.index`) */
+  groups?: string[];
 }
 
 export type ThemeTokenDef = string | { value: string } | { ref: string };

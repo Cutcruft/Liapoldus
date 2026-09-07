@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ComponentType, ReactNode } from 'react';
 import type { BootRuntime } from '../../src/core/boot';
 import { PageRenderer, RouteOutlet, RuntimeProvider } from '../../src/react';
-import type { TreeDeclaration } from '../../src/types/tree';
+import type { ElementProp, PageDeclaration, ResolvedPageDeclaration } from '../../src/types/page';
 import { bootFromContract, routeHome, routeRedirect } from './react-harness';
 import { resetFakes } from './helpers';
 
@@ -11,63 +11,41 @@ function Scaffold({ runtime, children }: { runtime: BootRuntime; children: React
   return <RuntimeProvider runtime={runtime}>{children}</RuntimeProvider>;
 }
 
-type ElementProps = { title?: string; label?: string; children?: ReactNode };
+type ElementProps = { title?: string; label?: string };
 
 const ROOT: Record<string, ComponentType<ElementProps>> = {
-  'page.home': ({ title, children }) => (
-    <section data-testid="root" data-title={String(title)}>
-      {children}
-    </section>
-  ),
-  box: ({ title, children }) => (
-    <div data-testid="box" data-title={String(title)}>
-      {children}
-    </div>
-  ),
+  'page.home': ({ title }) => <section data-testid="root" data-title={String(title)} />,
+  box: ({ title }) => <div data-testid="box" data-title={String(title)} />,
   item: ({ label }) => <span data-testid="item">{String(label)}</span>,
 };
 
-function treeWith(): TreeDeclaration {
+const L = (value?: unknown): ElementProp => ({ kind: 'literal', value });
+
+function treeWith(): PageDeclaration {
   return {
     snapshotId: 's1',
     versionId: 'v1',
-    root: {
-      instanceId: 'root',
-      definitionId: 'page.home',
-      props: { title: 'Root title' },
-      bindings: [],
-      children: [
-        {
-          instanceId: 'box-a',
-          definitionId: 'box',
-          props: { title: 'A' },
-          bindings: [],
-          children: [{ instanceId: 'item-1', definitionId: 'item', props: { label: 'L1' }, bindings: [], children: [] }],
-        },
-        {
-          instanceId: 'box-b',
-          definitionId: 'box',
-          props: { title: 'B' },
-          bindings: [],
-          children: [],
-        },
-        {
-          instanceId: 'box-c',
-          definitionId: 'box',
-          props: { title: 'C' },
-          bindings: [],
-          children: [],
-        },
-      ],
-    },
+    elements: [
+      { id: 'root', componentId: 'page.home', props: { title: L('Root title') } },
+      { id: 'box-a', componentId: 'box', props: { title: L('A') } },
+      { id: 'box-b', componentId: 'box', props: { title: L('B') } },
+      { id: 'box-c', componentId: 'box', props: { title: L('C') } },
+      { id: 'item-1', componentId: 'item', props: { label: L('L1') } },
+    ],
   };
 }
 
-function treeB(): TreeDeclaration {
+function treeB(): ResolvedPageDeclaration {
   return {
-    ...treeWith(),
     snapshotId: 's2',
     versionId: 'v2',
+    elements: [
+      { id: 'root', componentId: 'page.home', props: { title: 'Root title' } },
+      { id: 'box-a', componentId: 'box', props: { title: 'A' } },
+      { id: 'box-b', componentId: 'box', props: { title: 'B' } },
+      { id: 'box-c', componentId: 'box', props: { title: 'C' } },
+      { id: 'item-1', componentId: 'item', props: { label: 'L1' } },
+    ],
   };
 }
 
@@ -76,9 +54,9 @@ describe('18. render (PageRenderer / RouteOutlet)', () => {
     resetFakes();
   });
 
-  it('1. PageRenderer строит дерево: root + children в правильном порядке', async () => {
+  it('1. PageRenderer рендерит лист элементов в порядке следования', async () => {
     const { runtime } = await bootFromContract();
-    act(() => runtime.store.getState().setTree(treeWith()));
+    act(() => runtime.store.getState().setTree(treeB()));
 
     render(
       <Scaffold runtime={runtime}>
@@ -89,15 +67,16 @@ describe('18. render (PageRenderer / RouteOutlet)', () => {
 
     const boxes = screen.getAllByTestId('box');
     expect(boxes.map((b) => b.getAttribute('data-title'))).toEqual(['A', 'B', 'C']);
-    expect(boxes[0].contains(screen.getByTestId('item'))).toBe(true);
+    expect(screen.getByTestId('item').textContent).toBe('L1');
   });
 
-  it('2. каждый instanceId получает props + резолвленные bindings', async () => {
+  it('2. каждый элемент получает props + резолвленные bindings', async () => {
     const { runtime } = await bootFromContract();
     const decl = treeWith();
     // резолвленный binding: title берётся из контента
-    decl.root.props = { title: 'Fallback' };
-    decl.root.bindings = [{ property: 'title', source: { type: 'content', contentId: 'labels', path: 'root' } }];
+    decl.elements[0].props = {
+      title: { kind: 'binding', source: { kind: 'content', contentId: 'labels', field: 'root' } },
+    };
     runtime.store.getState().setContent({ labels: { root: 'Из контента' } });
     act(() => runtime.tree.load(decl));
 
@@ -111,11 +90,11 @@ describe('18. render (PageRenderer / RouteOutlet)', () => {
     await waitFor(() => expect(screen.getByTestId('item').textContent).toBe('L1'));
   });
 
-  it('3. неизвестный definitionId → placeholder, дерево не падает', async () => {
+  it('3. неизвестный componentId → placeholder, страница не падает', async () => {
     const { runtime } = await bootFromContract();
     const decl = treeWith();
-    const child = decl.root.children.find((c) => c.instanceId === 'box-c');
-    if (child) child.definitionId = 'missing.component';
+    const target = decl.elements.find((c) => c.id === 'box-c');
+    if (target) target.componentId = 'missing.component';
     act(() => runtime.store.getState().setTree(decl));
 
     render(
@@ -126,7 +105,7 @@ describe('18. render (PageRenderer / RouteOutlet)', () => {
     await waitFor(() =>
       expect(document.querySelector('[data-unknown-component="missing.component"]')).toBeTruthy(),
     );
-    // соседние узлы продолжают рендериться
+    // соседние элементы продолжают рендериться
     expect(screen.getAllByTestId('box').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -170,9 +149,9 @@ describe('18. render (PageRenderer / RouteOutlet)', () => {
     expect(runtime.store.getState().route?.route.id).toBe('home');
   });
 
-  it('6. одинаковые декларации не вызывают remount (сравнение по instanceId)', async () => {
+  it('6. одинаковые декларации не вызывают remount (сравнение по element.id)', async () => {
     const { runtime } = await bootFromContract();
-    act(() => runtime.store.getState().setTree(treeWith()));
+    act(() => runtime.store.getState().setTree(treeB()));
 
     render(
       <Scaffold runtime={runtime}>
@@ -182,7 +161,7 @@ describe('18. render (PageRenderer / RouteOutlet)', () => {
     await waitFor(() => expect(screen.getByTestId('root').getAttribute('data-title')).toBe('Root title'));
     const elBefore = screen.getByTestId('item');
 
-    // payload изменился (snapshot v2), но instanceId те же → элемент не пересоздаётся
+    // payload изменился (snapshot v2), но element.id те же → элемент не пересоздаётся
     act(() => runtime.store.getState().setTree(treeB()));
     await waitFor(() => expect(screen.getByTestId('item')).toBe(elBefore));
   });

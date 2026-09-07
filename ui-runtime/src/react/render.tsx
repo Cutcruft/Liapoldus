@@ -1,39 +1,43 @@
 import { createElement, type ComponentType, type ReactElement } from 'react';
 import type { ResolvedRoute } from '../types/descriptor';
-import type { ResolvedTreeInstance } from '../types/tree';
+import type { ResolvedElementNode } from '../types/page';
 import { useRoute, useTree } from './hooks';
 
 export type ComponentMap = Record<string, ComponentType<any>>;
 
-/** Рендер инстанса дерева: definitionId → компонент из карты, props + children. */
-function InstanceNode(props: { instance: ResolvedTreeInstance; components: ComponentMap }): ReactElement | null {
-  const { instance, components } = props;
-  const Comp = components[instance.definitionId];
-  const children = instance.children.map((child) => (
-    <InstanceNode key={child.instanceId} instance={child} components={components} />
-  ));
+/** Рендер элемента страницы: componentId → компонент из карты, props из resolved-элемента. */
+function ElementNode(props: { element: ResolvedElementNode; components: ComponentMap }): ReactElement | null {
+  const { element, components } = props;
+  const Comp = components[element.componentId];
   if (!Comp) {
-    return createElement('div', { 'data-unknown-component': instance.definitionId }, `Unknown: ${instance.definitionId}`);
+    return createElement('div', { 'data-unknown-component': element.componentId }, `Unknown: ${element.componentId}`);
   }
-  return createElement(Comp, instance.props, children);
+  return createElement(Comp, element.props);
 }
 
 export interface PageRendererProps {
-  /** карта компонентов по definitionId */
+  /** карта компонентов по componentId */
   components: ComponentMap;
-  /** явная декларация/корень для тестов; по умолчанию — store.tree.root */
-  root?: ResolvedTreeInstance | null;
+  /** явный лист элементов для тестов; по умолчанию — store.tree.elements */
+  elements?: ResolvedElementNode[] | null;
 }
 
 /**
- * PageRenderer (§18#1-#3): строит дерево из декларации — root + children в порядке;
- * неизвестный definitionId → placeholder (не падает). Сравнение по instanceId — без remount при rebuild.
+ * PageRenderer (§18#1-#3): рендерит линейный лист элементов страницы в порядке
+ * (позиция в листе = порядок рендера); неизвестный componentId → placeholder (не падает).
+ * Ключи по element.id — без remount при rebuild.
  */
-export function PageRenderer({ components, root }: PageRendererProps) {
+export function PageRenderer({ components, elements }: PageRendererProps) {
   const tree = useTree();
-  const actual = root ?? (tree?.root as ResolvedTreeInstance | undefined) ?? null;
-  if (!actual) return null;
-  return <InstanceNode instance={actual} components={components} />;
+  const actual = elements ?? tree?.elements ?? null;
+  if (!actual || actual.length === 0) return null;
+  return (
+    <>
+      {actual.map((element) => (
+        <ElementNode key={element.id} element={element} components={components} />
+      ))}
+    </>
+  );
 }
 
 export interface RouteOutletProps {
