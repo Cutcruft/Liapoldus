@@ -189,6 +189,14 @@ export type Build = {
   finishedAt?: string;
 };
 
+export type Deployment = {
+  id: string;
+  siteId: string;
+  snapshotId: string;
+  environment: 'development' | 'production';
+  createdAt: string;
+};
+
 /** Событие dev-ребортера (client `/dev/build/ws`). */
 export type DevRebuildEvent = {
   siteId: string;

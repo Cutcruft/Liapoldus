@@ -17,6 +17,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	deployapp "github.com/liapoldus/liapoldus/backend/internal/application/deploy"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
 	"github.com/liapoldus/liapoldus/backend/internal/application/infra"
@@ -64,6 +65,9 @@ func newAdminHandlerTestAppDB(t *testing.T) (admin.App, domain.Storage) {
 		Forms:      form.NewService(db, db, form.Settings{EmailPattern: emailPattern}),
 		Components: component.NewService(db),
 		Infra:      infra.NewService(db, db),
+		Deploys: deployapp.NewService(db, db, db, &fakeReleaser{func(_ context.Context, siteID, snapshotID, environment string) (domain.Build, error) {
+			return domain.Build{ID: "build_" + snapshotID, SiteID: siteID, SnapshotID: snapshotID, Environment: environment, Status: domain.BuildStatusReady, CreatedAt: time.Now().UTC()}, nil
+		}}),
 		Git: gitsnapshot.NewService(
 			gitRepo, db, db, db, db, db, db, db, db, nil,
 		),

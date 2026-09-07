@@ -541,6 +541,21 @@ func (mr *MockStorageMockRecorder) GetDependency(arg0, arg1, arg2 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDependency", reflect.TypeOf((*MockStorage)(nil).GetDependency), arg0, arg1, arg2)
 }
 
+// GetDeployment mocks base method.
+func (m *MockStorage) GetDeployment(arg0 context.Context, arg1, arg2 string) (domain.Deployment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDeployment", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Deployment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDeployment indicates an expected call of GetDeployment.
+func (mr *MockStorageMockRecorder) GetDeployment(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeployment", reflect.TypeOf((*MockStorage)(nil).GetDeployment), arg0, arg1, arg2)
+}
+
 // GetEndpoint mocks base method.
 func (m *MockStorage) GetEndpoint(arg0 context.Context, arg1, arg2 string) (domain.Endpoint, error) {
 	m.ctrl.T.Helper()
@@ -796,6 +811,21 @@ func (mr *MockStorageMockRecorder) ListDependenciesBySite(arg0, arg1 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDependenciesBySite", reflect.TypeOf((*MockStorage)(nil).ListDependenciesBySite), arg0, arg1)
 }
 
+// ListDeploymentsBySite mocks base method.
+func (m *MockStorage) ListDeploymentsBySite(arg0 context.Context, arg1 string) ([]domain.Deployment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDeploymentsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Deployment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListDeploymentsBySite indicates an expected call of ListDeploymentsBySite.
+func (mr *MockStorageMockRecorder) ListDeploymentsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDeploymentsBySite", reflect.TypeOf((*MockStorage)(nil).ListDeploymentsBySite), arg0, arg1)
+}
+
 // ListEndpointsBySite mocks base method.
 func (m *MockStorage) ListEndpointsBySite(arg0 context.Context, arg1 string) ([]domain.Endpoint, error) {
 	m.ctrl.T.Helper()
@@ -986,6 +1016,20 @@ func (m *MockStorage) SetCacheConfig(arg0 context.Context, arg1 domain.SiteCache
 func (mr *MockStorageMockRecorder) SetCacheConfig(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCacheConfig", reflect.TypeOf((*MockStorage)(nil).SetCacheConfig), arg0, arg1)
+}
+
+// SetDeployment mocks base method.
+func (m *MockStorage) SetDeployment(arg0 context.Context, arg1 domain.Deployment) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetDeployment", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetDeployment indicates an expected call of SetDeployment.
+func (mr *MockStorageMockRecorder) SetDeployment(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDeployment", reflect.TypeOf((*MockStorage)(nil).SetDeployment), arg0, arg1)
 }
 
 // TouchTarballAccess mocks base method.
@@ -2577,4 +2621,72 @@ func (m *MockEndpointRepository) UpdateEndpoint(arg0 context.Context, arg1 domai
 func (mr *MockEndpointRepositoryMockRecorder) UpdateEndpoint(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateEndpoint", reflect.TypeOf((*MockEndpointRepository)(nil).UpdateEndpoint), arg0, arg1)
+}
+
+// MockDeploymentRepository is a mock of DeploymentRepository interface.
+type MockDeploymentRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockDeploymentRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockDeploymentRepositoryMockRecorder is the mock recorder for MockDeploymentRepository.
+type MockDeploymentRepositoryMockRecorder struct {
+	mock *MockDeploymentRepository
+}
+
+// NewMockDeploymentRepository creates a new mock instance.
+func NewMockDeploymentRepository(ctrl *gomock.Controller) *MockDeploymentRepository {
+	mock := &MockDeploymentRepository{ctrl: ctrl}
+	mock.recorder = &MockDeploymentRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDeploymentRepository) EXPECT() *MockDeploymentRepositoryMockRecorder {
+	return m.recorder
+}
+
+// GetDeployment mocks base method.
+func (m *MockDeploymentRepository) GetDeployment(arg0 context.Context, arg1, arg2 string) (domain.Deployment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDeployment", arg0, arg1, arg2)
+	ret0, _ := ret[0].(domain.Deployment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDeployment indicates an expected call of GetDeployment.
+func (mr *MockDeploymentRepositoryMockRecorder) GetDeployment(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeployment", reflect.TypeOf((*MockDeploymentRepository)(nil).GetDeployment), arg0, arg1, arg2)
+}
+
+// ListDeploymentsBySite mocks base method.
+func (m *MockDeploymentRepository) ListDeploymentsBySite(arg0 context.Context, arg1 string) ([]domain.Deployment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDeploymentsBySite", arg0, arg1)
+	ret0, _ := ret[0].([]domain.Deployment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListDeploymentsBySite indicates an expected call of ListDeploymentsBySite.
+func (mr *MockDeploymentRepositoryMockRecorder) ListDeploymentsBySite(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDeploymentsBySite", reflect.TypeOf((*MockDeploymentRepository)(nil).ListDeploymentsBySite), arg0, arg1)
+}
+
+// SetDeployment mocks base method.
+func (m *MockDeploymentRepository) SetDeployment(arg0 context.Context, arg1 domain.Deployment) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetDeployment", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetDeployment indicates an expected call of SetDeployment.
+func (mr *MockDeploymentRepositoryMockRecorder) SetDeployment(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDeployment", reflect.TypeOf((*MockDeploymentRepository)(nil).SetDeployment), arg0, arg1)
 }

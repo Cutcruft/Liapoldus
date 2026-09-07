@@ -45,6 +45,10 @@ export type OperationKind =
   | 'createBuild'
   | 'getBuild'
   | 'listBuilds'
+  | 'releaseDeployment'
+  | 'listDeployments'
+  | 'activeDeployment'
+  | 'rollbackDeployment'
   | 'runtimeStatus'
   | 'getGitOverview'
   | 'commitGit'
@@ -492,6 +496,40 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     method: 'GET',
     route: (args) => `/api/sites/{siteId}/builds`,
     detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
+  },
+
+  releaseDeployment: {
+    kind: 'releaseDeployment',
+    labelKey: 'op.releaseDeployment',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/deployments`,
+    body: (args) => ({ snapshotId: args.snapshotId, environment: args.environment }),
+    detail: () => 'OK',
+  },
+
+  listDeployments: {
+    kind: 'listDeployments',
+    labelKey: 'op.listDeployments',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/deployments`,
+    detail: (b, t) => t('result.count', { n: Array.isArray(b) ? b.length : 0 }),
+  },
+
+  activeDeployment: {
+    kind: 'activeDeployment',
+    labelKey: 'op.activeDeployment',
+    method: 'GET',
+    route: (args) => `/api/sites/{siteId}/deployments/active`,
+    detail: () => 'OK',
+  },
+
+  rollbackDeployment: {
+    kind: 'rollbackDeployment',
+    labelKey: 'op.rollbackDeployment',
+    method: 'POST',
+    route: (args) => `/api/sites/{siteId}/deployments/rollback`,
+    body: (args) => ({ snapshotId: args.snapshotId, environment: args.environment }),
+    detail: () => 'OK',
   },
 
   runtimeStatus: {

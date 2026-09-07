@@ -4,9 +4,10 @@ import (
 	"context"
 
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
-	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
+	buildapp 	"github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/deploy"
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	gitapp "github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
@@ -44,6 +45,7 @@ type Services struct {
 	Components   *component.Service
 	GitSnapshots *gitapp.Service
 	Builds       *buildapp.Service
+	Deploys      *deploy.Service
 	Runtime      *runtime.Service
 	Deps         *deps.Service
 	Tokens       *token.Service
@@ -98,6 +100,7 @@ func New(storage domain.Storage, blobs domain.AssetBlobStore, cfg config.Config)
 		GitSnapshots: gitSnaps,
 		Snapshots:    snapshot.NewService(storage, storage, storage, depsSvc).WithGit(gitSnaps),
 		Builds:       builds,
+		Deploys:      deploy.NewService(storage, storage, storage, builds),
 		BuildEvents:  buildEvents,
 		Runtime:      runtime.NewService(storage, storage, storage, routes, builds, storage, storage, storage),
 		Contents:     content.NewService(storage),

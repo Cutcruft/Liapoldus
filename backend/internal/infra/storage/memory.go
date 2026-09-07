@@ -31,6 +31,7 @@ type Memory struct {
 	tokens      map[string]*domain.TokenSet
 	operations  map[string]domain.Operation
 	endpoints   map[string]domain.Endpoint
+	deployments map[string]domain.Deployment
 }
 
 var _ domain.Storage = (*Memory)(nil)
@@ -56,6 +57,7 @@ func NewMemory() *Memory {
 		tokens:      make(map[string]*domain.TokenSet),
 		operations:  make(map[string]domain.Operation),
 		endpoints:   make(map[string]domain.Endpoint),
+		deployments: make(map[string]domain.Deployment),
 	}
 }
 
@@ -304,10 +306,46 @@ func (m *Memory) ListSnapshotsBySite(_ context.Context, siteID string) ([]domain
 func (m *Memory) DeleteSnapshot(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for _, deployment := range m.deployments {
+		if deployment.SnapshotID == id {
+			return domain.ErrInvalidRequest
+		}
+	}
 	if _, ok := m.snapshots[id]; !ok {
 		return domain.ErrNotFound
 	}
 	delete(m.snapshots, id)
+	return nil
+}
+
+func (m *Memory) GetDeployment(_ context.Context, siteID, environment string) (domain.Deployment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, deployment := range m.deployments {
+		if deployment.SiteID == siteID && deployment.Environment == environment {
+			return clone(deployment), nil
+		}
+	}
+	return domain.Deployment{}, domain.ErrNotFound
+}
+
+func (m *Memory) ListDeploymentsBySite(_ context.Context, siteID string) ([]domain.Deployment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]domain.Deployment, 0)
+	for _, deployment := range m.deployments {
+		if deployment.SiteID == siteID {
+			result = append(result, clone(deployment))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Environment < result[j].Environment })
+	return result, nil
+}
+
+func (m *Memory) SetDeployment(_ context.Context, deployment domain.Deployment) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deployments[deployment.ID] = clone(deployment)
 	return nil
 }
 

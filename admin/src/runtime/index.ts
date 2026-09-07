@@ -25,6 +25,7 @@ export type {
   Dashboard,
   DashboardSite,
   Dependency,
+  Deployment,
   DevRebuildEvent,
   EvictResponse,
   FormDefinition,

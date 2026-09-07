@@ -16,7 +16,7 @@ import (
 	"github.com/liapoldus/liapoldus/backend/internal/domain"
 )
 
-//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql migrations/011_pages_list.sql
+//go:embed migrations/001_initial.sql migrations/002_admin_client_split.sql migrations/002_git_snapshots.sql migrations/003_component_definitions.sql migrations/004_builds.sql migrations/005_dependencies.sql migrations/006_dependency_allowlist.sql migrations/007_cache_config.sql migrations/008_tokens.sql migrations/009_component_source.sql migrations/010_operations.sql migrations/011_pages_list.sql migrations/012_deployments.sql
 var migrationFiles embed.FS
 
 type Postgres struct {
@@ -409,10 +409,64 @@ func (p *Postgres) DeletePage(ctx context.Context, id string) error {
 func (p *Postgres) DeleteSnapshot(ctx context.Context, id string) error {
 	result, err := p.pool.Exec(ctx, `DELETE FROM snapshots WHERE id = $1`, id)
 	if err != nil {
+		if isForeignKeyViolation(err) {
+			return domain.ErrInvalidRequest
+		}
 		return fmt.Errorf("delete snapshot: %w", err)
 	}
 	if result.RowsAffected() == 0 {
 		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (p *Postgres) scanDeployment(row pgx.Row) (domain.Deployment, error) {
+	var deployment domain.Deployment
+	if err := row.Scan(&deployment.ID, &deployment.SiteID, &deployment.Environment, &deployment.SnapshotID, &deployment.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Deployment{}, domain.ErrNotFound
+		}
+		return domain.Deployment{}, fmt.Errorf("scan deployment: %w", err)
+	}
+	return deployment, nil
+}
+
+func (p *Postgres) GetDeployment(ctx context.Context, siteID, environment string) (domain.Deployment, error) {
+	return p.scanDeployment(p.pool.QueryRow(ctx, `
+		SELECT id, site_id, environment, snapshot_id, created_at
+		FROM deployments WHERE site_id = $1 AND environment = $2
+	`, siteID, environment))
+}
+
+func (p *Postgres) ListDeploymentsBySite(ctx context.Context, siteID string) ([]domain.Deployment, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT id, site_id, environment, snapshot_id, created_at
+		FROM deployments WHERE site_id = $1 ORDER BY environment
+	`, siteID)
+	if err != nil {
+		return nil, fmt.Errorf("list deployments: %w", err)
+	}
+	defer rows.Close()
+	result := make([]domain.Deployment, 0)
+	for rows.Next() {
+		var deployment domain.Deployment
+		if err := rows.Scan(&deployment.ID, &deployment.SiteID, &deployment.Environment, &deployment.SnapshotID, &deployment.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan deployment: %w", err)
+		}
+		result = append(result, deployment)
+	}
+	return result, rows.Err()
+}
+
+func (p *Postgres) SetDeployment(ctx context.Context, deployment domain.Deployment) error {
+	if _, err := p.pool.Exec(ctx, `
+		INSERT INTO deployments (id, site_id, environment, snapshot_id, created_at)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (site_id, environment) DO UPDATE SET
+			snapshot_id = EXCLUDED.snapshot_id,
+			created_at = EXCLUDED.created_at
+	`, deployment.ID, deployment.SiteID, deployment.Environment, deployment.SnapshotID, deployment.CreatedAt); err != nil {
+		return fmt.Errorf("set deployment: %w", err)
 	}
 	return nil
 }

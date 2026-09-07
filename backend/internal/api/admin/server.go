@@ -9,6 +9,7 @@ import (
 	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/application/component"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	deployapp "github.com/liapoldus/liapoldus/backend/internal/application/deploy"
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
@@ -31,6 +32,7 @@ type App struct {
 	Components *component.Service
 	Git        *gitsnapshot.Service
 	Builds     *buildapp.Service
+	Deploys    *deployapp.Service
 	Deps       *deps.Service
 	Tokens     *token.Service
 	Infra      *infra.Service
@@ -58,6 +60,7 @@ func NewRouter(app App) http.Handler {
 	snapshotHandler := NewSnapshotHandler(app.Snapshots)
 	componentHandler := NewComponentHandler(app.Components, app.Pages, app.Git)
 	buildHandler := NewBuildHandler(app.Builds)
+	deployHandler := NewDeployHandler(app.Deploys)
 	depsHandler := NewDepsHandler(app.Deps)
 	dashboardHandler := NewDashboardHandler(app.Sites, app.Builds, app.Snapshots, app.Git)
 	settingsHandler := NewSettingsHandler(app.AdminToken, app.DefaultLocale, app.RedirectDefaultStatus)
@@ -183,6 +186,11 @@ func NewRouter(app App) http.Handler {
 	protected.HandleFunc("POST /api/sites/{siteID}/builds", buildHandler.Create)
 	protected.HandleFunc("GET /api/sites/{siteID}/builds", buildHandler.List)
 	protected.HandleFunc("GET /api/builds/{buildID}", buildHandler.Get)
+
+	protected.HandleFunc("POST /api/sites/{siteID}/deployments", deployHandler.Release)
+	protected.HandleFunc("GET /api/sites/{siteID}/deployments", deployHandler.List)
+	protected.HandleFunc("GET /api/sites/{siteID}/deployments/active", deployHandler.Active)
+	protected.HandleFunc("POST /api/sites/{siteID}/deployments/rollback", deployHandler.Rollback)
 
 	if gitHandler != nil {
 		protected.HandleFunc("GET /api/sites/{siteID}/git", gitHandler.Overview)

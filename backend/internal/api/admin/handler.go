@@ -10,6 +10,7 @@ import (
 	httpapi "github.com/liapoldus/liapoldus/backend/internal/api/http"
 	"github.com/liapoldus/liapoldus/backend/internal/application/asset"
 	"github.com/liapoldus/liapoldus/backend/internal/application/content"
+	"github.com/liapoldus/liapoldus/backend/internal/application/deploy"
 	"github.com/liapoldus/liapoldus/backend/internal/application/form"
 	"github.com/liapoldus/liapoldus/backend/internal/application/page"
 	"github.com/liapoldus/liapoldus/backend/internal/application/route"
@@ -853,6 +854,73 @@ func (h *SnapshotHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func NotFound(w http.ResponseWriter, r *http.Request) {
 	httpapi.RespondJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+}
+
+type DeployHandler struct{ deploys *deploy.Service }
+
+func NewDeployHandler(deploys *deploy.Service) *DeployHandler {
+	return &DeployHandler{deploys: deploys}
+}
+
+type releaseRequest struct {
+	SnapshotID  string `json:"snapshotId"`
+	Environment string `json:"environment"`
+}
+
+func (h *DeployHandler) Release(w http.ResponseWriter, r *http.Request) {
+	var req releaseRequest
+	if !httpapi.DecodeJSON(r, &req, w) {
+		return
+	}
+	environment := req.Environment
+	if environment == "" {
+		environment = domain.EnvironmentProduction
+	}
+	result, err := h.deploys.Release(r.Context(), siteID(r), req.SnapshotID, environment)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusCreated, result)
+}
+
+func (h *DeployHandler) Rollback(w http.ResponseWriter, r *http.Request) {
+	var req releaseRequest
+	if !httpapi.DecodeJSON(r, &req, w) {
+		return
+	}
+	environment := req.Environment
+	if environment == "" {
+		environment = domain.EnvironmentProduction
+	}
+	result, err := h.deploys.Rollback(r.Context(), siteID(r), req.SnapshotID, environment)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *DeployHandler) Active(w http.ResponseWriter, r *http.Request) {
+	environment := r.URL.Query().Get("environment")
+	if environment == "" {
+		environment = domain.EnvironmentProduction
+	}
+	result, err := h.deploys.Active(r.Context(), siteID(r), environment)
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *DeployHandler) List(w http.ResponseWriter, r *http.Request) {
+	result, err := h.deploys.ListBySite(r.Context(), siteID(r))
+	if err != nil {
+		httpapi.RespondError(w, err)
+		return
+	}
+	httpapi.RespondJSON(w, http.StatusOK, result)
 }
 
 func injectLogger(next http.Handler, logger *slog.Logger) http.Handler {

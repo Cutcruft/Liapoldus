@@ -19,6 +19,7 @@ const (
 	Form         = "form"
 	Submission   = "submission"
 	Build        = "build"
+	Deployment   = "deployment"
 	ComponentVer = "componentver"
 	Element      = "el"
 )

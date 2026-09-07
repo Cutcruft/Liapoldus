@@ -139,6 +139,17 @@ const (
 	EnvironmentProduction  = "production"
 )
 
+// Deployment is the active pin of a site's published snapshot for one
+// environment (R9, spec §2.6). The (site, environment) pair is unique: the
+// current pin is re-written on release and on rollback, never appended.
+type Deployment struct {
+	ID          string    `json:"id"`
+	SiteID      string    `json:"siteId"`
+	Environment string    `json:"environment"`
+	SnapshotID  string    `json:"snapshotId"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
 // Build is the result of compiling a Site Snapshot for an Environment with the
 // esbuild-based bundler. The ArtifactDir points at the published static output.
 type Build struct {

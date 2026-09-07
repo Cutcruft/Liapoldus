@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/liapoldus/liapoldus/backend/internal/api/admin"
+	deployapp "github.com/liapoldus/liapoldus/backend/internal/application/deploy"
 	buildapp "github.com/liapoldus/liapoldus/backend/internal/application/build"
 	"github.com/liapoldus/liapoldus/backend/internal/application/deps"
 	"github.com/liapoldus/liapoldus/backend/internal/application/gitsnapshot"
@@ -57,6 +58,9 @@ func slice2TestApp(t *testing.T, adminToken string) (admin.App, *storage.Memory)
 		Snapshots: snapshot.NewService(db, db, db),
 		Builds: buildapp.NewService(db, db, db,
 			&fakeBuilder{}, &fakeRunner{}, &fakeArtifacts{}),
+		Deploys: deployapp.NewService(db, db, db, &fakeReleaser{func(_ context.Context, siteID, snapshotID, environment string) (domain.Build, error) {
+			return domain.Build{ID: "build_released", SiteID: siteID, SnapshotID: snapshotID, Environment: environment, Status: domain.BuildStatusReady, CreatedAt: time.Now().UTC()}, nil
+		}}),
 		Git: gitsnapshot.NewService(
 			git.NewRepo(filepath.Join(t.TempDir(), "git")),
 			db, db, db, db, db, db, db, db,

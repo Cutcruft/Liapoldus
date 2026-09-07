@@ -21,6 +21,7 @@ type Storage interface {
 	TokenRepository
 	OperationRepository
 	EndpointRepository
+	DeploymentRepository
 }
 
 type SiteRepository interface {
@@ -161,4 +162,13 @@ type EndpointRepository interface {
 	ListEndpointsBySite(context.Context, string) ([]Endpoint, error)
 	UpdateEndpoint(context.Context, Endpoint) error
 	DeleteEndpoint(context.Context, string, string) error
+}
+
+// DeploymentRepository persists the active release pin of a site's snapshots
+// per environment. GetDeployment returns ErrNotFound when the environment was
+// never published. SetDeployment upserts the pin (idempotent re-release).
+type DeploymentRepository interface {
+	GetDeployment(context.Context, string, string) (Deployment, error)
+	ListDeploymentsBySite(context.Context, string) ([]Deployment, error)
+	SetDeployment(context.Context, Deployment) error
 }

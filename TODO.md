@@ -119,17 +119,27 @@ Frontend на модель R7. Роут-API на бэке уже есть (`rout
 (снапшот-роуты server.go:156–159 уже есть), `admin/src/app/SiteTab.tsx` (`section=states` —
 placeholder).
 
-- [ ] **P0 [B]** Сущность `Deployment` в домене: id, siteId, snapshotId (активный прод),
+- [x] **P0 [B]** Сущность `Deployment` в домене: id, siteId, snapshotId (активный прод),
       environment, createdAt. Роуты `POST /api/sites/{siteID}/deployments`,
       `GET /api/sites/{siteID}/deployments/active`, `POST .../rollback`. *(R13 из спеки; см. §3.9.)*
-- [ ] **P0 [B]** Миграция `012_deployments.sql`: таблица deployment, FK на snapshots; идемпотентность.
-- [ ] **P1 [B]** Операции pin/rollback: публикация снапшота = переключение активного
+      *(model.go: Deployment struct; repository.go: DeploymentRepository; handler.go: DeployHandler;
+      server.go: routes wired; id.go: prefix Deployment; deploy_test.go: 7 tests; admin_deploy_test.go: 5 tests.)*
+- [x] **P0 [B]** Миграция `012_deployments.sql`: таблица deployment, FK на snapshots; идемпотентность.
+      *(012_deployments.sql: migrations, memory.go mirrors FK check on SetDeployment/DeleteSnapshot.)*
+- [x] **P1 [B]** Операции pin/rollback: публикация снапшота = переключение активного
       Deployment (снапшот-версия → индекс). Идемпотентность повторной публикации.
-- [ ] **P1 [F]** Раздел «Состояния»: список снапшотов (dev/prod + статусы), «создать снапшот»,
+      *(deploy/service.go: Release, Rollback, Active, ListBySite; idempotent re-release returns current pin.)*
+- [x] **P1 [F]** Раздел «Состояния»: список снапшотов (dev/prod + статусы), «создать снапшот»,
       «выпустить в прод» (confirm), «откатиться» (пин более раннего prod-снапшота).
-- [ ] **P1 [F]** Индикатор «есть незакоммиченные правки → создать снапшот» (по версиям
+      *(SnapshotSection.tsx: карточки сред dev/prod, таблица снапшотов с бейджами «Активный»,
+      кнопки «Выпустить dev», «Выпустить prod» (confirm), «Откатить prod» (confirm); операциями
+      releaseDeployment/rollbackDeployment/listDeployments/activeDeployment.)*
+- [x] **P1 [F]** Индикатор «есть незакоммиченные правки → создать снапшот» (по версиям
       сущностей vs последний снапшот; источник — дельта `updatedAt`/version).
-- [ ] Тесты: выпуск/откат/idempotent (unit + `admin_r5_test`-стиль), UI-флоу (SnapshotSection.test).
+      *(Источник — git dirty из getGitOverview; банер «Есть незакоммиченные правки…» над списком.)*
+- [x] Тесты: выпуск/откат/idempotent (unit + `admin_r5_test`-стиль), UI-флоу (SnapshotSection.test).
+      *(deploy_test.go: 7 unit tests; admin_deploy_test.go: 5 API tests;
+      SnapshotSection.test.tsx: 6 UI tests.)*
 
 **Done**: прод-состояние сайта управляется одним активным снапшотом; откат — пин старее.
 
