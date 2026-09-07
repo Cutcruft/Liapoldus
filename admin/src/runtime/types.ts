@@ -29,10 +29,12 @@ export type Site = {
   createdAt?: string;
 };
 
+/** Дефолты сайта для вывода в `<head>` и каркаса страницы (R10). */
 export type SiteHead = {
   titleTemplate?: string;
   description?: string;
   faviconAssetId?: string;
+  /** Дополнительные `<meta name=...>` (замёрживаются по ключу, page перекрывает). */
   meta: Record<string, string>;
 };
 
@@ -42,6 +44,19 @@ export type SiteSettings = {
   defaultLocale: string;
   defaultLayoutSectionId?: string;
   head: SiteHead;
+};
+
+/**
+ * Per-page head override (R10): пустые скаляры опускаются; page перекрывает
+ * site-дефолты. Соответствует wire `domain.PageHead`.
+ */
+export type PageHead = {
+  title?: string;
+  description?: string;
+  robots?: string;
+  canonical?: string;
+  og?: Record<string, string>;
+  meta?: Record<string, string>;
 };
 
 /**
@@ -83,6 +98,10 @@ export type Page = {
   name: string;
   slug: string;
   list: ElementNode[];
+  /** Override каркаса (section с acceptsPageContent); пусто = default сайта. */
+  layoutSectionId?: string;
+  /** Per-page head override (R10). */
+  head?: PageHead;
   version: number;
   createdAt?: string;
 };

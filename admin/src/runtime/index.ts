@@ -38,6 +38,7 @@ export type {
   OperationResult,
   OperationStatus,
   Page,
+  PageHead,
   PageVersion,
   RecentBuild,
   RecentSnapshot,

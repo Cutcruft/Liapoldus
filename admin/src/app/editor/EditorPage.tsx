@@ -12,6 +12,7 @@ import { PreviewPane } from './PreviewPane';
 import { CanvasPreview, CanvasTabBar } from './CanvasPreview';
 import { createPreviewStore, previewActions } from './preview-store';
 import { ToolButton } from './controls';
+import { PageSettings } from './PageSettings';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed';
 
@@ -34,6 +35,8 @@ export function EditorPage() {
   const tree = useSelector(store, (s) => s.elements);
   const dirty = useSelector(store, (s) => s.dirty);
   const version = useSelector(store, (s) => s.version);
+  const layoutSectionId = useSelector(store, (s) => s.layoutSectionId);
+  const head = useSelector(store, (s) => s.head);
   const pastCount = useSelector(store, (s) => s.past.length);
   const futureCount = useSelector(store, (s) => s.future.length);
   const loadError = useSelector(store, (s) => s.error);
@@ -45,7 +48,18 @@ export function EditorPage() {
     const cur = store.getState();
     setSaveState('saving');
     const pageName = page.state.status === 'success' ? page.state.data.name : '';
-    const res = await runOperation(api, 'updatePage', { pageId, name: pageName, list: cur.elements }, t);
+    const res = await runOperation(
+      api,
+      'updatePage',
+      {
+        pageId,
+        name: pageName,
+        list: cur.elements,
+        layoutSectionId: cur.layoutSectionId,
+        head: cur.head,
+      },
+      t,
+    );
     if (!res.ok) {
       setSaveState('failed');
       return;
@@ -69,7 +83,12 @@ export function EditorPage() {
 
   useEffect(() => {
     if (page.state.status === 'success') {
-      actions.applyLoaded({ list: page.state.data.list, version: page.state.data.version });
+      actions.applyLoaded({
+        list: page.state.data.list,
+        version: page.state.data.version,
+        layoutSectionId: page.state.data.layoutSectionId,
+        head: page.state.data.head,
+      });
     } else if (page.state.status === 'error') {
       actions.setLoadError(page.state.detail);
     }
@@ -117,6 +136,13 @@ export function EditorPage() {
 
       <div className="grid flex-1 grid-cols-[15rem_minmax(0,1fr)_18rem] gap-4 overflow-hidden">
         <section className={`${PANEL_CLASS} overflow-auto`} aria-label={t('editor.tree')}>
+          <PageSettings
+            layoutSectionId={layoutSectionId}
+            head={head}
+            layoutOptions={catalog.components.filter((c) => c.acceptsPageContent)}
+            onLayout={actions.setLayout}
+            onHead={actions.setHead}
+          />
           <TreePanel store={store} actions={actions} t={t} components={catalog.components} />
         </section>
         <section className={`${PANEL_CLASS} overflow-auto`} aria-label={t('editor.canvas')}>

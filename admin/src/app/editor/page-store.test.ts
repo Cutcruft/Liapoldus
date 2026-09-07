@@ -63,7 +63,7 @@ describe('page-store', () => {
     s = store.getState();
     expect(s.version).toBe(2);
     expect(s.dirty).toBe(false);
-    expect(serialize(s.elements)).toBe(s.savedKey);
+    expect(s.savedKey).toBe(JSON.stringify({ list: s.elements, layoutSectionId: s.layoutSectionId, head: s.head }));
   });
 
   it('updateProp правит literal-проп элемента и помечает dirty', () => {
@@ -77,7 +77,7 @@ describe('page-store', () => {
     expect(store.getState().dirty).toBe(true);
   });
 
-  it('setBinding сохраняет binding-источник в props как binding', () => {
+it('setBinding сохраняет binding-источник в props как binding', () => {
     const { store, actions } = load();
     actions.applyLoaded({ list: LIST, version: 1 });
     actions.setBinding('t1', 'text', { kind: 'content', contentId: 'strings', field: 'hero' });
@@ -86,6 +86,53 @@ describe('page-store', () => {
       source: { kind: 'content', contentId: 'strings', field: 'hero' },
     });
     expect(store.getState().dirty).toBe(true);
+  });
+
+  it('applyLoaded переносит layoutSectionId и head, чистая страница', () => {
+    const { store, actions } = load();
+    const head = { title: 'Заг', og: { image: 'https://x/i.png' } };
+    actions.applyLoaded({ list: LIST, version: 4, layoutSectionId: 'Section', head });
+    const s = store.getState();
+    expect(s.layoutSectionId).toBe('Section');
+    expect(s.head).toEqual(head);
+    expect(s.dirty).toBe(false);
+  });
+
+  it('setLayout меняет каркас и помечает dirty; обратно — снова чисто', () => {
+    const { store, actions } = load();
+    actions.applyLoaded({ list: LIST, version: 1, layoutSectionId: 'Section' });
+    actions.setLayout('Section2');
+    let s = store.getState();
+    expect(s.layoutSectionId).toBe('Section2');
+    expect(s.dirty).toBe(true);
+    actions.setLayout('Section');
+    s = store.getState();
+    expect(s.layoutSectionId).toBe('Section');
+    expect(s.dirty).toBe(false);
+  });
+
+  it('setHead мержит по ключу, пустые скаляры чистит, помечает dirty', () => {
+    const { store, actions } = load();
+    actions.applyLoaded({ list: LIST, version: 1 });
+    actions.setHead({ title: 'Новый' });
+    let s = store.getState();
+    expect(s.head.title).toBe('Новый');
+    expect(s.dirty).toBe(true);
+
+    actions.setHead({ description: 'Описание' });
+    s = store.getState();
+    expect(s.head).toEqual({ title: 'Новый', description: 'Описание' });
+
+    actions.setHead({ title: '' });
+    s = store.getState();
+    expect(s.head).toEqual({ description: 'Описание' });
+  });
+
+  it('setHead заменяет og/meta целиком, не мержит ключи', () => {
+    const { store, actions } = load();
+    actions.applyLoaded({ list: LIST, version: 1, head: { og: { image: 'https://x/a.png' } } });
+    actions.setHead({ og: { image: 'https://x/b.png', title: 'T' } });
+    expect(store.getState().head.og).toEqual({ image: 'https://x/b.png', title: 'T' });
   });
 
   it('remove удаляет элемент, выбор переходит на соседний', () => {
@@ -125,5 +172,3 @@ describe('page-store', () => {
     expect(s.error).toBe('boom');
   });
 });
-
-const serialize = (list: ElementNode[]) => JSON.stringify(list);

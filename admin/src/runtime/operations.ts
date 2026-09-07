@@ -195,10 +195,17 @@ export const OPERATIONS: Record<OperationKind, OperationSpec> = {
     labelKey: 'op.updatePage',
     method: 'PUT',
     route: (args) => `/api/pages/{pageId}`,
-    body: (args) => ({
-      name: String(args.name ?? ''),
-      list: (args.list as unknown[]) ?? [],
-    }),
+    body: (args) => {
+      const body: Record<string, unknown> = {
+        name: String(args.name ?? ''),
+        list: (args.list as unknown[]) ?? [],
+      };
+      // Полная замена: пустой layoutSectionId сбрасывает override (runtime
+      // берёт default сайта); head присылается целиком (как хранится).
+      if (args.layoutSectionId !== undefined) body.layoutSectionId = String(args.layoutSectionId);
+      if (args.head !== undefined) body.head = args.head;
+      return body;
+    },
     detail: (b, t) => {
       const version = typeof b === 'object' && b !== null && 'version' in b ? (b as { version: unknown }).version : 0;
       return t('result.saved.v', { version: Number(version) });

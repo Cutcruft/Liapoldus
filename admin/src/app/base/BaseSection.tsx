@@ -4,6 +4,7 @@ import { runOperation, type SiteSettings } from '../../runtime';
 import { useAdmin } from '../admin-context';
 import { AssetPicker } from '../assets/AssetPicker';
 import { useOperation } from '../use-operation';
+import { loadCatalog, type BuiltinComponent } from '../editor/schemas';
 
 const INPUT = 'w-full rounded border border-neutral-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none';
 
@@ -32,6 +33,7 @@ export function BaseSection() {
   const [draft, setDraft] = useState<SiteSettings | null>(null);
   const [metaText, setMetaText] = useState('{}');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [layoutOptions, setLayoutOptions] = useState<BuiltinComponent[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -43,6 +45,17 @@ export function BaseSection() {
     setDraft(loaded);
     setMetaText(JSON.stringify(loaded.head.meta, null, 2));
   }, [loadedSettings]);
+
+  useEffect(() => {
+    if (!siteId) return;
+    let alive = true;
+    void loadCatalog(api, siteId).then((list) => {
+      if (alive) setLayoutOptions(list.filter((c) => c.acceptsPageContent));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [api, siteId]);
 
   if (settings.state.status === 'loading') return <p className="text-sm text-neutral-400">{t('common.loading')}</p>;
   if (settings.state.status === 'error') return <p className="text-sm text-red-600">{settings.state.detail}</p>;
@@ -89,6 +102,20 @@ export function BaseSection() {
       <label className="block text-sm font-medium text-neutral-700">
         Язык по умолчанию
         <input className={`${INPUT} mt-1`} value={draft.defaultLocale} onChange={(e) => setDraft({ ...draft, defaultLocale: e.target.value })} />
+      </label>
+      <label className="block text-sm font-medium text-neutral-700">
+        Каркас по умолчанию
+        <select
+          className={`${INPUT} mt-1`}
+          value={draft.defaultLayoutSectionId ?? ''}
+          onChange={(e) => setDraft({ ...draft, defaultLayoutSectionId: e.target.value || undefined })}
+        >
+          <option value="">Нет</option>
+          {layoutOptions.map((c) => (
+            <option key={c.type} value={c.type}>{c.label}</option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs text-neutral-400">Секция, принимающая контент страницы; страницы без своего каркаса возьмут его.</span>
       </label>
       <label className="block text-sm font-medium text-neutral-700">
         Шаблон title

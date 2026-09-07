@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ElementNode, Page } from '../../runtime';
 import { jsonResponse, renderApp } from '../test-utils';
 import { setDevSocketFactory, type WsLike } from '../ws-client';
@@ -94,9 +94,10 @@ describe('EditorPage', () => {
     const { calls } = await renderApp({ path: '/sites/s1/pages/p1', handler: handler(put) });
 
     fireEvent.click(await screen.findByText('· Привет'));
-    const sourceSelect = screen.getAllByRole('combobox')[0]!;
+    const propsPanel = screen.getByRole('region', { name: 'Свойства' });
+    const sourceSelect = within(propsPanel).getAllByRole('combobox')[0]!;
     fireEvent.change(sourceSelect, { target: { value: 'content' } });
-    const pathInput = screen.getByLabelText('Путь к данным');
+    const pathInput = within(propsPanel).getByLabelText('Путь к данным');
     fireEvent.change(pathInput, { target: { value: 'strings.hero' } });
 
     await waitFor(
@@ -200,6 +201,53 @@ describe('EditorPage', () => {
     );
     // превью выбранного ассета в инспекторе (getAsset → имя + миниатюра)
     expect(await screen.findByAltText('logo.png')).toBeTruthy();
+    void put;
+  });
+
+  it('панель Страница: выбор каркаса и title уходят в PUT как layoutSectionId/head', async () => {
+    const put = { list: null as unknown, version: 3 };
+    const { calls } = await renderApp({
+      path: '/sites/s1/pages/p1',
+      handler: (url, init) => {
+        if (url === '/api/pages/p1' && init.method === 'GET') return jsonResponse(200, PAGE);
+        if (url === '/api/pages/p1' && init.method === 'PUT') {
+          put.list = JSON.parse(String(init.body))['list'];
+          put.version += 1;
+          return jsonResponse(200, { version: put.version });
+        }
+        if (url === '/api/sites/s1/components') {
+          return jsonResponse(200, [
+            { type: 'Section', label: 'Секция', container: true, acceptsPageContent: true, schema: { type: 'object', properties: {} } },
+          ]);
+        }
+        return jsonResponse(404, { error: 'not found' });
+      },
+    });
+
+    await screen.findByText('· Привет');
+    const layoutSelect = screen.getByLabelText('Каркас') as HTMLSelectElement;
+    await waitFor(() =>
+      expect(Array.from(layoutSelect.options).some((o) => o.value === 'Section')).toBe(true),
+    );
+    fireEvent.change(layoutSelect, { target: { value: 'Section' } });
+
+    const titleInput = screen.getByLabelText('Title (SEO)');
+    fireEvent.change(titleInput, { target: { value: 'Мой заголовок' } });
+
+    await waitFor(
+      () => {
+        const save = calls.find((c) => c.method === 'PUT' && c.url === '/api/pages/p1');
+        expect(save).toBeTruthy();
+        const body = JSON.parse(String(save?.init.body)) as {
+          list: ElementNode[];
+          layoutSectionId: string;
+          head: { title: string };
+        };
+        expect(body.layoutSectionId).toBe('Section');
+        expect(body.head.title).toBe('Мой заголовок');
+      },
+      { timeout: 3000 },
+    );
     void put;
   });
 

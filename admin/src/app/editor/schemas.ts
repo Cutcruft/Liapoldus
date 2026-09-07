@@ -36,6 +36,11 @@ export interface BuiltinComponent {
    * (появляется в меню «добавить» только для контейнерных родителя).
    */
   container: boolean;
+  /**
+   * section, который может быть каркасом страницы (принимает children
+   * как лист контента, §1.3). Кандидат в layout-пикер страницы/сайта.
+   */
+  acceptsPageContent?: boolean;
 }
 
 /** Backend отдаёт каталог как `{type,label,container,schema}`. */
@@ -43,6 +48,7 @@ type RawCatalogEntry = {
   type: string;
   label: string;
   container: boolean;
+  acceptsPageContent?: boolean;
   schema: unknown;
 };
 
@@ -58,7 +64,7 @@ export function parseCatalog(raw: unknown): BuiltinComponent[] {
     if (typeof schema !== 'object' || schema === null) continue;
     if (schema.type !== 'object') continue;
     if (typeof schema.properties !== 'object' || schema.properties === null) continue;
-    out.push({ type: e.type, label: e.label, container: e.container === true, schema });
+    out.push({ type: e.type, label: e.label, container: e.container === true, acceptsPageContent: e.acceptsPageContent === true, schema });
   }
   return out;
 }
